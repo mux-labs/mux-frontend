@@ -10,6 +10,49 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+   --color-primary: #3b82f6;
+  --color-sidebar-bg: #1f2937;
+  --radius-lg: 0.75rem;
+  
+  --animate-slide-in: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-in {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+@utility glass {
+  background: rgba(255, 255, 255, 0.8);
+  backdrop-filter: blur(10px);
+}
+
+@utility container {
+  width: 100%;
+  
+  @media (width >= 32rem) {
+    max-width: 32rem;
+  }
+  
+  @media (width >= 48rem) {
+    max-width: 48rem;
+  }
+  
+  @media (width >= 64rem) {
+    max-width: 64rem;
+  }
+  
+  @media (width >= 80rem) {
+    max-width: 80rem;
+  }
+  
+  @media (width >= 96rem) {
+    max-width: 96rem;
+  }
 }
 
 @media (prefers-color-scheme: dark) {

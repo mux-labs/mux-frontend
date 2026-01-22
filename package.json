@@ -10,9 +10,9 @@
 		"lint:fix": "biome format . --write && biome check . --write",
 		"prepare": "husky"
 	},
-  "lint-staged": {
-  "*.{ts,tsx,js,jsx,css,scss,json,md}": "pnpm lint:fix"
-},
+	"lint-staged": {
+		"*.{ts,tsx,js,jsx,css,scss,json,md}": "pnpm lint:fix"
+	},
 	"dependencies": {
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",

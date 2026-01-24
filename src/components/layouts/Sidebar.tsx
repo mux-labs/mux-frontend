@@ -1,7 +1,6 @@
-// app/components/dashboard/Sidebar.tsx
 'use client'
 
-import { 
+import {
   HomeIcon,
   ChartBarIcon,
   UsersIcon,
@@ -15,12 +14,12 @@ import { usePathname } from 'next/navigation'
 import clsx from 'clsx'
 
 const navigation = [
-  { name: 'Dashboard', href: '/dashboard', icon: HomeIcon },
-  { name: 'Analytics', href: '/dashboard/analytics', icon: ChartBarIcon },
-  { name: 'Users', href: '/dashboard/users', icon: UsersIcon },
-  { name: 'Orders', href: '/dashboard/orders', icon: ShoppingCartIcon },
-  { name: 'Documents', href: '/dashboard/documents', icon: DocumentTextIcon },
-  { name: 'Settings', href: '/dashboard/settings', icon: CogIcon },
+  { name: 'Dashboard', href: '/demo/dashboard', icon: HomeIcon },
+  { name: 'Analytics', href: '/demo/dashboard/analytics', icon: ChartBarIcon },
+  { name: 'Users', href: '/demo/dashboard/users', icon: UsersIcon },
+  { name: 'Orders', href: '/demo/dashboard/orders', icon: ShoppingCartIcon },
+  { name: 'Documents', href: '/demo/dashboard/documents', icon: DocumentTextIcon },
+  { name: 'Settings', href: '/demo/dashboard/settings', icon: CogIcon },
 ]
 
 interface SidebarProps {
@@ -50,7 +49,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
               <div className="h-8 w-8 rounded-lg bg-linear-to-br from-blue-500 to-purple-600" />
               <span className="text-xl font-bold text-gray-900">Dashboard</span>
             </div>
-            
+
             {/* Close button - mobile only */}
             <button
               type="button"

@@ -1,9 +1,8 @@
-// app/components/dashboard/TopNav.tsx
 'use client'
 
 import { useState } from 'react'
-import { 
-  MagnifyingGlassIcon, 
+import {
+  MagnifyingGlassIcon,
   BellIcon,
   ChevronDownIcon,
   Bars3Icon,
@@ -17,11 +16,11 @@ interface TopNavProps {
 export function TopNav({ onMenuClick }: TopNavProps) {
   const [searchOpen, setSearchOpen] = useState(false)
   const pathname = usePathname()
-  
+
   // Get current page title from pathname
-  const pageTitle = pathname === '/' ? 'Dashboard' : 
-                   (pathname.split('/').pop() ?? '').charAt(0).toUpperCase() + 
-                   (pathname.split('/').pop() ?? '').slice(1)
+  const pageTitle = pathname === '/' ? 'Dashboard' :
+    (pathname.split('/').pop() ?? '').charAt(0).toUpperCase() +
+    (pathname.split('/').pop() ?? '').slice(1)
 
   return (
     <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white/95 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 backdrop-blur supports-backdrop-filter:bg-white/60">
@@ -44,7 +43,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
           <h1 className="text-lg font-semibold text-gray-900 sm:text-xl">
             {pageTitle}
           </h1>
-          
+
           {/* Breadcrumbs - hidden on mobile */}
           <nav aria-label="Breadcrumb" className="hidden lg:ml-6 lg:flex lg:items-center">
             <ol className="flex items-center space-x-2 text-sm">
@@ -64,9 +63,9 @@ export function TopNav({ onMenuClick }: TopNavProps) {
             lg:w-64 lg:transition-none
           `}>
             <div className="relative">
-              <MagnifyingGlassIcon 
-                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none" 
-                aria-hidden="true" 
+              <MagnifyingGlassIcon
+                className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400 pointer-events-none"
+                aria-hidden="true"
               />
               <input
                 type="search"
@@ -75,7 +74,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
               />
             </div>
           </div>
-          
+
           <button
             type="button"
             onClick={() => setSearchOpen(!searchOpen)}

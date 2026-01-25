@@ -40,15 +40,35 @@ export default function Home() {
             center.
           </p>
         </div>
-        <div className="flex flex-col gap-3 sm:flex-row w-full sm:w-auto">
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="px-8 py-3 rounded-lg font-semibold text-base bg-blue-600 text-white hover:bg-blue-700 transition-colors whitespace-nowrap shadow-md hover:shadow-lg"
-          >
-            + Create API Key
-          </button>
+        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
+          {/* Your API Key button - keep your functionality but use their styling */}
+         <button
+  onClick={() => setIsModalOpen(true)}
+  className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 text-white transition-colors hover:bg-blue-700 md:w-[158px] whitespace-nowrap"
+>
+  + Create API Key
+</button>
+          
+          {/* Their Deploy Now button */}
           <a
-            className="px-8 py-3 rounded-lg font-semibold text-base border-2 border-zinc-300 text-zinc-900 dark:border-zinc-700 dark:text-zinc-50 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors whitespace-nowrap text-center"
+            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-39.5"
+            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Image
+              className="dark:invert"
+              src="/vercel.svg"
+              alt="Vercel logomark"
+              width={16}
+              height={16}
+            />
+            Deploy Now
+          </a>
+          
+          {/* Their Documentation link - keep their styling */}
+          <a
+            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/8 px-5 transition-colors hover:border-transparent hover:bg-black/4 dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-39.5"
             href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
             target="_blank"
             rel="noopener noreferrer"

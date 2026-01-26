@@ -11,9 +11,10 @@
 		"prepare": "husky"
 	},
 	"lint-staged": {
-		"*.{ts,tsx,js,jsx,css,scss,json,md}": "pnpm lint:fix"
+		"*.{ts,tsx,js,jsx,css,scss,json,md}": "npm run lint:fix"
 	},
 	"dependencies": {
+		"@heroicons/react": "^2.2.0",
 		"@radix-ui/react-slot": "^1.2.4",
 		"class-variance-authority": "^0.7.1",
 		"clsx": "^2.1.1",

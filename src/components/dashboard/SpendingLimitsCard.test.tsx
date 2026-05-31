@@ -1,6 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SpendingLimitsCard } from "./SpendingLimitsCard";
 
 describe("SpendingLimitsCard", () => {
@@ -82,8 +82,12 @@ describe("SpendingLimitsCard", () => {
 
 		render(<SpendingLimitsCard />);
 
-		const dailyInput = screen.getByLabelText(/daily spending limit/i) as HTMLInputElement;
-		const txInput = screen.getByLabelText(/per-transaction limit/i) as HTMLInputElement;
+		const dailyInput = screen.getByLabelText(
+			/daily spending limit/i,
+		) as HTMLInputElement;
+		const txInput = screen.getByLabelText(
+			/per-transaction limit/i,
+		) as HTMLInputElement;
 
 		expect(dailyInput.value).toBe("10000");
 		expect(txInput.value).toBe("2000");
@@ -94,8 +98,12 @@ describe("SpendingLimitsCard", () => {
 
 		render(<SpendingLimitsCard />);
 
-		const dailyInput = screen.getByLabelText(/daily spending limit/i) as HTMLInputElement;
-		const txInput = screen.getByLabelText(/per-transaction limit/i) as HTMLInputElement;
+		const dailyInput = screen.getByLabelText(
+			/daily spending limit/i,
+		) as HTMLInputElement;
+		const txInput = screen.getByLabelText(
+			/per-transaction limit/i,
+		) as HTMLInputElement;
 
 		expect(dailyInput.value).toBe("5000");
 		expect(txInput.value).toBe("1000");
@@ -109,7 +117,9 @@ describe("SpendingLimitsCard", () => {
 
 		render(<SpendingLimitsCard />);
 
-		const dailyInput = screen.getByLabelText(/daily spending limit/i) as HTMLInputElement;
+		const dailyInput = screen.getByLabelText(
+			/daily spending limit/i,
+		) as HTMLInputElement;
 
 		expect(dailyInput.value).toBe("5000");
 	});
@@ -132,27 +142,23 @@ describe("SpendingLimitsCard", () => {
 			await new Promise((resolve) => setTimeout(resolve, 3100));
 		});
 
-		expect(
-			screen.queryByText(/unable to save spending limits/i),
-		).toBeNull();
+		expect(screen.queryByText(/unable to save spending limits/i)).toBeNull();
 	});
 
 	it("handles empty string input gracefully", async () => {
 		// HTML number inputs default to 0 when cleared
 		// The component gracefully handles this by persisting valid numeric values
 		render(<SpendingLimitsCard />);
-		
+
 		const user = userEvent.setup();
 		const dailyInput = screen.getByLabelText(/daily spending limit/i);
 		const initialValue = (dailyInput as HTMLInputElement).value;
-		
+
 		expect(initialValue).toBe("5000");
-		
+
 		await user.click(screen.getByRole("button", { name: /save settings/i }));
-		
+
 		// Should show success message with default values
-		expect(
-			await screen.findByText(/spending limits saved/i),
-		).toBeTruthy();
+		expect(await screen.findByText(/spending limits saved/i)).toBeTruthy();
 	});
 });

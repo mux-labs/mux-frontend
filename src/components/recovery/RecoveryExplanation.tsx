@@ -45,10 +45,11 @@ export function RecoveryExplanation() {
 						</h2>
 						<p className="text-base text-zinc-600 dark:text-zinc-400 leading-relaxed">
 							Invisible Wallet Recovery is an automatic system that ensures your
-							wallet remains accessible even if you lose access to your device or
-							account. Unlike traditional wallets that require seed phrases or
-							private keys, Mux&apos;s invisible recovery system works seamlessly in the
-							background without requiring any action from you.
+							wallet remains accessible even if you lose access to your device
+							or account. Unlike traditional wallets that require seed phrases
+							or private keys, Mux&apos;s invisible recovery system works
+							seamlessly in the background without requiring any action from
+							you.
 						</p>
 					</div>
 
@@ -68,8 +69,8 @@ export function RecoveryExplanation() {
 										Automatic Detection
 									</h4>
 									<p className="text-sm text-zinc-600 dark:text-zinc-400">
-										The system continuously monitors your wallet&apos;s health and
-										automatically detects when recovery is needed.
+										The system continuously monitors your wallet&apos;s health
+										and automatically detects when recovery is needed.
 									</p>
 								</div>
 							</div>
@@ -133,8 +134,8 @@ export function RecoveryExplanation() {
 									<strong className="text-zinc-900 dark:text-zinc-50">
 										Account access issues:
 									</strong>{" "}
-									When authentication problems are detected, the system initiates
-									recovery to maintain wallet accessibility.
+									When authentication problems are detected, the system
+									initiates recovery to maintain wallet accessibility.
 								</span>
 							</li>
 							<li className="flex items-start gap-2">
@@ -186,9 +187,9 @@ export function RecoveryExplanation() {
 					</h3>
 					<div className="space-y-2 text-sm text-amber-800 dark:text-amber-300">
 						<p>
-							<strong>Recovery is automatic:</strong> You don&apos;t need to take any
-							action. The recovery system works in the background and handles
-							everything for you.
+							<strong>Recovery is automatic:</strong> You don&apos;t need to
+							take any action. The recovery system works in the background and
+							handles everything for you.
 						</p>
 						<p>
 							<strong>Recovery timeframes:</strong> Most recovery operations
@@ -201,9 +202,9 @@ export function RecoveryExplanation() {
 							user error. Always verify transaction details before confirming.
 						</p>
 						<p>
-							<strong>Contact support:</strong> If you experience issues accessing
-							your wallet after 24 hours, or if you notice any suspicious activity,
-							please contact our support team immediately.
+							<strong>Contact support:</strong> If you experience issues
+							accessing your wallet after 24 hours, or if you notice any
+							suspicious activity, please contact our support team immediately.
 						</p>
 					</div>
 				</div>

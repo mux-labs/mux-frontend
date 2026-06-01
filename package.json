@@ -27,6 +27,7 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.3.11",
+		"@rolldown/binding-linux-x64-gnu": "1.0.3",
 		"@tailwindcss/postcss": "^4",
 		"@testing-library/jest-dom": "^6.6.3",
 		"@testing-library/react": "^16.3.0",

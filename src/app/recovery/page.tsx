@@ -12,7 +12,8 @@ export default function RecoveryPage() {
 							Wallet Recovery
 						</h1>
 						<p className="text-zinc-500 dark:text-zinc-400 mt-1">
-							Learn how invisible wallet recovery works to keep your funds secure
+							Learn how invisible wallet recovery works to keep your funds
+							secure
 						</p>
 					</div>
 					<div className="flex gap-3">

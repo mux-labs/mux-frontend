@@ -15,6 +15,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
 	// biome-ignore lint/correctness/useExhaustiveDependencies: close sidebar on route change
 	useEffect(() => {
+		// eslint-disable-next-line react-hooks/set-state-in-effect
 		setSidebarOpen(false);
 	}, [pathname]);
 

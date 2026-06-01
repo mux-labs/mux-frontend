@@ -58,7 +58,7 @@ export default function APIKeyModal({ isOpen, onClose }: APIKeyModalProps) {
 									</h3>
 									<p className="text-sm text-amber-800 dark:text-amber-300">
 										This key will only be displayed once. Make sure to copy and
-										store it somewhere safe. You won't be able to see it again.
+										store it somewhere safe. You won&apos;t be able to see it again.
 									</p>
 								</div>
 							</div>
@@ -97,7 +97,7 @@ export default function APIKeyModal({ isOpen, onClose }: APIKeyModalProps) {
 					) : (
 						<p className="text-zinc-600 dark:text-zinc-400">
 							Click the button below to generate a new API key. Remember to save
-							it securely as you won't be able to view it again.
+							it securely as you won&apos;t be able to view it again.
 						</p>
 					)}
 				</div>

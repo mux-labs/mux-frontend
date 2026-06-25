@@ -1,15 +1,3 @@
-import type { NextConfig } from "next";
-
-const nextConfig = {
-	experimental: {
-		turbo: {
-			rules: {
-				"*.css": {
-					loaders: ["@tailwindcss/vite"],
-				},
-			},
-		},
-	},
-};
+const nextConfig = {};
 
 export default nextConfig;

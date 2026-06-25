@@ -12,7 +12,7 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { type ApiKey, mockApiKeys } from "@/mock-data/api-keys";
+import { mockApiKeys } from "@/mock-data/api-keys";
 
 export function ApiKeysTable() {
 	const [copiedId, setCopiedId] = useState<string | null>(null);

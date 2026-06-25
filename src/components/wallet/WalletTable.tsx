@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Check, Copy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -17,14 +18,17 @@ import type { WalletTableProps } from "@/types/wallet";
 import { truncateAddress } from "@/utils/addressFormatting";
 import { formatDate } from "@/utils/dateFormatting";
 
-function WalletAddressCell({ address }: { address: string }) {
+function WalletAddressCell({ address, walletId }: { address: string; walletId: string }) {
 	const { copy, copied } = useCopyToClipboard();
 
 	return (
-		<div className="flex items-center gap-2">
-			<code className="rounded bg-zinc-100 px-2 py-1 font-mono text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+		<div className="flex flex-wrap items-center gap-2">
+			<Link
+				href={`/demo/dashboard/wallets/${walletId}`}
+				className="rounded bg-zinc-100 px-2 py-1 font-mono text-sm font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700"
+			>
 				{truncateAddress(address)}
-			</code>
+			</Link>
 			<Button
 				variant="ghost"
 				size="icon-sm"
@@ -61,7 +65,10 @@ export function WalletTable({ wallets }: WalletTableProps) {
 					{wallets.map((wallet) => (
 						<TableRow key={wallet.id}>
 							<TableCell>
-								<WalletAddressCell address={wallet.address} />
+								<WalletAddressCell
+									address={wallet.address}
+									walletId={wallet.id}
+								/>
 							</TableCell>
 							<TableCell>
 								<NetworkBadge network={wallet.network} />

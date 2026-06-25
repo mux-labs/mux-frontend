@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, fetchWallets } from "@/lib/api";
+import { ApiError, fetchWalletById, fetchWallets } from "@/lib/api";
 
 const mockWalletsResponse = [
 	{
@@ -59,5 +59,37 @@ describe("fetchWallets", () => {
 		vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
 
 		await expect(fetchWallets()).rejects.toThrow("Network error");
+	});
+
+	it("returns wallet by id on success", async () => {
+		const mockWallet = mockWalletsResponse[0];
+		vi.mocked(fetch).mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockWallet,
+		} as Response);
+
+		const wallet = await fetchWalletById(mockWallet.id);
+
+		expect(wallet.id).toBe(mockWallet.id);
+		expect(wallet.network).toBe(mockWallet.network);
+		expect(wallet.createdAt).toBeInstanceOf(Date);
+	});
+
+	it("falls back to wallet list on 404 when the wallet exists", async () => {
+		vi.mocked(fetch)
+			.mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found" } as Response)
+			.mockResolvedValueOnce({ ok: true, json: async () => mockWalletsResponse } as Response);
+
+		const wallet = await fetchWalletById(mockWalletsResponse[0].id);
+
+		expect(wallet.id).toBe(mockWalletsResponse[0].id);
+	});
+
+	it("throws ApiError when wallet is not found", async () => {
+		vi.mocked(fetch)
+			.mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found" } as Response)
+			.mockResolvedValueOnce({ ok: true, json: async () => mockWalletsResponse } as Response);
+
+		await expect(fetchWalletById("missing-wallet")).rejects.toThrow(ApiError);
 	});
 });

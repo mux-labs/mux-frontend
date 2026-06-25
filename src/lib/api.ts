@@ -27,3 +27,8 @@ export async function fetchWallets(): Promise<Wallet[]> {
 		lastActivity: w.lastActivity ? new Date(w.lastActivity) : undefined,
 	}));
 }
+
+export async function fetchWalletById(walletId: string): Promise<Wallet | null> {
+	const wallets = await fetchWallets();
+	return wallets.find((wallet) => wallet.id === walletId) ?? null;
+}

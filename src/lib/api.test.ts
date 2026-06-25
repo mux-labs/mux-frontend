@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ApiError, fetchWallets } from "@/lib/api";
+import { ApiError, fetchWalletById, fetchWallets } from "@/lib/api";
 
 const mockWalletsResponse = [
 	{
@@ -59,5 +59,27 @@ describe("fetchWallets", () => {
 		vi.mocked(fetch).mockRejectedValueOnce(new Error("Network error"));
 
 		await expect(fetchWallets()).rejects.toThrow("Network error");
+	});
+
+	it("returns wallet by id when available", async () => {
+		vi.mocked(fetch).mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockWalletsResponse,
+		} as Response);
+
+		const wallet = await fetchWalletById("w-2");
+		expect(wallet).not.toBeNull();
+		expect(wallet?.id).toBe("w-2");
+		expect(wallet?.network).toBe("testnet");
+	});
+
+	it("returns null for unknown wallet id", async () => {
+		vi.mocked(fetch).mockResolvedValueOnce({
+			ok: true,
+			json: async () => mockWalletsResponse,
+		} as Response);
+
+		const wallet = await fetchWalletById("unknown");
+		expect(wallet).toBeNull();
 	});
 });

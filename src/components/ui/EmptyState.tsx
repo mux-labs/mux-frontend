@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ReactNode } from "react";
 
 interface EmptyStateProps {
@@ -6,7 +7,8 @@ interface EmptyStateProps {
 	description: string;
 	action?: {
 		label: string;
-		onClick: () => void;
+		onClick?: () => void;
+		href?: string;
 	};
 }
 
@@ -42,12 +44,21 @@ export function EmptyState({
 				{description}
 			</p>
 			{action && (
-				<button
-					onClick={action.onClick}
-					className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-medium text-zinc-50 transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
-				>
-					{action.label}
-				</button>
+				action.href ? (
+					<Link
+						href={action.href}
+						className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-medium text-zinc-50 transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+					>
+						{action.label}
+					</Link>
+				) : (
+					<button
+						onClick={action.onClick}
+						className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-medium text-zinc-50 transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
+					>
+						{action.label}
+					</button>
+				)
 			)}
 		</div>
 	);

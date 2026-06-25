@@ -1,10 +1,10 @@
-import { fetchWalletById } from "@/lib/api";
+import Link from "next/link";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { formatDate } from "@/utils/dateFormatting";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
-import Link from "next/link";
+import { fetchWalletById } from "@/lib/api";
+import { formatDate } from "@/utils/dateFormatting";
 
 interface WalletDetailPageProps {
 	params: {
@@ -12,7 +12,9 @@ interface WalletDetailPageProps {
 	};
 }
 
-export default async function WalletDetailPage({ params }: WalletDetailPageProps) {
+export default async function WalletDetailPage({
+	params,
+}: WalletDetailPageProps) {
 	const wallet = await fetchWalletById(params.walletId);
 
 	if (!wallet) {
@@ -60,40 +62,54 @@ export default async function WalletDetailPage({ params }: WalletDetailPageProps
 									Wallet overview
 								</p>
 								<h2 className="mt-2 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
-									{wallet.network === "mainnet" ? "Mainnet Wallet" : "Testnet Wallet"}
+									{wallet.network === "mainnet"
+										? "Mainnet Wallet"
+										: "Testnet Wallet"}
 								</h2>
 							</div>
 
 							<div className="grid gap-4 sm:grid-cols-2">
 								<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-									<p className="text-sm text-zinc-500 dark:text-zinc-400">Address</p>
+									<p className="text-sm text-zinc-500 dark:text-zinc-400">
+										Address
+									</p>
 									<p className="mt-2 font-mono text-sm text-zinc-900 dark:text-zinc-100 break-all">
 										{wallet.address}
 									</p>
 								</div>
 								<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-									<p className="text-sm text-zinc-500 dark:text-zinc-400">Status</p>
+									<p className="text-sm text-zinc-500 dark:text-zinc-400">
+										Status
+									</p>
 									<div className="mt-2">
 										<StatusIndicator status={wallet.status} />
 									</div>
 								</div>
 								<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-									<p className="text-sm text-zinc-500 dark:text-zinc-400">Network</p>
+									<p className="text-sm text-zinc-500 dark:text-zinc-400">
+										Network
+									</p>
 									<div className="mt-2">
 										<NetworkBadge network={wallet.network} />
 									</div>
 								</div>
 								<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-									<p className="text-sm text-zinc-500 dark:text-zinc-400">Created</p>
+									<p className="text-sm text-zinc-500 dark:text-zinc-400">
+										Created
+									</p>
 									<p className="mt-2 text-sm text-zinc-900 dark:text-zinc-100">
 										{formatDate(wallet.createdAt)}
 									</p>
 								</div>
 							</div>
 							<div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900">
-								<p className="text-sm text-zinc-500 dark:text-zinc-400">Last Activity</p>
+								<p className="text-sm text-zinc-500 dark:text-zinc-400">
+									Last Activity
+								</p>
 								<p className="mt-2 text-sm text-zinc-900 dark:text-zinc-100">
-									{wallet.lastActivity ? formatDate(wallet.lastActivity) : "No recent activity"}
+									{wallet.lastActivity
+										? formatDate(wallet.lastActivity)
+										: "No recent activity"}
 								</p>
 							</div>
 						</div>
@@ -125,7 +141,9 @@ export default async function WalletDetailPage({ params }: WalletDetailPageProps
 								Status summary
 							</h2>
 							<p className="mt-4 text-sm text-zinc-600 dark:text-zinc-300">
-								The wallet detail view is read-only for now. If the selected wallet is invalid or disconnected, you will see a clear account message instead of a blank page.
+								The wallet detail view is read-only for now. If the selected
+								wallet is invalid or disconnected, you will see a clear account
+								message instead of a blank page.
 							</p>
 						</div>
 					</div>

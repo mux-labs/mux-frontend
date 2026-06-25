@@ -43,8 +43,8 @@ export function EmptyState({
 			<p className="mb-6 max-w-sm text-zinc-500 dark:text-zinc-400">
 				{description}
 			</p>
-			{action && (
-				action.href ? (
+			{action &&
+				(action.href ? (
 					<Link
 						href={action.href}
 						className="inline-flex h-10 items-center justify-center rounded-lg bg-zinc-900 px-6 text-sm font-medium text-zinc-50 transition-colors hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-900 dark:hover:bg-zinc-200"
@@ -58,8 +58,7 @@ export function EmptyState({
 					>
 						{action.label}
 					</button>
-				)
-			)}
+				))}
 		</div>
 	);
 }

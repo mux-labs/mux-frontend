@@ -28,7 +28,9 @@ export async function fetchWallets(): Promise<Wallet[]> {
 	}));
 }
 
-export async function fetchWalletById(walletId: string): Promise<Wallet | null> {
+export async function fetchWalletById(
+	walletId: string,
+): Promise<Wallet | null> {
 	const wallets = await fetchWallets();
 	return wallets.find((wallet) => wallet.id === walletId) ?? null;
 }

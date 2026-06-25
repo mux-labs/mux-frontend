@@ -58,7 +58,8 @@ export default function APIKeyModal({ isOpen, onClose }: APIKeyModalProps) {
 									</h3>
 									<p className="text-sm text-amber-800 dark:text-amber-300">
 										This key will only be displayed once. Make sure to copy and
-										store it somewhere safe. You won&apos;t be able to see it again.
+										store it somewhere safe. You won&apos;t be able to see it
+										again.
 									</p>
 								</div>
 							</div>

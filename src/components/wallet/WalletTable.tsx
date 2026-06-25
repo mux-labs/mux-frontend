@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { Check, Copy } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import {
 	Table,

@@ -44,6 +44,17 @@ describe("fetchWallets", () => {
 		expect(wallets[0].network).toBe("mainnet");
 	});
 
+	it("returns an empty array when the backend returns a wrapped payload", async () => {
+		vi.mocked(fetch).mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({ wallets: [] }),
+		} as Response);
+
+		const wallets = await fetchWallets();
+
+		expect(wallets).toEqual([]);
+	});
+
 	it("throws ApiError on non-ok response", async () => {
 		vi.mocked(fetch).mockResolvedValue({
 			ok: false,

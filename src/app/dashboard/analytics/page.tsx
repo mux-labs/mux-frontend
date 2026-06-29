@@ -10,6 +10,7 @@ import { AnalyticsLoadingSkeleton } from "@/components/analytics/AnalyticsLoadin
 import { MetricsCards } from "@/components/analytics/MetricsCards";
 import { TopAssetsTable } from "@/components/analytics/TopAssetsTable";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ToastContainer, useToast } from "@/components/ui/toast";
 import { useAnalytics } from "@/hooks/useAnalytics";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 
@@ -25,10 +26,39 @@ export default function AnalyticsPage() {
 	});
 	const { data, isLoading, isError, error, refetch } = useAnalytics();
 	const { track } = useAnalyticsTracking("analytics");
+	const { toasts, addToast, dismissToast } = useToast();
 
 	function handleRangeChange(newRange: DateRange) {
+		const oldRange = range;
 		setRange(newRange);
 		track("date_range_changed", { from: newRange.from, to: newRange.to });
+		
+		// Show toast confirmation for date range change
+		addToast({
+			type: "info",
+			message: "Date range updated",
+			description: `Showing data from ${newRange.from} to ${newRange.to}`,
+			duration: 3000,
+		});
+	}
+
+	async function handleRefresh() {
+		try {
+			await refetch();
+			addToast({
+				type: "success",
+				message: "Analytics data refreshed",
+				description: "Dashboard has been updated with the latest data",
+				duration: 3000,
+			});
+		} catch (err) {
+			addToast({
+				type: "error",
+				message: "Failed to refresh data",
+				description: err instanceof Error ? err.message : "Please try again later",
+				duration: 5000,
+			});
+		}
 	}
 
 	if (isLoading) {
@@ -37,35 +67,54 @@ export default function AnalyticsPage() {
 
 	if (isError || !data) {
 		return (
-			<ErrorState
-				title="Failed to load analytics"
-				description={error ?? "An unexpected error occurred. Please try again."}
-				retry={{ onRetry: refetch }}
-			/>
+			<>
+				<ErrorState
+					title="Failed to load analytics"
+					description={error ?? "An unexpected error occurred. Please try again."}
+					retry={{ onRetry: handleRefresh }}
+				/>
+				<ToastContainer 
+					toasts={toasts} 
+					onDismiss={dismissToast}
+					position="top-right"
+				/>
+			</>
 		);
 	}
 
 	return (
-		<div className="space-y-6">
-			<AnalyticsHeader range={range} onRangeChange={handleRangeChange} />
-
-			<MetricsCards metrics={data.metrics} />
-
-			<div className="grid gap-6 lg:grid-cols-2">
-				<AnalyticsChart
-					title="Volume"
-					description="Total transaction volume over the selected period"
-					data={data.volumeData}
-					formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
+		<>
+			<div className="space-y-6">
+				<AnalyticsHeader 
+					range={range} 
+					onRangeChange={handleRangeChange}
+					onRefresh={handleRefresh}
 				/>
-				<AnalyticsChart
-					title="Transactions"
-					description="Number of transactions over the selected period"
-					data={data.transactionsData}
-				/>
+
+				<MetricsCards metrics={data.metrics} />
+
+				<div className="grid gap-6 lg:grid-cols-2">
+					<AnalyticsChart
+						title="Volume"
+						description="Total transaction volume over the selected period"
+						data={data.volumeData}
+						formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
+					/>
+					<AnalyticsChart
+						title="Transactions"
+						description="Number of transactions over the selected period"
+						data={data.transactionsData}
+					/>
+				</div>
+
+				<TopAssetsTable assets={data.topAssets} />
 			</div>
-
-			<TopAssetsTable assets={data.topAssets} />
-		</div>
+			
+			<ToastContainer 
+				toasts={toasts} 
+				onDismiss={dismissToast}
+				position="top-right"
+			/>
+		</>
 	);
 }

@@ -9,3 +9,4 @@ export {
 } from "./AnalyticsLoadingSkeleton";
 export { MetricsCards } from "./MetricsCards";
 export { TopAssetsTable } from "./TopAssetsTable";
+export { CopyButton } from "./CopyButton";

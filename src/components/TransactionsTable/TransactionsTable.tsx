@@ -534,92 +534,15 @@ export default function TransactionsTable({
 										</div>
 										<span className="text-xs text-slate-400">
 											{formatDate(tx.createdAt)}
-										</div>
+										</span>
 									</div>
 
-									{/* Mobile card */}
-									<div className="lg:hidden space-y-2">
-										<div className="flex items-center justify-between">
-											<div className="flex items-center">
-												<span
-													className="font-mono text-xs text-indigo-600"
-													title={tx.hash}
-												>
-													{truncate(tx.hash, 8, 6)}
-												</span>
-												<CopyButton
-													text={tx.hash}
-													label={`Copy transaction hash ${tx.hash}`}
-												/>
-											</div>
-											<div className="flex items-center gap-2">
-												<NetworkBadge network={tx.network} />
-												<StatusPill status={tx.status} />
-											</div>
-										</div>
-										<div className="flex justify-between text-xs text-slate-500">
-											<span className="flex items-center gap-0.5">
-												<span className="font-medium text-slate-700">From: </span>
-												<span className="font-mono" title={tx.from}>
-													{truncate(tx.from)}
-												</span>
-												<CopyButton
-													text={tx.from}
-													label={`Copy from address ${tx.from}`}
-												/>
-											</span>
-											<span className="flex items-center gap-0.5">
-												<span className="font-medium text-slate-700">To: </span>
-												<span className="font-mono" title={tx.to}>
-													{truncate(tx.to)}
-												</span>
-												<CopyButton
-													text={tx.to}
-													label={`Copy to address ${tx.to}`}
-												/>
-											</span>
-										</div>
-										<div className="flex justify-between items-center">
-											<span className="font-semibold text-sm tabular-nums text-slate-900">
-												{Number(tx.amountXlm).toLocaleString(undefined, {
-													minimumFractionDigits: 2,
-													maximumFractionDigits: 7,
-												})}{" "}
-												XLM
-											</span>
-											<span className="text-xs text-slate-400">
-												{formatDate(tx.createdAt)}
-											</span>
-										</div>
-										{tx.memo && (
-											<p className="text-xs text-slate-400">Memo: {tx.memo}</p>
-										)}
-									</div>
 									{tx.memo && (
 										<p className="text-xs text-slate-400 mt-2 italic leading-relaxed bg-slate-50 rounded-md px-2.5 py-1.5">
 											Memo: {tx.memo}
 										</p>
 									)}
 								</div>
-							))
-						) : (
-							<div className="p-12 text-center">
-								<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
-									<Search size={20} className="text-slate-400" aria-hidden />
-								</div>
-								<h3 className="text-sm font-medium text-slate-900">
-									No transactions found
-								</h3>
-								<p className="text-sm text-slate-500 mt-1">
-									No results for current filters.
-								</p>
-								<button
-									type="button"
-									onClick={clearFilters}
-									className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
-								>
-									Clear all filters
-								</button>
 							</div>
 						))
 					) : (
@@ -634,6 +557,7 @@ export default function TransactionsTable({
 								No results for current filters.
 							</p>
 							<button
+								type="button"
 								onClick={clearFilters}
 								className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
 							>

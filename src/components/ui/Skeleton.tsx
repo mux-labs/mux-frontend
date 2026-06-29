@@ -111,3 +111,82 @@ export function CardSkeleton() {
 		</div>
 	);
 }
+
+/**
+ * Skeleton placeholder for the RecoveryStatus badge.
+ * Mirrors the shape of the active badge — a pill with a dot and label text.
+ */
+export function RecoveryStatusSkeleton({ className }: { className?: string }) {
+	return (
+		<div
+			aria-label="Loading recovery status"
+			aria-busy="true"
+			className={className}
+		>
+			<Skeleton className="inline-flex items-center gap-1.5 h-6 w-24 rounded-full" />
+		</div>
+	);
+}
+
+/**
+ * Skeleton placeholder for the RecoveryTimelineList.
+ * Mirrors the layout: progress header, progress bar, event list, stat cards.
+ */
+export function RecoveryTimelineSkeleton({
+	className,
+	eventCount = 3,
+}: { className?: string; eventCount?: number }) {
+	return (
+		<div
+			className="space-y-6"
+			role="status"
+			aria-label="Loading recovery timeline"
+			aria-busy="true"
+			aria-live="polite"
+		>
+			{/* Progress header */}
+			<div className="space-y-2">
+				<div className="flex items-center justify-between">
+					<Skeleton className="h-4 w-36" />
+					<Skeleton className="h-4 w-24" />
+				</div>
+				<Skeleton className="h-2 w-full rounded-full" />
+			</div>
+
+			{/* Timeline events */}
+			<div className="space-y-0">
+				{Array.from({ length: eventCount }).map((_, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
+					<div key={i} className="flex gap-4 py-2">
+						<div className="flex flex-col items-center">
+							<Skeleton className="h-9 w-9 rounded-full shrink-0" />
+							{i < eventCount - 1 && (
+								<Skeleton className="w-1 flex-1 my-2 rounded-full" />
+							)}
+						</div>
+						<div className="flex-1 space-y-2 pb-4">
+							<div className="flex items-start justify-between gap-2">
+								<div className="flex-1 space-y-1">
+									<Skeleton className="h-4 w-40" />
+									<Skeleton className="h-3 w-full max-w-md" />
+								</div>
+								<Skeleton className="h-3 w-12 shrink-0" />
+							</div>
+						</div>
+					</div>
+				))}
+			</div>
+
+			{/* Stat summary cards */}
+			<div className="grid grid-cols-3 gap-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+				{Array.from({ length: 3 }).map((_, i) => (
+					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
+					<div key={i} className="text-center space-y-2">
+						<Skeleton className="h-8 w-12 mx-auto" />
+						<Skeleton className="h-3 w-16 mx-auto" />
+					</div>
+				))}
+			</div>
+		</div>
+	);
+}

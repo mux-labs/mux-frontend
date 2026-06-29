@@ -1,4 +1,5 @@
 import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/Skeleton";
 
 /**
  * Props for the {@link RecoveryLoadingState} skeleton component.
@@ -52,33 +53,33 @@ export function RecoveryLoadingState({
 			<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
-						<div className="h-9 w-9 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+						<Skeleton className="h-9 w-9 rounded-full" />
 						<div className="space-y-2">
-							<div className="h-4 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-							<div className="h-3 w-56 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+							<Skeleton className="h-4 w-40" />
+							<Skeleton className="h-3 w-56" />
 						</div>
 					</div>
-					<div className="h-6 w-20 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+					<Skeleton className="h-6 w-20 rounded-full" />
 				</div>
 			</div>
 
 			{/* Explanation card skeleton */}
 			<div className="rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 space-y-6">
 				<div className="space-y-2">
-					<div className="h-6 w-64 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-					<div className="h-4 w-full rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-					<div className="h-4 w-5/6 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+					<Skeleton className="h-6 w-64" />
+					<Skeleton className="h-4 w-full" />
+					<Skeleton className="h-4 w-5/6" />
 				</div>
 
 				<div className="border-t border-zinc-200 dark:border-zinc-800 pt-6 space-y-4">
-					<div className="h-5 w-32 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+					<Skeleton className="h-5 w-32" />
 					{[1, 2, 3].map((i) => (
 						<div key={i} className="flex gap-4">
-							<div className="h-8 w-8 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse shrink-0" />
+							<Skeleton className="h-8 w-8 rounded-full shrink-0" />
 							<div className="flex-1 space-y-2">
-								<div className="h-4 w-40 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-								<div className="h-3 w-full rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
-								<div className="h-3 w-4/5 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
+								<Skeleton className="h-4 w-40" />
+								<Skeleton className="h-3 w-full" />
+								<Skeleton className="h-3 w-4/5" />
 							</div>
 						</div>
 					))}

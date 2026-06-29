@@ -4,6 +4,8 @@ import {
 	CardSkeleton,
 	Skeleton,
 	WalletTableSkeleton,
+	RecoveryStatusSkeleton,
+	RecoveryTimelineSkeleton,
 } from "@/components/ui/Skeleton";
 
 describe("Skeleton", () => {
@@ -157,6 +159,83 @@ describe("Skeleton", () => {
 			const { container } = render(<CardSkeleton />);
 			const wrapper = container.firstChild as HTMLElement;
 			expect(wrapper.className).toContain("dark:border-zinc-800");
+		});
+	});
+
+	describe("RecoveryStatusSkeleton", () => {
+		it("renders with aria-busy=true", () => {
+			render(<RecoveryStatusSkeleton />);
+			expect(screen.getByLabelText("Loading recovery status")).toHaveAttribute(
+				"aria-busy",
+				"true",
+			);
+		});
+
+		it("renders a pill-shaped skeleton", () => {
+			const { container } = render(<RecoveryStatusSkeleton />);
+			const pill = container.querySelector(".rounded-full");
+			expect(pill).toBeInTheDocument();
+		});
+
+		it("applies custom className", () => {
+			render(<RecoveryStatusSkeleton className="ml-auto" />);
+			expect(screen.getByLabelText("Loading recovery status")).toHaveClass(
+				"ml-auto",
+			);
+		});
+	});
+
+	describe("RecoveryTimelineSkeleton", () => {
+		it("renders with role=status and accessible label", () => {
+			render(<RecoveryTimelineSkeleton />);
+			const region = screen.getByRole("status");
+			expect(region).toBeInTheDocument();
+			expect(region).toHaveAttribute(
+				"aria-label",
+				"Loading recovery timeline",
+			);
+		});
+
+		it("has aria-live=polite for screen reader announcements", () => {
+			render(<RecoveryTimelineSkeleton />);
+			expect(screen.getByRole("status")).toHaveAttribute(
+				"aria-live",
+				"polite",
+			);
+		});
+
+		it("has aria-busy=true", () => {
+			render(<RecoveryTimelineSkeleton />);
+			expect(screen.getByRole("status")).toHaveAttribute("aria-busy", "true");
+		});
+
+		it("renders the requested number of event skeletons", () => {
+			const { container } = render(<RecoveryTimelineSkeleton eventCount={5} />);
+			const eventDots = container.querySelectorAll(
+				'.flex.flex-col.items-center > .rounded-full',
+			);
+			expect(eventDots.length).toBe(5);
+		});
+
+		it("renders 3 events by default", () => {
+			const { container } = render(<RecoveryTimelineSkeleton />);
+			const eventDots = container.querySelectorAll(
+				'.flex.flex-col.items-center > .rounded-full',
+			);
+			expect(eventDots.length).toBe(3);
+		});
+
+		it("renders stat summary cards", () => {
+			const { container } = render(<RecoveryTimelineSkeleton />);
+			const statSection = container.querySelector(".grid.grid-cols-3");
+			expect(statSection).toBeInTheDocument();
+			expect(statSection?.children).toHaveLength(3);
+		});
+
+		it("renders a progress bar skeleton", () => {
+			const { container } = render(<RecoveryTimelineSkeleton />);
+			const progressBar = container.querySelector(".rounded-full");
+			expect(progressBar).toBeInTheDocument();
 		});
 	});
 });

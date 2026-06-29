@@ -64,6 +64,7 @@ export interface RecoveryTimelineEventProps {
 
 export interface RecoveryTimelineListProps {
 	events: RecoveryTimelineEvent[];
+	loading?: boolean;
 	className?: string;
 	onEventClick?: (event: RecoveryTimelineEvent) => void;
 	emptyMessage?: string;

@@ -3,6 +3,7 @@
 import { cn } from "@/lib/utils";
 import type { RecoveryTimelineListProps } from "@/types/recovery";
 import { RecoveryTimelineEvent } from "./RecoveryTimelineEvent";
+import { RecoveryTimelineSkeleton } from "@/components/ui/Skeleton";
 
 /**
  * RecoveryTimelineList component displays a list of recovery timeline events
@@ -12,10 +13,12 @@ import { RecoveryTimelineEvent } from "./RecoveryTimelineEvent";
  * - Shows visual timeline with connecting lines
  * - Handles empty state gracefully
  * - Supports event selection callbacks
+ * - Loading state shows skeleton placeholder
  * - Responsive design with dark mode support
  * - Accessible with proper ARIA attributes
  *
  * @param events - Array of recovery timeline events to display
+ * @param loading - Show skeleton placeholder when true
  * @param className - Optional additional CSS classes
  * @param onEventClick - Callback when an event is clicked
  * @param emptyMessage - Custom message for empty state
@@ -23,15 +26,20 @@ import { RecoveryTimelineEvent } from "./RecoveryTimelineEvent";
  * @example
  * <RecoveryTimelineList
  *   events={timeline.events}
+ *   loading={isLoading}
  *   onEventClick={(event) => console.log(event)}
  * />
  */
 export function RecoveryTimelineList({
 	events,
+	loading = false,
 	className,
 	onEventClick,
 	emptyMessage = "No recovery events to display",
 }: RecoveryTimelineListProps) {
+	if (loading) {
+		return <RecoveryTimelineSkeleton className={className} />;
+	}
 	// Handle empty state
 	if (!events || events.length === 0) {
 		return (

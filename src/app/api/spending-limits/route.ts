@@ -91,9 +91,6 @@ export async function PUT(request: Request) {
 			todayUsage: 750,
 		});
 	} catch {
-		return NextResponse.json(
-			{ error: "Invalid JSON body" },
-			{ status: 400 },
-		);
+		return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
 	}
 }

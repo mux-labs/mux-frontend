@@ -256,7 +256,9 @@ describe("StatusIndicator", () => {
 		});
 
 		it("does not show pulse animation for unknown status", () => {
-			const { container } = render(<StatusIndicator status={"broken" as never} />);
+			const { container } = render(
+				<StatusIndicator status={"broken" as never} />,
+			);
 			const dot = container.querySelector(".animate-pulse");
 			expect(dot).not.toBeInTheDocument();
 		});

@@ -207,24 +207,22 @@ describe("AddWalletModal label validation", () => {
 	it("shows an error when label exceeds 30 characters", async () => {
 		const user = userEvent.setup();
 		renderModal();
-		await user.type(
-			screen.getByLabelText(/label/i),
-			"A".repeat(31),
-		);
+		await user.type(screen.getByLabelText(/label/i), "A".repeat(31));
 		await user.tab();
-		expect(await screen.findByText(/30 characters or less/i)).toBeInTheDocument();
+		expect(
+			await screen.findByText(/30 characters or less/i),
+		).toBeInTheDocument();
 	});
 
 	it("blocks submission when label exceeds 30 characters", async () => {
 		const user = userEvent.setup();
 		const { onAdd } = renderModal();
 		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
-		await user.type(
-			screen.getByLabelText(/label/i),
-			"A".repeat(31),
-		);
+		await user.type(screen.getByLabelText(/label/i), "A".repeat(31));
 		await user.click(screen.getByRole("button", { name: /add wallet/i }));
-		expect(await screen.findByText(/30 characters or less/i)).toBeInTheDocument();
+		expect(
+			await screen.findByText(/30 characters or less/i),
+		).toBeInTheDocument();
 		expect(onAdd).not.toHaveBeenCalled();
 	});
 
@@ -233,9 +231,7 @@ describe("AddWalletModal label validation", () => {
 		renderModal();
 		await user.type(screen.getByLabelText(/label/i), "My <Wallet>");
 		await user.tab();
-		expect(
-			await screen.findByText(/invalid characters/i),
-		).toBeInTheDocument();
+		expect(await screen.findByText(/invalid characters/i)).toBeInTheDocument();
 	});
 
 	it("blocks submission when label contains invalid characters", async () => {
@@ -397,9 +393,9 @@ describe("AddWalletModal successful submission", () => {
 		expect(
 			(screen.getByLabelText(/stellar address/i) as HTMLInputElement).value,
 		).toBe("");
-		expect(
-			(screen.getByLabelText(/label/i) as HTMLInputElement).value,
-		).toBe("");
+		expect((screen.getByLabelText(/label/i) as HTMLInputElement).value).toBe(
+			"",
+		);
 	});
 });
 

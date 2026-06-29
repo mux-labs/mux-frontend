@@ -3,10 +3,6 @@
 	"compilerOptions": {
 		"types": ["@storybook/react"]
 	},
-	"include": [
-		"../src/**/*.stories.ts",
-		"../src/**/*.stories.tsx",
-		"./**/*.ts"
-	],
+	"include": ["../src/**/*.stories.ts", "../src/**/*.stories.tsx", "./**/*.ts"],
 	"exclude": ["../node_modules"]
 }

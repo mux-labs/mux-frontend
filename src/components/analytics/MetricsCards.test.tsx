@@ -55,7 +55,7 @@ const mockMetrics: Metric[] = [
 describe("MetricsCards", () => {
 	it("renders all metric cards", () => {
 		render(<MetricsCards metrics={mockMetrics} />);
-		
+
 		for (const metric of mockMetrics) {
 			expect(screen.getByText(metric.label)).toBeInTheDocument();
 			expect(screen.getByText(metric.value)).toBeInTheDocument();
@@ -71,7 +71,9 @@ describe("MetricsCards", () => {
 	it("displays positive change with emerald color", () => {
 		render(<MetricsCards metrics={mockMetrics} />);
 		const positiveChange = screen.getByText("12.5%");
-		expect(positiveChange.parentElement?.className).toContain("text-emerald-600");
+		expect(positiveChange.parentElement?.className).toContain(
+			"text-emerald-600",
+		);
 	});
 
 	it("displays negative change with red color", () => {
@@ -101,7 +103,7 @@ describe("MetricsCards", () => {
 	it("shows toast message when copy succeeds", async () => {
 		const user = userEvent.setup();
 		render(<MetricsCards metrics={mockMetrics} />);
-		
+
 		const copyButtons = screen.getAllByTestId("analytics-copy-button");
 		// Just verify the button click works without errors
 		await user.click(copyButtons[0]);
@@ -111,10 +113,10 @@ describe("MetricsCards", () => {
 	it("handles copy button click without errors", async () => {
 		const user = userEvent.setup();
 		render(<MetricsCards metrics={mockMetrics} />);
-		
+
 		const copyButtons = screen.getAllByTestId("analytics-copy-button");
 		await user.click(copyButtons[0]);
-		
+
 		// Toast behavior is tested via integration
 	});
 
@@ -147,7 +149,7 @@ describe("MetricsCards", () => {
 
 	it("each copy button has correct accessible label", () => {
 		render(<MetricsCards metrics={mockMetrics} />);
-		
+
 		expect(
 			screen.getByLabelText("Copy Total Volume value"),
 		).toBeInTheDocument();
@@ -166,7 +168,7 @@ describe("MetricsCards", () => {
 		const { container } = render(<MetricsCards metrics={mockMetrics} />);
 		const cards = container.querySelectorAll(".shadow-sm");
 		expect(cards.length).toBe(mockMetrics.length);
-		
+
 		for (const card of cards) {
 			expect(card.className).toContain("hover:shadow-md");
 		}

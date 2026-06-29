@@ -76,7 +76,7 @@ describe("TopAssetsTable", () => {
 
 	it("renders all assets", () => {
 		render(<TopAssetsTable assets={mockAssets} />);
-		
+
 		for (const asset of mockAssets) {
 			expect(screen.getByText(asset.name)).toBeInTheDocument();
 			expect(screen.getByText(asset.symbol)).toBeInTheDocument();
@@ -134,7 +134,7 @@ describe("TopAssetsTable", () => {
 	it("handles symbol copy button click", async () => {
 		const user = userEvent.setup();
 		render(<TopAssetsTable assets={mockAssets} />);
-		
+
 		const copyButtons = screen.getAllByTestId("analytics-copy-button");
 		await user.click(copyButtons[0]); // First button is symbol copy
 		// Toast behavior is tested via integration
@@ -143,7 +143,7 @@ describe("TopAssetsTable", () => {
 	it("handles volume copy button click", async () => {
 		const user = userEvent.setup();
 		render(<TopAssetsTable assets={mockAssets} />);
-		
+
 		const copyButtons = screen.getAllByTestId("analytics-copy-button");
 		await user.click(copyButtons[1]); // Second button is volume copy
 		// Toast behavior is tested via integration
@@ -152,7 +152,7 @@ describe("TopAssetsTable", () => {
 	it("handles TVL copy button click", async () => {
 		const user = userEvent.setup();
 		render(<TopAssetsTable assets={mockAssets} />);
-		
+
 		const copyButtons = screen.getAllByTestId("analytics-copy-button");
 		await user.click(copyButtons[2]); // Third button is TVL copy
 		// Toast behavior is tested via integration
@@ -193,7 +193,7 @@ describe("TopAssetsTable", () => {
 
 	it("each copy button has correct accessible label", () => {
 		render(<TopAssetsTable assets={mockAssets} />);
-		
+
 		expect(screen.getByLabelText("Copy MUX symbol")).toBeInTheDocument();
 		expect(screen.getByLabelText("Copy MUX volume")).toBeInTheDocument();
 		expect(screen.getByLabelText("Copy MUX TVL")).toBeInTheDocument();

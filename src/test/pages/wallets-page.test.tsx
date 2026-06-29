@@ -172,15 +172,10 @@ describe("WalletsPage (/demo/dashboard/wallets)", () => {
 			await user.click(screen.getByRole("button", { name: /add wallet/i }));
 
 			// Fill in form
-			await user.type(
-				screen.getByLabelText(/stellar address/i),
-				VALID_ADDRESS,
-			);
+			await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
 
 			// Submit form — triggers 800ms fake API delay inside AddWalletModal
-			await user.click(
-				screen.getByRole("button", { name: /^add wallet$/i }),
-			);
+			await user.click(screen.getByRole("button", { name: /^add wallet$/i }));
 
 			// Advance past the simulated API delay
 			vi.advanceTimersByTime(1000);
@@ -214,13 +209,8 @@ describe("WalletsPage (/demo/dashboard/wallets)", () => {
 				?.textContent?.match(/\d+/)?.[0];
 
 			await user.click(screen.getByRole("button", { name: /add wallet/i }));
-			await user.type(
-				screen.getByLabelText(/stellar address/i),
-				VALID_ADDRESS,
-			);
-			await user.click(
-				screen.getByRole("button", { name: /^add wallet$/i }),
-			);
+			await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+			await user.click(screen.getByRole("button", { name: /^add wallet$/i }));
 			vi.advanceTimersByTime(1000);
 			await waitFor(() =>
 				expect(

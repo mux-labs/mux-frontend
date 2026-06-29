@@ -6,7 +6,10 @@ import RequestsToday from "../RequestsToday";
 describe("RequestsToday", () => {
 	beforeEach(() => {
 		global.fetch = vi.fn(() =>
-			Promise.resolve({ ok: true, json: () => Promise.resolve({ count: 123 }) })
+			Promise.resolve({
+				ok: true,
+				json: () => Promise.resolve({ count: 123 }),
+			}),
 		) as unknown as typeof fetch;
 	});
 	afterEach(() => {

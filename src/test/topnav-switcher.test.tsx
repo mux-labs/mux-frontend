@@ -110,7 +110,9 @@ describe("TopNav — dark mode toggle", () => {
 
 	it("shows 'switch to light mode' label after enabling dark mode", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: /switch to dark mode/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /switch to dark mode/i }),
+		);
 		expect(
 			screen.getByRole("button", { name: /switch to light mode/i }),
 		).toBeInTheDocument();
@@ -120,20 +122,28 @@ describe("TopNav — dark mode toggle", () => {
 		renderTopNav();
 		const toggle = screen.getByRole("button", { name: /switch to dark mode/i });
 		fireEvent.click(toggle); // → dark
-		fireEvent.click(screen.getByRole("button", { name: /switch to light mode/i })); // → light
+		fireEvent.click(
+			screen.getByRole("button", { name: /switch to light mode/i }),
+		); // → light
 		expect(document.documentElement.classList.contains("dark")).toBe(false);
 	});
 
 	it("persists dark mode preference to localStorage", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: /switch to dark mode/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /switch to dark mode/i }),
+		);
 		expect(localStorage.getItem("mux_dark_mode")).toBe("true");
 	});
 
 	it("persists light mode preference to localStorage", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: /switch to dark mode/i }));
-		fireEvent.click(screen.getByRole("button", { name: /switch to light mode/i }));
+		fireEvent.click(
+			screen.getByRole("button", { name: /switch to dark mode/i }),
+		);
+		fireEvent.click(
+			screen.getByRole("button", { name: /switch to light mode/i }),
+		);
 		expect(localStorage.getItem("mux_dark_mode")).toBe("false");
 	});
 });

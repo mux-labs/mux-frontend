@@ -23,23 +23,23 @@ import { TransactionForm } from "./TransactionForm";
  * ```
  */
 const meta = {
-  title: "Transactions/TransactionForm",
-  component: TransactionForm,
-  parameters: {
-    layout: "centered",
-  },
-  tags: ["autodocs"],
-  argTypes: {
-    onSubmit: { action: "submitted" },
-    isSubmitting: {
-      control: "boolean",
-      description: "Whether the form is in submitting state",
-    },
-    className: {
-      control: "text",
-      description: "Additional CSS class names",
-    },
-  },
+	title: "Transactions/TransactionForm",
+	component: TransactionForm,
+	parameters: {
+		layout: "centered",
+	},
+	tags: ["autodocs"],
+	argTypes: {
+		onSubmit: { action: "submitted" },
+		isSubmitting: {
+			control: "boolean",
+			description: "Whether the form is in submitting state",
+		},
+		className: {
+			control: "text",
+			description: "Additional CSS class names",
+		},
+	},
 } satisfies Meta<typeof TransactionForm>;
 
 export default meta;
@@ -47,31 +47,31 @@ type Story = StoryObj<typeof TransactionForm>;
 
 /** Default form in its initial state */
 export const Default: Story = {
-  args: {
-    onSubmit: (data) => console.log("Submitted:", data),
-    isSubmitting: false,
-  },
+	args: {
+		onSubmit: (data) => console.log("Submitted:", data),
+		isSubmitting: false,
+	},
 };
 
 /** Form in a submitting/loading state with all fields disabled */
 export const Submitting: Story = {
-  args: {
-    onSubmit: (data) => console.log("Submitted:", data),
-    isSubmitting: true,
-  },
+	args: {
+		onSubmit: (data) => console.log("Submitted:", data),
+		isSubmitting: true,
+	},
 };
 
 /** Form with pre-filled data for editing/review */
 export const WithPrefilledData: Story = {
-  args: {
-    onSubmit: (data) => console.log("Submitted:", data),
-    isSubmitting: false,
-  },
-  /**
-   * Note: In a real scenario, TransactionForm would need controlled
-   * initial values. For now, users can type into the fields in the
-   * Storybook canvas to test validation interactively.
-   */
+	args: {
+		onSubmit: (data) => console.log("Submitted:", data),
+		isSubmitting: false,
+	},
+	/**
+	 * Note: In a real scenario, TransactionForm would need controlled
+	 * initial values. For now, users can type into the fields in the
+	 * Storybook canvas to test validation interactively.
+	 */
 };
 
 /**
@@ -79,12 +79,12 @@ export const WithPrefilledData: Story = {
  * Demonstrates how the form adapts to different widths.
  */
 export const NarrowContainer: Story = {
-  args: {
-    onSubmit: (data) => console.log("Submitted:", data),
-    isSubmitting: false,
-    className: "max-w-xs",
-  },
-  parameters: {
-    layout: "centered",
-  },
+	args: {
+		onSubmit: (data) => console.log("Submitted:", data),
+		isSubmitting: false,
+		className: "max-w-xs",
+	},
+	parameters: {
+		layout: "centered",
+	},
 };

@@ -139,16 +139,12 @@ describe("RecoveryFAQ stories", () => {
 
 	it("Empty story renders the empty fallback message", () => {
 		render(<RecoveryFAQ {...Empty.args} />);
-		expect(
-			screen.getByText(/no faq items available/i),
-		).toBeInTheDocument();
+		expect(screen.getByText(/no faq items available/i)).toBeInTheDocument();
 	});
 
 	it("SingleItem story renders exactly one FAQ question", () => {
 		render(<RecoveryFAQ {...SingleItem.args} />);
-		expect(
-			screen.getAllByRole("listitem").length,
-		).toBe(1);
+		expect(screen.getAllByRole("listitem").length).toBe(1);
 	});
 });
 
@@ -168,9 +164,7 @@ describe("InitiateRecoveryCTA stories", () => {
 		expect(
 			screen.getByRole("button", { name: /yes, initiate recovery/i }),
 		).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: /cancel/i }),
-		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
 	});
 
 	it("Pending story renders the loading spinner", () => {
@@ -182,15 +176,11 @@ describe("InitiateRecoveryCTA stories", () => {
 
 	it("Success story renders the success confirmation", () => {
 		render(<InitiateRecoveryCTA {...Success.args!} />);
-		expect(
-			screen.getByText(/recovery initiated/i),
-		).toBeInTheDocument();
+		expect(screen.getByText(/recovery initiated/i)).toBeInTheDocument();
 	});
 
 	it("WithError story renders the error message inline", () => {
 		render(<InitiateRecoveryCTA {...WithError.args!} />);
-		expect(
-			screen.getByText(/network timeout/i),
-		).toBeInTheDocument();
+		expect(screen.getByText(/network timeout/i)).toBeInTheDocument();
 	});
 });

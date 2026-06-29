@@ -14,7 +14,7 @@ describe("RecoveryFAQ", () => {
 	it("renders FAQ heading and items", () => {
 		render(<RecoveryFAQ />);
 		expect(
-			screen.getByRole("heading", { name: /frequently asked questions/i })
+			screen.getByRole("heading", { name: /frequently asked questions/i }),
 		).toBeInTheDocument();
 		expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
 	});
@@ -31,7 +31,7 @@ describe("RecoveryFAQ", () => {
 	it("expands and collapses FAQ items", () => {
 		render(<RecoveryFAQ />);
 		const firstQuestion = screen.getAllByRole("button")[0];
-		
+
 		fireEvent.click(firstQuestion);
 		expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
 	});

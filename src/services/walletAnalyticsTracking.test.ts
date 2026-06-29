@@ -14,26 +14,21 @@ describe("trackWalletEvent", () => {
 
 	it("logs to console in development environment", () => {
 		process.env.NODE_ENV = "development";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackWalletEvent("wallet_detail_view", { walletId: "wallet-001" });
 
 		expect(consoleSpy).toHaveBeenCalledTimes(1);
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"[Analytics] wallet_detail_view",
-			{ walletId: "wallet-001" },
-		);
+		expect(consoleSpy).toHaveBeenCalledWith("[Analytics] wallet_detail_view", {
+			walletId: "wallet-001",
+		});
 
 		consoleSpy.mockRestore();
 	});
 
 	it("does not log in production environment", () => {
 		process.env.NODE_ENV = "production";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackWalletEvent("wallet_detail_view", { walletId: "wallet-001" });
 
@@ -44,9 +39,7 @@ describe("trackWalletEvent", () => {
 
 	it("does not log in test environment", () => {
 		process.env.NODE_ENV = "test";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackWalletEvent("wallet_balance_refresh", { walletId: "wallet-001" });
 
@@ -74,9 +67,7 @@ describe("trackWalletEvent", () => {
 
 	it("defaults payload to empty object when omitted", () => {
 		process.env.NODE_ENV = "development";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackWalletEvent("wallet_detail_view");
 

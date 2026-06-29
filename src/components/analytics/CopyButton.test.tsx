@@ -49,7 +49,7 @@ describe("CopyButton", () => {
 		const user = userEvent.setup();
 		render(<CopyButton text="Test value" />);
 		const button = screen.getByTestId("analytics-copy-button");
-		
+
 		await user.click(button);
 		// Should not throw
 	});
@@ -57,7 +57,7 @@ describe("CopyButton", () => {
 	it("calls onCopySuccess when copy succeeds", async () => {
 		const onCopySuccess = vi.fn();
 		const user = userEvent.setup();
-		
+
 		// Mock successful copy
 		const { useCopyToClipboard } = await import("@/hooks/useCopyToClipboard");
 		vi.mocked(useCopyToClipboard).mockReturnValue({
@@ -66,13 +66,11 @@ describe("CopyButton", () => {
 			error: null,
 		});
 
-		render(
-			<CopyButton text="Test value" onCopySuccess={onCopySuccess} />,
-		);
+		render(<CopyButton text="Test value" onCopySuccess={onCopySuccess} />);
 		const button = screen.getByTestId("analytics-copy-button");
-		
+
 		await user.click(button);
-		
+
 		await waitFor(() => {
 			expect(onCopySuccess).toHaveBeenCalledWith("Test value");
 		});
@@ -81,16 +79,16 @@ describe("CopyButton", () => {
 	it("prevents event propagation on click", async () => {
 		const onClick = vi.fn();
 		const user = userEvent.setup();
-		
+
 		render(
 			<div onClick={onClick}>
 				<CopyButton text="Test value" />
 			</div>,
 		);
-		
+
 		const button = screen.getByTestId("analytics-copy-button");
 		await user.click(button);
-		
+
 		// Parent onClick should not be called due to stopPropagation
 		expect(onClick).not.toHaveBeenCalled();
 	});
@@ -125,7 +123,7 @@ describe("CopyButton", () => {
 	it("calls onCopyError when copy fails", async () => {
 		const onCopyError = vi.fn();
 		const user = userEvent.setup();
-		
+
 		const { useCopyToClipboard } = await import("@/hooks/useCopyToClipboard");
 		vi.mocked(useCopyToClipboard).mockReturnValue({
 			copy: vi.fn(async () => {
@@ -137,9 +135,9 @@ describe("CopyButton", () => {
 
 		render(<CopyButton text="Test value" onCopyError={onCopyError} />);
 		const button = screen.getByTestId("analytics-copy-button");
-		
+
 		await user.click(button);
-		
+
 		await waitFor(() => {
 			expect(onCopyError).toHaveBeenCalledWith("Copy failed");
 		});
@@ -149,7 +147,7 @@ describe("CopyButton", () => {
 		const { rerender } = render(<CopyButton text="Test value" size="sm" />);
 		let button = screen.getByTestId("analytics-copy-button");
 		expect(button.className).toContain("size-sm");
-		
+
 		rerender(<CopyButton text="Test value" size="default" />);
 		button = screen.getByTestId("analytics-copy-button");
 		expect(button.className).toContain("size-default");

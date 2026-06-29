@@ -40,13 +40,14 @@ function WalletAddressCell({
 	const handleCopy = async (e: React.MouseEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
-		
+
 		try {
 			await copy(address, address);
 			// Success callback will be triggered by effect monitoring copied state
 		} catch (err) {
 			// Error will be set in hook state
-			const errorMessage = err instanceof Error ? err.message : "Failed to copy";
+			const errorMessage =
+				err instanceof Error ? err.message : "Failed to copy";
 			if (onCopyError) {
 				onCopyError(errorMessage);
 			}
@@ -79,15 +80,23 @@ function WalletAddressCell({
 				title={error ? error : copied ? "Copied!" : "Copy address"}
 				disabled={error !== null}
 				className="transition-all hover:scale-110"
-				aria-label={copied ? "Address copied to clipboard" : "Copy address to clipboard"}
+				aria-label={
+					copied ? "Address copied to clipboard" : "Copy address to clipboard"
+				}
 				data-testid="copy-address-button"
 			>
 				{error ? (
 					<AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
 				) : copied ? (
-					<Check className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200" aria-hidden="true" />
+					<Check
+						className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200"
+						aria-hidden="true"
+					/>
 				) : (
-					<Copy className="h-4 w-4 transition-colors hover:text-blue-600 dark:hover:text-blue-400" aria-hidden="true" />
+					<Copy
+						className="h-4 w-4 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+						aria-hidden="true"
+					/>
 				)}
 			</Button>
 			<ExplorerLink
@@ -335,11 +344,7 @@ export function WalletTable({
 			</div>
 
 			{/* Toast notification for copy feedback */}
-			<CopyToast 
-				open={toastOpen} 
-				message={toastMessage} 
-				type={toastType}
-			/>
+			<CopyToast open={toastOpen} message={toastMessage} type={toastType} />
 		</div>
 	);
 }
@@ -356,7 +361,7 @@ function CopyToast({ open, message, type }: CopyToastProps) {
 	}
 
 	return (
-		<div 
+		<div
 			className="fixed right-4 bottom-4 z-50 max-w-sm rounded-lg bg-zinc-950/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300"
 			role="status"
 			aria-live="polite"
@@ -364,9 +369,15 @@ function CopyToast({ open, message, type }: CopyToastProps) {
 		>
 			<div className="flex items-start gap-3">
 				{type === "success" ? (
-					<Check className="h-5 w-5 text-green-400 flex-shrink-0" aria-hidden="true" />
+					<Check
+						className="h-5 w-5 text-green-400 flex-shrink-0"
+						aria-hidden="true"
+					/>
 				) : (
-					<AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" aria-hidden="true" />
+					<AlertCircle
+						className="h-5 w-5 text-red-400 flex-shrink-0"
+						aria-hidden="true"
+					/>
 				)}
 				<div className="space-y-1 flex-1 min-w-0">
 					<p className="text-sm font-semibold">

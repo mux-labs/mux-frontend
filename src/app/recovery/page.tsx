@@ -19,9 +19,12 @@ export default function RecoveryPage() {
 
 	useEffect(() => {
 		if (recovery.state === "success") {
+			const msg = recovery.recoveryRequestId
+				? `Recovery request submitted successfully. ID: ${recovery.recoveryRequestId}`
+				: "Recovery request submitted successfully.";
 			setToast({
 				open: true,
-				message: "Recovery request submitted successfully.",
+				message: msg,
 				variant: "success",
 			});
 		} else if (recovery.state === "error" && recovery.errorMessage) {

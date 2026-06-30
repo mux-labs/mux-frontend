@@ -1,6 +1,6 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { FAQItem } from "../RecoveryFAQ";
 import { FAQ_ITEMS, RecoveryFAQ } from "../RecoveryFAQ";
 
@@ -14,7 +14,7 @@ describe("RecoveryFAQ", () => {
 	it("renders FAQ heading and items", () => {
 		render(<RecoveryFAQ />);
 		expect(
-			screen.getByRole("heading", { name: /frequently asked questions/i })
+			screen.getByRole("heading", { name: /frequently asked questions/i }),
 		).toBeInTheDocument();
 		expect(screen.getAllByRole("listitem").length).toBeGreaterThan(0);
 	});
@@ -28,11 +28,67 @@ describe("RecoveryFAQ", () => {
 		expect(link).toHaveTextContent("Read Docs");
 	});
 
-	it("expands and collapses FAQ items", () => {
+	it("expands and collapses FAQ items", async () => {
+		const user = userEvent.setup();
 		render(<RecoveryFAQ />);
 		const firstQuestion = screen.getAllByRole("button")[0];
-		
-		fireEvent.click(firstQuestion);
+
+		await user.click(firstQuestion);
 		expect(firstQuestion).toHaveAttribute("aria-expanded", "true");
+	});
+
+	it("shows a copy button for each open FAQ answer", async () => {
+		const user = userEvent.setup();
+		render(<RecoveryFAQ items={SAMPLE} />);
+
+		// Expand the first item
+		await user.click(screen.getByText("First question?"));
+
+		// The "Copy" button should be visible for the answer
+		const copyBtn = screen.getByRole("button", {
+			name: /copy answer to clipboard/i,
+		});
+		expect(copyBtn).toBeInTheDocument();
+	});
+
+	it("copies FAQ answer text to clipboard when copy button is clicked", async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			writable: true,
+			configurable: true,
+		});
+
+		const user = userEvent.setup();
+		render(<RecoveryFAQ items={SAMPLE} />);
+
+		// Expand the first item
+		await user.click(screen.getByText("First question?"));
+
+		// Click the copy button
+		await user.click(
+			screen.getByRole("button", { name: /copy answer to clipboard/i }),
+		);
+
+		expect(writeText).toHaveBeenCalledWith("First answer.");
+	});
+
+	it("shows 'Copied' feedback after copying an answer", async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			writable: true,
+			configurable: true,
+		});
+
+		const user = userEvent.setup();
+		render(<RecoveryFAQ items={SAMPLE} />);
+
+		await user.click(screen.getByText("First question?"));
+		await user.click(
+			screen.getByRole("button", { name: /copy answer to clipboard/i }),
+		);
+
+		expect(screen.getByText("Copied")).toBeInTheDocument();
 	});
 });

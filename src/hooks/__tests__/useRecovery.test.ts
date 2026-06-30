@@ -73,6 +73,51 @@ describe("useRecovery", () => {
 		expect(result.current.state).toBe("success");
 	});
 
+	it("generates a recovery request ID on success", async () => {
+		const { result } = renderHook(() => useRecovery());
+		await waitForIdle(result);
+
+		await act(async () => {
+			result.current.initiateRecovery();
+		});
+		await act(async () => {
+			await result.current.confirmRecovery();
+		});
+
+		expect(result.current.recoveryRequestId).toMatch(/^REC-[A-Z0-9]{4}-[A-Z0-9]{4}$/);
+	});
+
+	it("clears the recovery request ID on reset", async () => {
+		const { result } = renderHook(() => useRecovery());
+		await waitForIdle(result);
+
+		await act(async () => {
+			result.current.initiateRecovery();
+		});
+		await act(async () => {
+			await result.current.confirmRecovery();
+		});
+		expect(result.current.recoveryRequestId).not.toBeNull();
+
+		await act(async () => {
+			result.current.resetRecovery();
+		});
+		expect(result.current.recoveryRequestId).toBeNull();
+	});
+
+	it("recoveryRequestId is null in non-success states", async () => {
+		const { result } = renderHook(() => useRecovery());
+		expect(result.current.recoveryRequestId).toBeNull();
+
+		await waitForIdle(result);
+		expect(result.current.recoveryRequestId).toBeNull();
+
+		await act(async () => {
+			result.current.initiateRecovery();
+		});
+		expect(result.current.recoveryRequestId).toBeNull();
+	});
+
 	it("does not transition from idle on cancelRecovery", async () => {
 		const { result } = renderHook(() => useRecovery());
 		await waitForIdle(result);

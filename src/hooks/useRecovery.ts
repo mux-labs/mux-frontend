@@ -13,6 +13,11 @@ export type RecoveryState =
 export interface UseRecoveryReturn {
 	state: RecoveryState;
 	errorMessage: string | null;
+	/**
+	 * A unique recovery request identifier returned after successful initiation.
+	 * Users can copy this for their records or to reference in support tickets.
+	 */
+	recoveryRequestId: string | null;
 	initiateRecovery: () => void;
 	confirmRecovery: () => Promise<void>;
 	cancelRecovery: () => void;
@@ -30,10 +35,18 @@ export interface UseRecoveryReturn {
  * The `confirmRecovery` function is a stub that simulates an async API call.
  * Replace the body with a real API integration when the backend is ready.
  */
+function generateRecoveryRequestId(): string {
+	const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+	const segment = () =>
+		Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
+	return `REC-${segment()}-${segment()}`;
+}
+
 export function useRecovery(): UseRecoveryReturn {
 	// Start in loading so the page shows a skeleton while status is fetched.
 	const [state, setState] = useState<RecoveryState>("loading");
 	const [errorMessage, setErrorMessage] = useState<string | null>(null);
+	const [recoveryRequestId, setRecoveryRequestId] = useState<string | null>(null);
 
 	// Simulate fetching initial recovery status from the backend.
 	// TODO: replace with real API call, e.g. const data = await recoveryApi.getStatus()
@@ -68,6 +81,8 @@ export function useRecovery(): UseRecoveryReturn {
 		try {
 			// TODO: replace with real API call, e.g. await recoveryApi.initiate()
 			await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+			setRecoveryRequestId(generateRecoveryRequestId());
+			setErrorMessage(null);
 			setState("success");
 		} catch (err) {
 			const message =
@@ -86,11 +101,13 @@ export function useRecovery(): UseRecoveryReturn {
 	const resetRecovery = useCallback(() => {
 		setState("idle");
 		setErrorMessage(null);
+		setRecoveryRequestId(null);
 	}, []);
 
 	return {
 		state,
 		errorMessage,
+		recoveryRequestId,
 		initiateRecovery,
 		confirmRecovery,
 		cancelRecovery,

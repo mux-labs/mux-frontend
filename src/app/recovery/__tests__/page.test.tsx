@@ -18,6 +18,7 @@ function makeRecovery(
 	return {
 		state: "idle",
 		errorMessage: null,
+		recoveryRequestId: null,
 		initiateRecovery: vi.fn(),
 		confirmRecovery: vi.fn().mockResolvedValue(undefined),
 		cancelRecovery: vi.fn(),
@@ -110,12 +111,20 @@ describe("RecoveryPage", () => {
 		expect(useRecoveryMock).toHaveBeenCalledTimes(1);
 	});
 
-	it("shows a success toast when recovery state is 'success'", () => {
-		useRecoveryMock.mockReturnValue(makeRecovery({ state: "success" }));
+	it("shows a success toast with recovery request ID when recovery state is 'success'", () => {
+		useRecoveryMock.mockReturnValue(
+			makeRecovery({
+				state: "success",
+				recoveryRequestId: "REC-ABCD-1234",
+			}),
+		);
 		render(<RecoveryPage />);
 
 		expect(
-			screen.getByText("Recovery request submitted successfully."),
+			screen.getByText(/Recovery request submitted successfully/),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("REC-ABCD-1234"),
 		).toBeInTheDocument();
 		expect(screen.getByText("Success")).toBeInTheDocument();
 	});

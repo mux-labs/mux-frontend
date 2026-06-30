@@ -10,6 +10,7 @@ function makeRecovery(
 	return {
 		state: "idle",
 		errorMessage: null,
+		recoveryRequestId: null,
 		initiateRecovery: vi.fn(),
 		confirmRecovery: vi.fn(),
 		cancelRecovery: vi.fn(),
@@ -84,14 +85,58 @@ describe("InitiateRecoveryCTA", () => {
 		expect(screen.queryByRole("button")).not.toBeInTheDocument();
 	});
 
-	it("shows success message in success state", () => {
+	it("shows success message and recovery request ID in success state", () => {
 		render(
-			<InitiateRecoveryCTA recovery={makeRecovery({ state: "success" })} />,
+			<InitiateRecoveryCTA
+				recovery={makeRecovery({
+					state: "success",
+					recoveryRequestId: "REC-ABCD-1234",
+				})}
+			/>,
 		);
 		expect(screen.getByText(/recovery initiated/i)).toBeInTheDocument();
+		expect(screen.getByTestId("recovery-request-id")).toHaveTextContent(
+			"REC-ABCD-1234",
+		);
 		expect(
 			screen.getByRole("button", { name: /dismiss/i }),
 		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /copy recovery request id/i }),
+		).toBeInTheDocument();
+	});
+
+	it("does not show recovery request ID when it is null", () => {
+		render(
+			<InitiateRecoveryCTA recovery={makeRecovery({ state: "success" })} />,
+		);
+		expect(
+			screen.queryByTestId("recovery-request-id"),
+		).not.toBeInTheDocument();
+	});
+
+	it("copies recovery request ID when copy button is clicked", async () => {
+		const writeText = vi.fn().mockResolvedValue(undefined);
+		Object.defineProperty(navigator, "clipboard", {
+			value: { writeText },
+			writable: true,
+			configurable: true,
+		});
+
+		render(
+			<InitiateRecoveryCTA
+				recovery={makeRecovery({
+					state: "success",
+					recoveryRequestId: "REC-ABCD-1234",
+				})}
+			/>,
+		);
+
+		await userEvent.click(
+			screen.getByRole("button", { name: /copy recovery request id/i }),
+		);
+
+		expect(writeText).toHaveBeenCalledWith("REC-ABCD-1234");
 	});
 
 	it("calls resetRecovery on dismiss in success state", async () => {

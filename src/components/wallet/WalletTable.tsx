@@ -3,7 +3,7 @@
 import { AlertCircle, Check, Copy, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
@@ -54,14 +54,14 @@ function WalletAddressCell({
 	};
 
 	// Trigger success callback when copied changes to true
-	React.useEffect(() => {
+	useEffect(() => {
 		if (copied && onCopySuccess) {
 			onCopySuccess(address);
 		}
 	}, [copied, address, onCopySuccess]);
 
 	// Trigger error callback when error is set
-	React.useEffect(() => {
+	useEffect(() => {
 		if (error && onCopyError) {
 			onCopyError(error);
 		}
@@ -110,6 +110,10 @@ export function WalletTable({
 }: WalletTableProps) {
 	const router = useRouter();
 	const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+	const [toastOpen, setToastOpen] = useState(false);
+	const [toastMessage, setToastMessage] = useState("");
+	const [toastType, setToastType] = useState<"success" | "error">("success");
+	const toastTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
 
 	const hasTestnetWallets = useMemo(

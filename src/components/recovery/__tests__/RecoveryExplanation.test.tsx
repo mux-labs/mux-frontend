@@ -4,15 +4,17 @@ import { RecoveryExplanation } from "../RecoveryExplanation";
 describe("RecoveryExplanation", () => {
 	it("renders the explanation text and external docs link", () => {
 		render(<RecoveryExplanation />);
-		
+
 		expect(
-			screen.getByRole("heading", { name: /What is Invisible Wallet Recovery\?/i })
+			screen.getByRole("heading", {
+				name: /What is Invisible Wallet Recovery\?/i,
+			}),
 		).toBeInTheDocument();
 
 		const link = screen.getByRole("link", {
 			name: /read recovery documentation/i,
 		});
-		
+
 		expect(link).toBeInTheDocument();
 		expect(link).toHaveAttribute("target", "_blank");
 	});

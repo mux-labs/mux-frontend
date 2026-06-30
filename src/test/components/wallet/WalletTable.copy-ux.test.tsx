@@ -52,7 +52,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			// Click to copy
 			await user.click(copyButton);
 
@@ -66,7 +66,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			// Should have hover classes
 			expect(copyButton.className).toContain("hover:scale-110");
 		});
@@ -75,7 +75,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			// Should have transition classes
 			expect(copyButton.className).toContain("transition-all");
 		});
@@ -87,7 +87,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			// Click to copy
 			await user.click(copyButton);
 
@@ -106,7 +106,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -123,7 +123,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			// Toast should be visible
@@ -148,7 +148,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			expect(copyButton).toHaveAttribute(
 				"aria-label",
 				"Copy address to clipboard",
@@ -160,7 +160,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -185,7 +185,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			// Should change button state to show copied
@@ -217,7 +217,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -233,7 +233,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -247,7 +247,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -265,7 +265,7 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
@@ -279,13 +279,13 @@ describe("WalletTable Copy-to-Clipboard UX", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const copyButton = screen.getAllByTestId("copy-address-button")[0];
-			
+
 			await user.click(copyButton);
 
 			await waitFor(() => {
 				const toast = screen.getByTestId("copy-toast");
 				// Should have Check icon (success)
-				const checkIcon = toast.querySelector('svg');
+				const checkIcon = toast.querySelector("svg");
 				expect(checkIcon).toBeInTheDocument();
 			});
 		});

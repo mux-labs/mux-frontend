@@ -51,8 +51,9 @@ async function authenticateUser(
 		);
 	}
 
-	const user = (data as { user?: { name: string; email: string; role: string } })
-		.user;
+	const user = (
+		data as { user?: { name: string; email: string; role: string } }
+	).user;
 	if (!user) {
 		throw new Error("Unexpected response from authentication server.");
 	}
@@ -217,7 +218,11 @@ function LoginPageContent() {
 		try {
 			const user = await authenticateUser(fields.email, fields.password);
 			signIn(user);
-			addToast({ type: "success", message: "Signed in successfully!", description: `Welcome back, ${user.name}.` });
+			addToast({
+				type: "success",
+				message: "Signed in successfully!",
+				description: `Welcome back, ${user.name}.`,
+			});
 			router.replace(callbackUrl);
 		} catch (err) {
 			const message =
@@ -225,7 +230,11 @@ function LoginPageContent() {
 					? err.message
 					: "Sign in failed. Please check your credentials and try again.";
 			setSubmitError(message);
-			addToast({ type: "error", message: "Sign in failed", description: message });
+			addToast({
+				type: "error",
+				message: "Sign in failed",
+				description: message,
+			});
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -239,7 +248,11 @@ function LoginPageContent() {
 
 	return (
 		<div className="flex min-h-screen items-center justify-center bg-gray-50 px-4">
-			<ToastContainer toasts={toasts} onDismiss={dismissToast} position="top-right" />
+			<ToastContainer
+				toasts={toasts}
+				onDismiss={dismissToast}
+				position="top-right"
+			/>
 			<div className="w-full max-w-md">
 				{/* Logo / brand */}
 				<div className="mb-8 text-center">

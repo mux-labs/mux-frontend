@@ -59,7 +59,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 			expect(rows[0]).toHaveFocus();
@@ -78,7 +78,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus third row
 			rows[2].focus();
 			expect(rows[2]).toHaveFocus();
@@ -97,7 +97,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 			expect(rows[0]).toHaveFocus();
@@ -113,7 +113,7 @@ describe("WalletTable Keyboard Navigation", () => {
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
 			const lastIndex = rows.length - 1;
-			
+
 			// Focus last row
 			rows[lastIndex].focus();
 			expect(rows[lastIndex]).toHaveFocus();
@@ -130,7 +130,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 
@@ -146,7 +146,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus second row
 			rows[1].focus();
 
@@ -164,7 +164,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus last row
 			rows[2].focus();
 			expect(rows[2]).toHaveFocus();
@@ -179,7 +179,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 			expect(rows[0]).toHaveFocus();
@@ -196,7 +196,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			await user.click(rows[0]);
 			rows[0].focus();
@@ -210,7 +210,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row then blur
 			rows[0].focus();
 			rows[0].blur();
@@ -225,7 +225,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			rows.forEach((row) => {
 				expect(row).toHaveAttribute("tabIndex", "0");
 			});
@@ -236,7 +236,7 @@ describe("WalletTable Keyboard Navigation", () => {
 
 			const firstRow = screen.getByTestId("wallet-row-0");
 			const ariaLabel = firstRow.getAttribute("aria-label");
-			
+
 			// Should contain truncated address, network, and status
 			expect(ariaLabel).toContain("GBZXN7...MADI");
 			expect(ariaLabel).toContain("mainnet");
@@ -249,12 +249,14 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// The first link in each row should have tabIndex="-1" to prevent tab conflicts
 			// This ensures row-level keyboard navigation works properly
 			const firstRow = rows[0];
-			const firstLink = firstRow.querySelector("a[href*='/demo/dashboard/wallets']");
-			
+			const firstLink = firstRow.querySelector(
+				"a[href*='/demo/dashboard/wallets']",
+			);
+
 			// The link should have tabIndex -1 to prevent it from stealing focus during keyboard nav
 			expect(firstLink).toHaveAttribute("tabIndex", "-1");
 		});
@@ -268,7 +270,9 @@ describe("WalletTable Keyboard Navigation", () => {
 			expect(rows).toHaveLength(0);
 
 			// Should show empty state message
-			expect(screen.getByText("No wallets found for this network.")).toBeInTheDocument();
+			expect(
+				screen.getByText("No wallets found for this network."),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -279,7 +283,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={singleWallet} />);
 
 			const row = screen.getByTestId("wallet-row-0");
-			
+
 			// Focus the row
 			row.focus();
 			expect(row).toHaveFocus();
@@ -311,7 +315,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 
@@ -329,7 +333,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			rows[0].focus();
 
@@ -356,7 +360,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			rows.forEach((row) => {
 				// TableRow component should render as a tr element with implicit row role
 				expect(row.tagName).toBe("TR");
@@ -368,11 +372,17 @@ describe("WalletTable Keyboard Navigation", () => {
 
 			// Should have table structure
 			expect(screen.getByRole("table")).toBeInTheDocument();
-			
+
 			// Should have column headers
-			expect(screen.getByRole("columnheader", { name: /address/i })).toBeInTheDocument();
-			expect(screen.getByRole("columnheader", { name: /network/i })).toBeInTheDocument();
-			expect(screen.getByRole("columnheader", { name: /status/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("columnheader", { name: /address/i }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("columnheader", { name: /network/i }),
+			).toBeInTheDocument();
+			expect(
+				screen.getByRole("columnheader", { name: /status/i }),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -382,7 +392,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			render(<WalletTable wallets={testWallets} />);
 
 			const rows = screen.getAllByTestId(/wallet-row-/);
-			
+
 			// Focus first row
 			await user.click(rows[0]);
 			rows[0].focus();

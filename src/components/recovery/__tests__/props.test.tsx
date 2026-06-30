@@ -18,7 +18,9 @@ import { RecoveryLoadingState } from "../RecoveryLoadingState";
 describe("RecoveryStatus — documented props", () => {
 	it("defaults to 'active' status when no prop is given", () => {
 		render(<RecoveryStatus />);
-		expect(screen.getByLabelText(/recovery status: active/i)).toBeInTheDocument();
+		expect(
+			screen.getByLabelText(/recovery status: active/i),
+		).toBeInTheDocument();
 	});
 
 	it("accepts all documented RecoveryStatusValue variants", () => {
@@ -43,7 +45,9 @@ describe("RecoveryStatus — documented props", () => {
 	it("falls back to 'unknown' for an unrecognised status value", () => {
 		// Cast to bypass TypeScript so we can test the runtime guard
 		render(<RecoveryStatus status={"stale" as never} />);
-		expect(screen.getByLabelText(/recovery status: unknown/i)).toBeInTheDocument();
+		expect(
+			screen.getByLabelText(/recovery status: unknown/i),
+		).toBeInTheDocument();
 	});
 
 	it("merges className onto the root badge", () => {

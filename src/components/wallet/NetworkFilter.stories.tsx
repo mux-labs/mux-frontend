@@ -49,10 +49,7 @@ export const Interactive: Story = {
 		const [network, setNetwork] = useState<WalletNetwork | "all">("all");
 		return (
 			<div className="space-y-3">
-				<NetworkFilter
-					selectedNetwork={network}
-					onNetworkChange={setNetwork}
-				/>
+				<NetworkFilter selectedNetwork={network} onNetworkChange={setNetwork} />
 				<p className="text-sm text-zinc-500">
 					Selected: <strong>{network}</strong>
 				</p>

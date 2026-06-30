@@ -28,7 +28,9 @@ describe("Toast", () => {
 		});
 
 		it("uses 'Error' as default title for error variant", () => {
-			render(<Toast open={true} message="Something went wrong" variant="error" />);
+			render(
+				<Toast open={true} message="Something went wrong" variant="error" />,
+			);
 			expect(screen.getByText("Error")).toBeInTheDocument();
 		});
 

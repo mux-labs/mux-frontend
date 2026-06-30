@@ -4,9 +4,7 @@ import { Toast } from "../toast";
 
 describe("Toast", () => {
 	it("renders nothing when open is false", () => {
-		const { container } = render(
-			<Toast open={false} message="Test message" />,
-		);
+		const { container } = render(<Toast open={false} message="Test message" />);
 		expect(container.firstChild).toBeNull();
 	});
 

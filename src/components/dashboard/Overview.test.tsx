@@ -1,62 +1,72 @@
-import { render, screen, waitFor } from '@testing-library/react';
-import { describe, it, vi, beforeEach, afterEach, expect } from 'vitest';
-import Overview from './Overview';
+import { render, screen, waitFor } from "@testing-library/react";
+import { describe, it, vi, beforeEach, afterEach, expect } from "vitest";
+import Overview from "./Overview";
 
 const overviewData = { data: { projects: 5 } };
 
-describe('Overview', () => {
-  beforeEach(() => {
-    vi.stubGlobal('fetch', vi.fn());
-  });
+describe("Overview", () => {
+	beforeEach(() => {
+		vi.stubGlobal("fetch", vi.fn());
+	});
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
 
-  it('renders active project count after fetching overview', async () => {
-    // @ts-ignore
-    fetch.mockResolvedValueOnce({ ok: true, json: async () => overviewData });
+	it("renders active project count after fetching overview", async () => {
+		// @ts-ignore
+		fetch.mockResolvedValueOnce({ ok: true, json: async () => overviewData });
 
-    render(<Overview />);
+		render(<Overview />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Active projects:/i)).toBeInTheDocument();
-      expect(screen.getByText(/5/)).toBeInTheDocument();
-    });
-  });
+		await waitFor(() => {
+			expect(screen.getByText(/Active projects:/i)).toBeInTheDocument();
+			expect(screen.getByText(/5/)).toBeInTheDocument();
+		});
+	});
 
-  it('shows an empty state when there are no projects', async () => {
-    // @ts-ignore
-    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ data: { projects: 0 } }) });
+	it("shows an empty state when there are no projects", async () => {
+		// @ts-ignore
+		fetch.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({ data: { projects: 0 } }),
+		});
 
-    render(<Overview />);
+		render(<Overview />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/No projects/i)).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Create Project/i })).toBeInTheDocument();
-    });
-  });
+		await waitFor(() => {
+			expect(screen.getByText(/No projects/i)).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /Create Project/i }),
+			).toBeInTheDocument();
+		});
+	});
 
-  it('shows an error state for network failures', async () => {
-    // @ts-ignore
-    fetch.mockResolvedValueOnce({ ok: false, status: 500 });
+	it("shows an error state for network failures", async () => {
+		// @ts-ignore
+		fetch.mockResolvedValueOnce({ ok: false, status: 500 });
 
-    render(<Overview />);
+		render(<Overview />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
-    });
-  });
+		await waitFor(() => {
+			expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+		});
+	});
 
-  it('shows an error state for invalid server payloads', async () => {
-    // @ts-ignore
-    fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ invalid: true }) });
+	it("shows an error state for invalid server payloads", async () => {
+		// @ts-ignore
+		fetch.mockResolvedValueOnce({
+			ok: true,
+			json: async () => ({ invalid: true }),
+		});
 
-    render(<Overview />);
+		render(<Overview />);
 
-    await waitFor(() => {
-      expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
-      expect(screen.getByText(/Overview response is invalid/i)).toBeInTheDocument();
-    });
-  });
+		await waitFor(() => {
+			expect(screen.getByText(/Something went wrong/i)).toBeInTheDocument();
+			expect(
+				screen.getByText(/Overview response is invalid/i),
+			).toBeInTheDocument();
+		});
+	});
 });

@@ -18,26 +18,21 @@ describe("trackTransactionEvent", () => {
 
 	it("logs to console in development environment", () => {
 		process.env.NODE_ENV = "development";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackTransactionEvent("transactions_view", { address: "G…test" });
 
 		expect(consoleSpy).toHaveBeenCalledTimes(1);
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"[Analytics] transactions_view",
-			{ address: "G…test" },
-		);
+		expect(consoleSpy).toHaveBeenCalledWith("[Analytics] transactions_view", {
+			address: "G…test",
+		});
 
 		consoleSpy.mockRestore();
 	});
 
 	it("does not log in production environment", () => {
 		process.env.NODE_ENV = "production";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackTransactionEvent("transactions_view", { address: "G…test" });
 
@@ -48,11 +43,12 @@ describe("trackTransactionEvent", () => {
 
 	it("does not log in test environment", () => {
 		process.env.NODE_ENV = "test";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
-		trackTransactionEvent("transactions_sort", { key: "amount", direction: "asc" });
+		trackTransactionEvent("transactions_sort", {
+			key: "amount",
+			direction: "asc",
+		});
 
 		expect(consoleSpy).not.toHaveBeenCalled();
 
@@ -65,8 +61,14 @@ describe("trackTransactionEvent", () => {
 			payload: Parameters<typeof trackTransactionEvent>[1];
 		}> = [
 			{ name: "transactions_view", payload: { address: "G…" } },
-			{ name: "transactions_sort", payload: { key: "createdAt", direction: "desc" } },
-			{ name: "transactions_filter_changed", payload: { type: "status", value: "completed" } },
+			{
+				name: "transactions_sort",
+				payload: { key: "createdAt", direction: "desc" },
+			},
+			{
+				name: "transactions_filter_changed",
+				payload: { type: "status", value: "completed" },
+			},
 			{ name: "transactions_filters_cleared", payload: {} },
 			{ name: "transactions_page_change", payload: { page: 2 } },
 			{ name: "transactions_items_per_page", payload: { itemsPerPage: 10 } },
@@ -80,9 +82,7 @@ describe("trackTransactionEvent", () => {
 
 	it("defaults payload to empty object when omitted", () => {
 		process.env.NODE_ENV = "development";
-		const consoleSpy = vi
-			.spyOn(console, "log")
-			.mockImplementation(() => {});
+		const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
 		trackTransactionEvent("transactions_view");
 

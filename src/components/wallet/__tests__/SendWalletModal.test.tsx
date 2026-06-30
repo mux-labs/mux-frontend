@@ -38,7 +38,11 @@ describe("SendWalletModal", () => {
 
 	it("does not render when isOpen is false", () => {
 		render(
-			<SendWalletModal isOpen={false} wallet={fundedWallet} onClose={vi.fn()} />,
+			<SendWalletModal
+				isOpen={false}
+				wallet={fundedWallet}
+				onClose={vi.fn()}
+			/>,
 		);
 		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
@@ -58,7 +62,9 @@ describe("SendWalletModal", () => {
 	it("calls onClose when close (X) button is clicked", async () => {
 		const user = userEvent.setup();
 		const { onClose } = setup();
-		await user.click(screen.getByRole("button", { name: /close send dialog/i }));
+		await user.click(
+			screen.getByRole("button", { name: /close send dialog/i }),
+		);
 		expect(onClose).toHaveBeenCalledOnce();
 	});
 
@@ -86,9 +92,7 @@ describe("SendWalletModal", () => {
 			await user.tab();
 			await waitFor(() => {
 				expect(
-					screen.getByText(
-						/enter a valid stellar address/i,
-					),
+					screen.getByText(/enter a valid stellar address/i),
 				).toBeInTheDocument();
 			});
 		});
@@ -100,9 +104,10 @@ describe("SendWalletModal", () => {
 				screen.getByRole("button", { name: /submit send transaction/i }),
 			);
 			await waitFor(() => {
-				expect(
-					screen.getByLabelText(/destination address/i),
-				).toHaveAttribute("aria-invalid", "true");
+				expect(screen.getByLabelText(/destination address/i)).toHaveAttribute(
+					"aria-invalid",
+					"true",
+				);
 			});
 		});
 
@@ -140,7 +145,9 @@ describe("SendWalletModal", () => {
 			await user.type(screen.getByLabelText(/amount/i), "0");
 			await user.tab();
 			await waitFor(() => {
-				expect(screen.getByText("Enter a positive amount.")).toBeInTheDocument();
+				expect(
+					screen.getByText("Enter a positive amount."),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -150,7 +157,9 @@ describe("SendWalletModal", () => {
 			await user.type(screen.getByLabelText(/amount/i), "-5");
 			await user.tab();
 			await waitFor(() => {
-				expect(screen.getByText("Enter a positive amount.")).toBeInTheDocument();
+				expect(
+					screen.getByText("Enter a positive amount."),
+				).toBeInTheDocument();
 			});
 		});
 
@@ -186,9 +195,7 @@ describe("SendWalletModal", () => {
 			await user.type(screen.getByLabelText(/amount/i), "100");
 			await user.tab();
 			await waitFor(() => {
-				expect(
-					screen.queryByText(/amount exceeds/i),
-				).not.toBeInTheDocument();
+				expect(screen.queryByText(/amount exceeds/i)).not.toBeInTheDocument();
 				expect(
 					screen.queryByText("Enter a positive amount."),
 				).not.toBeInTheDocument();
@@ -254,9 +261,7 @@ describe("SendWalletModal", () => {
 		});
 
 		it("renders with null wallet gracefully", () => {
-			render(
-				<SendWalletModal isOpen={true} wallet={null} onClose={vi.fn()} />,
-			);
+			render(<SendWalletModal isOpen={true} wallet={null} onClose={vi.fn()} />);
 			expect(screen.getByRole("dialog")).toBeInTheDocument();
 		});
 	});

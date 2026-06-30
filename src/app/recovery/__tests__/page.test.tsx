@@ -127,7 +127,9 @@ describe("RecoveryPage", () => {
 		render(<RecoveryPage />);
 
 		// "Network failure" appears in both the CTA alert and the toast
-		expect(screen.getAllByText("Network failure").length).toBeGreaterThanOrEqual(2);
+		expect(
+			screen.getAllByText("Network failure").length,
+		).toBeGreaterThanOrEqual(2);
 		expect(screen.getByText("Error")).toBeInTheDocument();
 	});
 

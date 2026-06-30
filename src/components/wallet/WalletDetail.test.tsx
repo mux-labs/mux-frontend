@@ -77,9 +77,7 @@ describe("WalletDetail", () => {
 		});
 		render(<WalletDetail id="bad-id" />);
 		expect(screen.getByText("Wallet not found")).toBeInTheDocument();
-		expect(
-			screen.getByRole("button", { name: /retry/i }),
-		).toBeInTheDocument();
+		expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
 	});
 
 	it("shows inline error when error but wallet already loaded", () => {

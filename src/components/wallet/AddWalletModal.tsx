@@ -5,6 +5,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Wallet, WalletNetwork } from "@/types/wallet";
 import { validateStellarAddress } from "@/utils/addressFormatting";
+import { validateNetwork, validateNotInList, validateWalletLabel } from "@/utils/formValidation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -21,18 +22,6 @@ type Step = "form" | "submitting" | "success";
 
 function generateId(): string {
 	return `wallet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
-
-function validateLabel(value: string): { valid: boolean; error?: string } {
-	const trimmed = value.trim();
-	if (!trimmed) return { valid: true };
-	if (trimmed.length > 30) {
-		return { valid: false, error: "Label must be 30 characters or less." };
-	}
-	if (/[<>"'&]/.test(trimmed)) {
-		return { valid: false, error: "Label contains invalid characters." };
-	}
-	return { valid: true };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -135,7 +124,7 @@ export function AddWalletModal({
 	}
 
 	function handleLabelBlur() {
-		const { valid, error } = validateLabel(label);
+		const { valid, error } = validateWalletLabel(label);
 		if (!valid) setLabelError(error);
 	}
 
@@ -149,15 +138,26 @@ export function AddWalletModal({
 			return;
 		}
 
-		if (isDuplicateAddress(address)) {
-			setAddressError("This address has already been added.");
+		// Check for duplicates using new utility
+		const dupCheck = validateNotInList(
+			address,
+			existingAddresses || [],
+			"Address",
+		);
+		if (!dupCheck.valid) {
+			setAddressError(dupCheck.error);
 			addressInputRef.current?.focus();
 			return;
 		}
 
-		const lblResult = validateLabel(label);
+		const lblResult = validateWalletLabel(label);
 		if (!lblResult.valid) {
 			setLabelError(lblResult.error);
+			return;
+		}
+
+		const netResult = validateNetwork(network);
+		if (!netResult.valid) {
 			return;
 		}
 
@@ -361,7 +361,8 @@ export function AddWalletModal({
 										</span>
 									) : (
 										<p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
-											A friendly name to identify this wallet. Max 30 characters.
+											A friendly name to identify this wallet. Max 30
+											characters.
 										</p>
 									)}
 								</div>

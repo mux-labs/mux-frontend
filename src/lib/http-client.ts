@@ -1,3 +1,5 @@
+import type { SpendingLimitsResponse } from "@/app/api/spending-limits/route";
+
 export interface ApiResult<T> {
 	data?: T;
 	error?: string;
@@ -23,7 +25,7 @@ export async function getTransactions() {
 }
 
 export async function getSpendingLimits() {
-	return fetchJson<Record<string, unknown>>("/api/spending-limits");
+	return fetchJson<SpendingLimitsResponse>("/api/spending-limits");
 }
 
 export async function saveSpendingLimits(payload: {
@@ -32,7 +34,7 @@ export async function saveSpendingLimits(payload: {
 }) {
 	try {
 		const res = await fetch("/api/spending-limits", {
-			method: "POST",
+			method: "PUT",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(payload),
 		});
@@ -40,7 +42,7 @@ export async function saveSpendingLimits(payload: {
 			const text = await res.text();
 			return { error: `HTTP ${res.status}: ${text}` };
 		}
-		const data = await res.json();
+		const data = (await res.json()) as SpendingLimitsResponse;
 		return { data };
 	} catch (err: unknown) {
 		const message = err instanceof Error ? err.message : String(err);

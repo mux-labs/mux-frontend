@@ -81,7 +81,9 @@ describe("WalletDetail keyboard navigation", () => {
 
 	it("copy button has descriptive aria-label", () => {
 		render(<WalletDetail id="wallet-001" />);
-		const copyBtn = screen.getByRole("button", { name: /copy wallet address/i });
+		const copyBtn = screen.getByRole("button", {
+			name: /copy wallet address/i,
+		});
 		expect(copyBtn).toBeInTheDocument();
 	});
 
@@ -89,7 +91,9 @@ describe("WalletDetail keyboard navigation", () => {
 		const user = userEvent.setup();
 		render(<WalletDetail id="wallet-001" />);
 
-		const copyBtn = screen.getByRole("button", { name: /copy wallet address/i });
+		const copyBtn = screen.getByRole("button", {
+			name: /copy wallet address/i,
+		});
 		copyBtn.focus();
 		expect(copyBtn).toHaveFocus();
 
@@ -125,7 +129,8 @@ describe("WalletDetail keyboard navigation", () => {
 		const focused = document.activeElement;
 		expect(focused).toBeTruthy();
 		const isInteractive =
-			focused?.tagName === "BUTTON" || focused?.getAttribute("role") === "button";
+			focused?.tagName === "BUTTON" ||
+			focused?.getAttribute("role") === "button";
 		expect(isInteractive).toBe(true);
 	});
 });

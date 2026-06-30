@@ -1,7 +1,7 @@
 export interface OverviewData {
-  projects: number;
+	projects: number;
 }
 
 export const mockOverview: OverviewData = {
-  projects: 0,
+	projects: 0,
 };

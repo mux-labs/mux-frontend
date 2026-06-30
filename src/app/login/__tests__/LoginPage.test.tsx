@@ -314,9 +314,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 				target: { value: "u" },
 			});
 
-			expect(
-				screen.queryByTestId("login-empty-state"),
-			).not.toBeInTheDocument();
+			expect(screen.queryByTestId("login-empty-state")).not.toBeInTheDocument();
 		});
 
 		it("hides the welcome hint after the user starts typing in the password field", async () => {
@@ -327,9 +325,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 				target: { value: "p" },
 			});
 
-			expect(
-				screen.queryByTestId("login-empty-state"),
-			).not.toBeInTheDocument();
+			expect(screen.queryByTestId("login-empty-state")).not.toBeInTheDocument();
 		});
 	});
 

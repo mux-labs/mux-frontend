@@ -64,9 +64,7 @@ describe("useWalletBalance", () => {
 	});
 
 	it("re-polls after interval", async () => {
-		const { result } = renderHook(() =>
-			useWalletBalance("wallet-001", 5_000),
-		);
+		const { result } = renderHook(() => useWalletBalance("wallet-001", 5_000));
 
 		// First fetch completes
 		await act(async () => {

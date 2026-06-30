@@ -66,7 +66,10 @@ export function SendWalletModal({
 	const [destination, setDestination] = useState("");
 	const [amount, setAmount] = useState("");
 	const [errors, setErrors] = useState<FormErrors>({});
-	const [touched, setTouched] = useState<{ destination?: boolean; amount?: boolean }>({});
+	const [touched, setTouched] = useState<{
+		destination?: boolean;
+		amount?: boolean;
+	}>({});
 
 	const maxBalance = wallet ? parseBalance(wallet.balance) : null;
 
@@ -114,7 +117,10 @@ export function SendWalletModal({
 				<div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
 					<div className="flex items-center gap-3">
 						<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-neutral-100">
-							<SendHorizonal className="h-5 w-5 text-neutral-700" aria-hidden="true" />
+							<SendHorizonal
+								className="h-5 w-5 text-neutral-700"
+								aria-hidden="true"
+							/>
 						</div>
 						<div>
 							<h2
@@ -124,7 +130,9 @@ export function SendWalletModal({
 								Send funds
 							</h2>
 							<p className="text-sm text-neutral-500">
-								{wallet?.balance ? `Available: ${wallet.balance}` : "No balance available"}
+								{wallet?.balance
+									? `Available: ${wallet.balance}`
+									: "No balance available"}
 							</p>
 						</div>
 					</div>
@@ -148,7 +156,9 @@ export function SendWalletModal({
 								className="block text-sm font-medium text-neutral-900"
 							>
 								Destination address
-								<span className="ml-1 text-red-500" aria-hidden="true">*</span>
+								<span className="ml-1 text-red-500" aria-hidden="true">
+									*
+								</span>
 							</label>
 							<input
 								id={destinationId}
@@ -174,7 +184,10 @@ export function SendWalletModal({
 									role="alert"
 									className="flex items-center gap-1.5 text-xs text-red-600"
 								>
-									<AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+									<AlertCircle
+										className="h-3.5 w-3.5 shrink-0"
+										aria-hidden="true"
+									/>
 									{errors.destination}
 								</p>
 							)}
@@ -187,7 +200,9 @@ export function SendWalletModal({
 								className="block text-sm font-medium text-neutral-900"
 							>
 								Amount (XLM)
-								<span className="ml-1 text-red-500" aria-hidden="true">*</span>
+								<span className="ml-1 text-red-500" aria-hidden="true">
+									*
+								</span>
 							</label>
 							<input
 								id={amountId}
@@ -211,7 +226,10 @@ export function SendWalletModal({
 									role="alert"
 									className="flex items-center gap-1.5 text-xs text-red-600"
 								>
-									<AlertCircle className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+									<AlertCircle
+										className="h-3.5 w-3.5 shrink-0"
+										aria-hidden="true"
+									/>
 									{errors.amount}
 								</p>
 							)}

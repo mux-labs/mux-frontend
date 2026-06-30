@@ -50,7 +50,9 @@ describe("WalletDetail copy-to-clipboard UX", () => {
 
 	it("copy button shows Copy icon initially", () => {
 		render(<WalletDetail id="wallet-001" />);
-		const copyBtn = screen.getByRole("button", { name: /copy wallet address/i });
+		const copyBtn = screen.getByRole("button", {
+			name: /copy wallet address/i,
+		});
 		const svg = copyBtn.querySelector("svg");
 		expect(svg).toBeInTheDocument();
 	});
@@ -82,9 +84,7 @@ describe("WalletDetail copy-to-clipboard UX", () => {
 	});
 
 	it("shows error state when clipboard write fails", async () => {
-		vi.mocked(copyToClipboard).mockRejectedValue(
-			new Error("Clipboard denied"),
-		);
+		vi.mocked(copyToClipboard).mockRejectedValue(new Error("Clipboard denied"));
 		const user = userEvent.setup();
 		render(<WalletDetail id="wallet-001" />);
 

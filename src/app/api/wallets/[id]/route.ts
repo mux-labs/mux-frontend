@@ -2,11 +2,13 @@ import { NextResponse } from "next/server";
 import { dummyWallets } from "@/mock-data/wallets";
 
 type RouteContext = {
-	params: {
-		id: string;
-	} | Promise<{
-		id: string;
-	}>;
+	params:
+		| {
+				id: string;
+		  }
+		| Promise<{
+				id: string;
+		  }>;
 };
 
 export async function GET(_request: Request, { params }: RouteContext) {

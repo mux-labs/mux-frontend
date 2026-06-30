@@ -47,7 +47,11 @@ function LoginErrorCard({
 					stroke="currentColor"
 					aria-hidden="true"
 				>
-					<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						d="M6 18L18 6M6 6l12 12"
+					/>
 				</svg>
 			</button>
 		</div>
@@ -94,8 +98,12 @@ function LoginCard({ children }: { children: React.ReactNode }) {
 							/>
 						</svg>
 					</div>
-					<h1 className="text-2xl font-bold tracking-tight text-gray-900">Mux Protocol</h1>
-					<p className="mt-1 text-sm text-gray-500">Sign in to your developer console</p>
+					<h1 className="text-2xl font-bold tracking-tight text-gray-900">
+						Mux Protocol
+					</h1>
+					<p className="mt-1 text-sm text-gray-500">
+						Sign in to your developer console
+					</p>
 				</div>
 				<div className="rounded-2xl border border-gray-200 bg-white px-8 py-10 shadow-sm">
 					<h2 className="mb-6 text-lg font-semibold text-gray-900">Sign in</h2>
@@ -143,7 +151,10 @@ export const Default: Story = {
 			<LoginWelcomeHint />
 			<form noValidate aria-label="Sign in form">
 				<div className="mb-4">
-					<label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="email"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Email address
 					</label>
 					<input
@@ -155,7 +166,10 @@ export const Default: Story = {
 					/>
 				</div>
 				<div className="mb-6">
-					<label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="password"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Password
 					</label>
 					<input
@@ -187,7 +201,10 @@ export const WithError: Story = {
 			/>
 			<form noValidate aria-label="Sign in form">
 				<div className="mb-4">
-					<label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="email"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Email address
 					</label>
 					<input
@@ -199,7 +216,10 @@ export const WithError: Story = {
 					/>
 				</div>
 				<div className="mb-6">
-					<label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="password"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Password
 					</label>
 					<input
@@ -227,7 +247,10 @@ export const Submitting: Story = {
 		<LoginCard>
 			<form noValidate aria-label="Sign in form">
 				<div className="mb-4">
-					<label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="email"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Email address
 					</label>
 					<input
@@ -240,7 +263,10 @@ export const Submitting: Story = {
 					/>
 				</div>
 				<div className="mb-6">
-					<label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-700">
+					<label
+						htmlFor="password"
+						className="mb-1.5 block text-sm font-medium text-gray-700"
+					>
 						Password
 					</label>
 					<input
@@ -257,9 +283,25 @@ export const Submitting: Story = {
 					disabled
 					className="flex w-full items-center justify-center gap-2 rounded-lg bg-blue-400 px-4 py-2.5 text-sm font-semibold text-white cursor-not-allowed opacity-60"
 				>
-					<svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
-						<circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-						<path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+					<svg
+						className="h-4 w-4 animate-spin"
+						fill="none"
+						viewBox="0 0 24 24"
+						aria-hidden="true"
+					>
+						<circle
+							className="opacity-25"
+							cx="12"
+							cy="12"
+							r="10"
+							stroke="currentColor"
+							strokeWidth="4"
+						/>
+						<path
+							className="opacity-75"
+							fill="currentColor"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+						/>
 					</svg>
 					Signing in…
 				</button>
@@ -272,13 +314,24 @@ export const Submitting: Story = {
 export const ToastSuccess: Story = {
 	render: () => {
 		const toasts: ToastMessage[] = [
-			{ id: "1", type: "success", message: "Signed in successfully!", description: "Welcome back, Alex." },
+			{
+				id: "1",
+				type: "success",
+				message: "Signed in successfully!",
+				description: "Welcome back, Alex.",
+			},
 		];
 		return (
 			<div className="relative">
-				<ToastContainer toasts={toasts} onDismiss={() => {}} position="top-right" />
+				<ToastContainer
+					toasts={toasts}
+					onDismiss={() => {}}
+					position="top-right"
+				/>
 				<LoginCard>
-					<div className="py-4 text-center text-sm text-gray-500">Redirecting to dashboard…</div>
+					<div className="py-4 text-center text-sm text-gray-500">
+						Redirecting to dashboard…
+					</div>
 				</LoginCard>
 			</div>
 		);
@@ -289,13 +342,25 @@ export const ToastSuccess: Story = {
 export const ToastError: Story = {
 	render: () => {
 		const toasts: ToastMessage[] = [
-			{ id: "1", type: "error", message: "Sign in failed", description: "Invalid email or password." },
+			{
+				id: "1",
+				type: "error",
+				message: "Sign in failed",
+				description: "Invalid email or password.",
+			},
 		];
 		return (
 			<div className="relative">
-				<ToastContainer toasts={toasts} onDismiss={() => {}} position="top-right" />
+				<ToastContainer
+					toasts={toasts}
+					onDismiss={() => {}}
+					position="top-right"
+				/>
 				<LoginCard>
-					<LoginErrorCard message="Invalid email or password." onDismiss={() => {}} />
+					<LoginErrorCard
+						message="Invalid email or password."
+						onDismiss={() => {}}
+					/>
 					<form noValidate>
 						<div className="mb-4">
 							<input
@@ -311,7 +376,10 @@ export const ToastError: Story = {
 								className="block w-full rounded-lg border border-gray-300 bg-white px-3 py-2.5 text-sm"
 							/>
 						</div>
-						<button type="submit" className="flex w-full justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white">
+						<button
+							type="submit"
+							className="flex w-full justify-center rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white"
+						>
 							Sign in
 						</button>
 					</form>

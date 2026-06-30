@@ -15,25 +15,24 @@ describe("useAnalyticsTracking", () => {
 
 	it("fires a page_view event on mount", () => {
 		renderHook(() => useAnalyticsTracking("analytics"));
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"[analytics]",
-			"page_view",
-			{ page: "analytics" },
-		);
+		expect(consoleSpy).toHaveBeenCalledWith("[analytics]", "page_view", {
+			page: "analytics",
+		});
 	});
 
 	it("uses the provided page name in the page_view event", () => {
 		renderHook(() => useAnalyticsTracking("wallets"));
-		expect(consoleSpy).toHaveBeenCalledWith(
-			"[analytics]",
-			"page_view",
-			{ page: "wallets" },
-		);
+		expect(consoleSpy).toHaveBeenCalledWith("[analytics]", "page_view", {
+			page: "wallets",
+		});
 	});
 
 	it("track() dispatches the event with properties", () => {
 		const { result } = renderHook(() => useAnalyticsTracking("analytics"));
-		result.current.track("date_range_changed", { from: "2024-01-01", to: "2024-01-07" });
+		result.current.track("date_range_changed", {
+			from: "2024-01-01",
+			to: "2024-01-07",
+		});
 		expect(consoleSpy).toHaveBeenCalledWith(
 			"[analytics]",
 			"date_range_changed",

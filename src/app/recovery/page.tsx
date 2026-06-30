@@ -36,7 +36,10 @@ export default function RecoveryPage() {
 	// Auto-dismiss toast after 4 seconds
 	useEffect(() => {
 		if (!toast.open) return;
-		const timer = setTimeout(() => setToast((t) => ({ ...t, open: false })), 4000);
+		const timer = setTimeout(
+			() => setToast((t) => ({ ...t, open: false })),
+			4000,
+		);
 		return () => clearTimeout(timer);
 	}, [toast.open]);
 
@@ -81,7 +84,11 @@ export default function RecoveryPage() {
 				)}
 			</div>
 
-			<Toast open={toast.open} message={toast.message} variant={toast.variant} />
+			<Toast
+				open={toast.open}
+				message={toast.message}
+				variant={toast.variant}
+			/>
 		</main>
 	);
 }

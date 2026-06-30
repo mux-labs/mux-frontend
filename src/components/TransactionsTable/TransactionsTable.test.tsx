@@ -54,7 +54,12 @@ function renderWith(
 	extra?: Partial<React.ComponentProps<typeof TransactionsTable>>,
 ) {
 	return render(
-		<TransactionsTable transactions={txs} loading={false} error={null} {...extra} />,
+		<TransactionsTable
+			transactions={txs}
+			loading={false}
+			error={null}
+			{...extra}
+		/>,
 	);
 }
 
@@ -64,17 +69,13 @@ function renderWith(
 
 describe("TransactionsTable — loading state", () => {
 	it("renders a loading skeleton when loading=true", () => {
-		render(
-			<TransactionsTable transactions={[]} loading={true} error={null} />,
-		);
+		render(<TransactionsTable transactions={[]} loading={true} error={null} />);
 		expect(screen.getByTestId("transactions-loading")).toBeInTheDocument();
 		expect(screen.getByLabelText("Loading transactions")).toBeInTheDocument();
 	});
 
 	it("does not render the transactions header while loading", () => {
-		render(
-			<TransactionsTable transactions={[]} loading={true} error={null} />,
-		);
+		render(<TransactionsTable transactions={[]} loading={true} error={null} />);
 		expect(screen.queryByText("Transactions")).not.toBeInTheDocument();
 	});
 });
@@ -98,7 +99,9 @@ describe("TransactionsTable — empty state", () => {
 
 	it("does not render the table or filter controls when empty", () => {
 		renderWith([]);
-		expect(screen.queryByLabelText("Search transactions")).not.toBeInTheDocument();
+		expect(
+			screen.queryByLabelText("Search transactions"),
+		).not.toBeInTheDocument();
 		expect(screen.queryByTestId("tx-row")).not.toBeInTheDocument();
 	});
 });
@@ -110,7 +113,11 @@ describe("TransactionsTable — empty state", () => {
 describe("TransactionsTable — error state", () => {
 	it("renders the ErrorState when error is provided", () => {
 		render(
-			<TransactionsTable transactions={[]} loading={false} error="Network error" />,
+			<TransactionsTable
+				transactions={[]}
+				loading={false}
+				error="Network error"
+			/>,
 		);
 		expect(screen.getByText("Network error")).toBeInTheDocument();
 		// ErrorState renders default title
@@ -119,9 +126,15 @@ describe("TransactionsTable — error state", () => {
 
 	it("renders a retry button in the error state", () => {
 		render(
-			<TransactionsTable transactions={[]} loading={false} error="Fetch failed" />,
+			<TransactionsTable
+				transactions={[]}
+				loading={false}
+				error="Fetch failed"
+			/>,
 		);
-		expect(screen.getByRole("button", { name: /try again/i })).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /try again/i }),
+		).toBeInTheDocument();
 	});
 
 	it("calls onRetry when the retry button is clicked", async () => {
@@ -139,10 +152,10 @@ describe("TransactionsTable — error state", () => {
 	});
 
 	it("does not render table or filters when in error state", () => {
-		render(
-			<TransactionsTable transactions={[]} loading={false} error="err" />,
-		);
-		expect(screen.queryByLabelText("Search transactions")).not.toBeInTheDocument();
+		render(<TransactionsTable transactions={[]} loading={false} error="err" />);
+		expect(
+			screen.queryByLabelText("Search transactions"),
+		).not.toBeInTheDocument();
 		expect(screen.queryByTestId("tx-row")).not.toBeInTheDocument();
 	});
 });
@@ -164,10 +177,10 @@ describe("TransactionsTable — data rendering", () => {
 		const targetAddress =
 			"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 		render(<TransactionsTable address={targetAddress} />);
-		
+
 		// The transaction from/to targetAddress should be present
 		expect(screen.getAllByText("250.00")[0]).toBeInTheDocument();
-		
+
 		// Transaction not involving targetAddress should NOT be present (e.g. 50.50 amount)
 		expect(screen.queryByText("50.50")).not.toBeInTheDocument();
 	});
@@ -177,7 +190,7 @@ describe("TransactionsTable — data rendering", () => {
 		render(<TransactionsTable />);
 		const searchInput = screen.getByPlaceholderText("Hash, address, memo…");
 		await user.type(searchInput, "payment-ref");
-		
+
 		expect(screen.getAllByText("250.00")[0]).toBeInTheDocument();
 		// The 1000.00 tx doesn't have this memo
 		expect(screen.queryByText("1,000.00")).not.toBeInTheDocument();
@@ -245,12 +258,15 @@ describe("TransactionsTable — data rendering", () => {
 			const user = userEvent.setup();
 			render(<TransactionsTable />);
 			// Reset button not rendered before any filter is applied
-			expect(screen.queryByRole("button", { name: "Reset" })).not.toBeInTheDocument();
-			await user.selectOptions(screen.getByLabelText("Filter by status"), "completed");
-			// Reset button appears after a filter is applied
 			expect(
-				screen.getByRole("button", { name: "Reset" }),
-			).toBeInTheDocument();
+				screen.queryByRole("button", { name: "Reset" }),
+			).not.toBeInTheDocument();
+			await user.selectOptions(
+				screen.getByLabelText("Filter by status"),
+				"completed",
+			);
+			// Reset button appears after a filter is applied
+			expect(screen.getByRole("button", { name: "Reset" })).toBeInTheDocument();
 		});
 
 		it("pagination displays within a sm:flex-row container", () => {
@@ -325,7 +341,9 @@ describe("TransactionsTable — data rendering", () => {
 		});
 
 		it("calls clipboard.writeText when a copy button is clicked", async () => {
-			const writeText = vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
+			const writeText = vi
+				.spyOn(navigator.clipboard, "writeText")
+				.mockResolvedValue();
 			const user = userEvent.setup();
 			render(<TransactionsTable />);
 			const [firstCopyBtn] = screen

@@ -40,13 +40,14 @@ function WalletAddressCell({
 	const handleCopy = async (e: React.MouseEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
-		
+
 		try {
 			await copy(address, address);
 			// Success callback will be triggered by effect monitoring copied state
 		} catch (err) {
 			// Error will be set in hook state
-			const errorMessage = err instanceof Error ? err.message : "Failed to copy";
+			const errorMessage =
+				err instanceof Error ? err.message : "Failed to copy";
 			if (onCopyError) {
 				onCopyError(errorMessage);
 			}
@@ -79,15 +80,23 @@ function WalletAddressCell({
 				title={error ? error : copied ? "Copied!" : "Copy address"}
 				disabled={error !== null}
 				className="transition-all hover:scale-110"
-				aria-label={copied ? "Address copied to clipboard" : "Copy address to clipboard"}
+				aria-label={
+					copied ? "Address copied to clipboard" : "Copy address to clipboard"
+				}
 				data-testid="copy-address-button"
 			>
 				{error ? (
 					<AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
 				) : copied ? (
-					<Check className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200" aria-hidden="true" />
+					<Check
+						className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200"
+						aria-hidden="true"
+					/>
 				) : (
-					<Copy className="h-4 w-4 transition-colors hover:text-blue-600 dark:hover:text-blue-400" aria-hidden="true" />
+					<Copy
+						className="h-4 w-4 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+						aria-hidden="true"
+					/>
 				)}
 			</Button>
 			<ExplorerLink
@@ -119,6 +128,48 @@ export function WalletTable({
 	const hasTestnetWallets = useMemo(
 		() => wallets.some((wallet) => wallet.network === "testnet"),
 		[wallets],
+	);
+
+	// Toast management: show and auto-dismiss
+	const showToast = useCallback(
+		(message: string, type: "success" | "error", duration = 3000) => {
+			// Clear existing timeout if any
+			if (toastTimeoutRef.current) {
+				clearTimeout(toastTimeoutRef.current);
+			}
+
+			// Show toast
+			setToastMessage(message);
+			setToastType(type);
+			setToastOpen(true);
+
+			// Auto-dismiss after duration
+			toastTimeoutRef.current = window.setTimeout(() => {
+				setToastOpen(false);
+				toastTimeoutRef.current = null;
+			}, duration);
+		},
+		[],
+	);
+
+	// Handle copy success - trigger success toast
+	const handleCopySuccess = useCallback(
+		(address: string) => {
+			showToast(`Copied address: ${address}`, "success");
+			// Also call the parent callback if provided
+			onCopySuccess?.(address);
+		},
+		[showToast, onCopySuccess],
+	);
+
+	// Handle copy error - trigger error toast
+	const handleCopyError = useCallback(
+		(error: string) => {
+			showToast(`Copy failed: ${error}`, "error");
+			// Also call the parent callback if provided
+			onCopyError?.(error);
+		},
+		[showToast, onCopyError],
 	);
 
 	// Handle keyboard navigation
@@ -169,6 +220,15 @@ export function WalletTable({
 	// Handle row blur
 	const handleRowBlur = useCallback(() => {
 		setFocusedIndex(-1);
+	}, []);
+
+	// Cleanup: clear toast timeout on unmount
+	useEffect(() => {
+		return () => {
+			if (toastTimeoutRef.current) {
+				clearTimeout(toastTimeoutRef.current);
+			}
+		};
 	}, []);
 
 	return (
@@ -291,8 +351,8 @@ export function WalletTable({
 												<WalletAddressCell
 													address={wallet.address}
 													network={wallet.network}
-													onCopySuccess={onCopySuccess}
-													onCopyError={onCopyError}
+													onCopySuccess={handleCopySuccess}
+													onCopyError={handleCopyError}
 												/>
 											</div>
 											<div className="flex flex-shrink-0 gap-2">
@@ -339,11 +399,7 @@ export function WalletTable({
 			</div>
 
 			{/* Toast notification for copy feedback */}
-			<CopyToast 
-				open={toastOpen} 
-				message={toastMessage} 
-				type={toastType}
-			/>
+			<CopyToast open={toastOpen} message={toastMessage} type={toastType} />
 		</div>
 	);
 }
@@ -360,7 +416,7 @@ function CopyToast({ open, message, type }: CopyToastProps) {
 	}
 
 	return (
-		<div 
+		<div
 			className="fixed right-4 bottom-4 z-50 max-w-sm rounded-lg bg-zinc-950/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300"
 			role="status"
 			aria-live="polite"
@@ -368,9 +424,15 @@ function CopyToast({ open, message, type }: CopyToastProps) {
 		>
 			<div className="flex items-start gap-3">
 				{type === "success" ? (
-					<Check className="h-5 w-5 text-green-400 flex-shrink-0" aria-hidden="true" />
+					<Check
+						className="h-5 w-5 text-green-400 flex-shrink-0"
+						aria-hidden="true"
+					/>
 				) : (
-					<AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0" aria-hidden="true" />
+					<AlertCircle
+						className="h-5 w-5 text-red-400 flex-shrink-0"
+						aria-hidden="true"
+					/>
 				)}
 				<div className="space-y-1 flex-1 min-w-0">
 					<p className="text-sm font-semibold">

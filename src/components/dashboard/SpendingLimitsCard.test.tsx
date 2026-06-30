@@ -166,10 +166,14 @@ describe("SpendingLimitsCard", () => {
 	it("has proper accessibility: inputs are associated with labels", async () => {
 		render(<SpendingLimitsCard />);
 		await waitFor(() => {
-			expect(screen.getByLabelText(/daily spending limit/i)).toBeInTheDocument();
+			expect(
+				screen.getByLabelText(/daily spending limit/i),
+			).toBeInTheDocument();
 		});
 		await waitFor(() => {
-			expect(screen.getByLabelText(/per-transaction limit/i)).toBeInTheDocument();
+			expect(
+				screen.getByLabelText(/per-transaction limit/i),
+			).toBeInTheDocument();
 		});
 	});
 

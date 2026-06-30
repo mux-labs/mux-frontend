@@ -33,7 +33,13 @@ const VARIANT_STYLES: Record<
 	},
 };
 
-export function Toast({ open, message, variant = "success", title, onClose }: ToastProps) {
+export function Toast({
+	open,
+	message,
+	variant = "success",
+	title,
+	onClose,
+}: ToastProps) {
 	if (!open) {
 		return null;
 	}

@@ -26,7 +26,9 @@ describe("NetworkFilter – #306 dark mode ring-offset", () => {
 		const { rerender } = render(
 			<NetworkFilter selectedNetwork="testnet" onNetworkChange={noop} />,
 		);
-		rerender(<NetworkFilter selectedNetwork="mainnet" onNetworkChange={noop} />);
+		rerender(
+			<NetworkFilter selectedNetwork="mainnet" onNetworkChange={noop} />,
+		);
 		const mainnetBtn = screen.getByLabelText("Filter by Mainnet");
 		const testnetBtn = screen.getByLabelText("Filter by Testnet");
 		expect(mainnetBtn).toHaveClass("ring-2");

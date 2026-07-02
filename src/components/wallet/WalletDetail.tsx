@@ -15,30 +15,12 @@ import { trackWalletEvent } from "@/services/walletAnalyticsTracking";
 import { truncateAddress } from "@/utils/addressFormatting";
 import { formatDate } from "@/utils/dateFormatting";
 
-/**
- * Props for the WalletDetail component.
- */
 interface WalletDetailProps {
-	/**
-	 * The unique identifier of the wallet to display.
-	 * Used to fetch live balance and metadata from the backend.
-	 */
 	id: string;
 }
 
-const TOAST_DURATION_MS = 3000;
-
 /**
  * Displays live balance and metadata for a single wallet.
- *
- * Fetches wallet data via `useWalletBalance` and auto-refreshes on an interval.
- * Provides one-click copy of the wallet address with toast confirmation,
- * a manual refresh button with feedback, and graceful error/loading states.
- *
- * @example
- * ```tsx
- * <WalletDetail id="wallet-001" />
- * ```
  */
 export function WalletDetail({ id }: WalletDetailProps) {
 	const { wallet, balance, loading, error, lastUpdated, refresh } =
@@ -67,30 +49,17 @@ export function WalletDetail({ id }: WalletDetailProps) {
 		[id, track, copy],
 	);
 
-	if (isNotFound) {
-		return (
-			<EmptyState
-				title="Wallet not found"
-				description="No wallet exists for this ID. It may have been removed or the link is invalid."
-			/>
-		);
-	}
-
 	if (error && !wallet) {
-		const isNotFound =
-			error.toLowerCase().includes("not found") || error === "not_found";
 		return (
 			<ErrorState
 				title={isNotFound ? "Wallet not found" : "Failed to load wallet"}
 				description={
 					isNotFound
-						? "This wallet doesn't exist or the ID is invalid."
+						? "No wallet exists for this ID. It may have been removed or the link is invalid."
 						: `${error}. Check your connection and try again.`
 				}
 				retry={
-					isNotFound
-						? undefined
-						: { label: "Try Again", onRetry: refresh }
+					isNotFound ? undefined : { label: "Try Again", onRetry: refresh }
 				}
 			/>
 		);
@@ -130,6 +99,7 @@ export function WalletDetail({ id }: WalletDetailProps) {
 							onClick={handleRefresh}
 							disabled={loading}
 							aria-label="Refresh balance"
+							aria-busy={loading ? "true" : undefined}
 							className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
 						>
 							<RefreshCw
@@ -138,11 +108,16 @@ export function WalletDetail({ id }: WalletDetailProps) {
 							/>
 						</button>
 					</div>
+				</div>
 
 				{loading && !balance ? (
 					<Skeleton className="h-12 w-48" aria-hidden="true" />
 				) : (
-					<p className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-zinc-50">
+					<p
+						className="text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl dark:text-zinc-50"
+						aria-live="polite"
+						aria-atomic="true"
+					>
 						{balance ?? "—"}
 					</p>
 				)}
@@ -152,10 +127,10 @@ export function WalletDetail({ id }: WalletDetailProps) {
 						role="alert"
 						className="mt-2 text-sm text-red-600 dark:text-red-400"
 					>
-						Balance refresh failed: {error}
+						{error}
 					</p>
 				)}
-			</section>
+			</div>
 
 			{/* Wallet metadata */}
 			{wallet ? (
@@ -240,77 +215,29 @@ export function WalletDetail({ id }: WalletDetailProps) {
 						{wallet.lastActivity && (
 							<div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
 								<dt className="text-sm text-zinc-500 dark:text-zinc-400">
-									Address
+									Last Activity
 								</dt>
-								<dd className="flex items-center gap-2">
-									<code className="rounded bg-zinc-100 px-2 py-1 font-mono text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-										{truncateAddress(wallet.address)}
-									</code>
-									<Button
-										variant="ghost"
-										size="icon-sm"
-										onClick={() => copy(wallet.address)}
-										title={copied ? "Copied!" : "Copy address"}
-										aria-label={
-											copied ? "Address copied" : "Copy wallet address"
-										}
-									>
-										{copied ? (
-											<Check className="h-4 w-4 text-green-500 dark:text-green-400" />
-										) : (
-											<Copy className="h-4 w-4 text-zinc-500 dark:text-zinc-400" />
-										)}
-									</Button>
+								<dd className="text-sm text-zinc-700 dark:text-zinc-300">
+									{formatDate(wallet.lastActivity)}
 								</dd>
 							</div>
 						)}
 					</dl>
-				</section>
+				</div>
 			) : (
 				<div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
 					<Skeleton className="mb-4 h-4 w-24" />
 					<div className="space-y-4">
 						{[...Array(4)].map((_, i) => (
+							// biome-ignore lint/suspicious/noArrayIndexKey: skeleton list
 							<div key={i} className="flex items-center justify-between">
 								<Skeleton className="h-4 w-20" />
 								<Skeleton className="h-6 w-32" />
 							</div>
-							<div className="flex items-center justify-between py-3">
-								<dt className="text-sm text-zinc-500 dark:text-zinc-400">
-									Created
-								</dt>
-								<dd className="text-sm text-zinc-700 dark:text-zinc-300">
-									{formatDate(wallet.createdAt)}
-								</dd>
-							</div>
-							{wallet.lastActivity && (
-								<div className="flex items-center justify-between py-3 last:pb-0">
-									<dt className="text-sm text-zinc-500 dark:text-zinc-400">
-										Last Activity
-									</dt>
-									<dd className="text-sm text-zinc-700 dark:text-zinc-300">
-										{formatDate(wallet.lastActivity)}
-									</dd>
-								</div>
-							)}
-						</dl>
+						))}
 					</div>
-				) : (
-					<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-none">
-						<Skeleton className="mb-4 h-4 w-24" />
-						<div className="space-y-4">
-							{[...Array(4)].map((_, i) => (
-								<div key={i} className="flex items-center justify-between">
-									<Skeleton className="h-4 w-20" />
-									<Skeleton className="h-6 w-32" />
-								</div>
-							))}
-						</div>
-					</div>
-				)}
-			</div>
-
-			<Toast open={toastOpen} message={toastMessage} />
-		</>
+				</div>
+			)}
+		</div>
 	);
 }

@@ -1,5 +1,8 @@
 packages:
   - .
+allowBuilds:
+  core-js-pure: false
+  esbuild: true
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver

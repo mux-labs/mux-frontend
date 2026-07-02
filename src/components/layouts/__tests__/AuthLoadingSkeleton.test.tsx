@@ -41,4 +41,29 @@ describe("AuthLoadingSkeleton", () => {
 		const cards = container.querySelectorAll("main .rounded-xl");
 		expect(cards.length).toBeGreaterThanOrEqual(3);
 	});
+
+	it("renders the sticky TopNav header skeleton", () => {
+		const { container } = render(<AuthLoadingSkeleton />);
+		expect(container.querySelector("header")).toBeInTheDocument();
+	});
+
+	it("renders a table skeleton inside the main content area", () => {
+		const { container } = render(<AuthLoadingSkeleton />);
+		// Table skeleton has a divide-y child for row items
+		const tableRows = container.querySelectorAll("main .divide-y > div");
+		expect(tableRows.length).toBeGreaterThanOrEqual(5);
+	});
+
+	it("renders animated pulse skeleton items", () => {
+		const { container } = render(<AuthLoadingSkeleton />);
+		const pulseItems = container.querySelectorAll(".animate-pulse");
+		expect(pulseItems.length).toBeGreaterThan(0);
+	});
+
+	it("sidebar wrapper is hidden on mobile via CSS class", () => {
+		const { container } = render(<AuthLoadingSkeleton />);
+		// Sidebar uses hidden lg:flex — not visible on mobile
+		const sidebar = container.querySelector(".hidden.lg\\:flex");
+		expect(sidebar).toBeInTheDocument();
+	});
 });

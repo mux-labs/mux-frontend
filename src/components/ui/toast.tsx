@@ -1,133 +1,83 @@
-"use client";
+import { AlertCircle, CheckCircle2, Info, X } from "lucide-react";
 
 import { useEffect, useState, useCallback } from "react";
 
-/**
- * Represents the different types of toast notifications.
- */
-export type ToastType = "success" | "error" | "info" | "warning";
-
-/**
- * Represents a single toast notification message.
- */
-export interface ToastMessage {
-	/** Unique identifier for the toast instance */
-	id: string;
-	/** The type/severity of the toast */
-	type: ToastType;
-	/** The primary message text to display */
+/** Props for the `Toast` notification component. */
+export interface ToastProps {
+	/** Whether the toast is visible. When `false` nothing is rendered. */
+	open: boolean;
+	/** The message body displayed inside the toast. */
 	message: string;
-	/** Optional secondary description providing more detail */
-	description?: string;
-	/** Duration in ms before auto-dismiss (default: 5000). 0 disables auto-dismiss. */
-	duration?: number;
-}
-
-/**
- * Props for the ToastContainer component.
- */
-export interface ToastContainerProps {
-	/** Array of toast messages to display */
-	toasts: ToastMessage[];
-	/** Callback fired when a toast is dismissed */
-	onDismiss: (id: string) => void;
 	/**
-	 * Position of the toast container on the screen.
-	 * @default "top-right"
+	 * Visual style variant.
+	 * Defaults to `"success"` when omitted.
 	 */
-	position?:
-		| "top-right"
-		| "top-left"
-		| "bottom-right"
-		| "bottom-left"
-		| "top-center"
-		| "bottom-center";
+	variant?: ToastVariant;
+	/**
+	 * Overrides the default title for the variant (`"Success"` / `"Error"` / `"Info"`).
+	 */
+	title?: string;
+	/**
+	 * When provided, renders a dismiss (✕) button that calls this handler.
+	 * Omit to render a non-dismissible toast.
+	 */
+	onClose?: () => void;
 }
 
-/**
- * Props for an individual ToastItem component.
- */
-export interface ToastItemProps {
-	/** The toast message data to render */
-	toast: ToastMessage;
-	/** Callback fired when this toast is dismissed */
-	onDismiss: (id: string) => void;
-}
-
-// ─── Style Maps ──────────────────────────────────────────────────────────────
-
-const typeStyles: Record<
-	ToastType,
-	{ bg: string; icon: string; border: string }
+const VARIANT_CONFIG: Record<
+	ToastVariant,
+	{ icon: React.ElementType; iconClass: string; defaultTitle: string }
 > = {
 	success: {
-		bg: "bg-green-50 dark:bg-green-950",
-		icon: "✓",
-		border: "border-green-400 dark:border-green-700",
+		icon: CheckCircle2,
+		iconClass: "text-green-400",
+		defaultTitle: "Success",
 	},
 	error: {
-		bg: "bg-red-50 dark:bg-red-950",
-		icon: "✕",
-		border: "border-red-400 dark:border-red-700",
+		icon: AlertCircle,
+		iconClass: "text-red-400",
+		defaultTitle: "Error",
 	},
 	info: {
-		bg: "bg-blue-50 dark:bg-blue-950",
-		icon: "ℹ",
-		border: "border-blue-400 dark:border-blue-700",
-	},
-	warning: {
-		bg: "bg-amber-50 dark:bg-amber-950",
-		icon: "⚠",
-		border: "border-amber-400 dark:border-amber-700",
+		icon: Info,
+		iconClass: "text-blue-400",
+		defaultTitle: "Info",
 	},
 };
 
-const positionClasses: Record<string, string> = {
-	"top-right": "top-4 right-4",
-	"top-left": "top-4 left-4",
-	"bottom-right": "bottom-4 right-4",
-	"bottom-left": "bottom-4 left-4",
-	"top-center": "top-4 left-1/2 -translate-x-1/2",
-	"bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
-};
+export function Toast({
+	open,
+	message,
+	variant = "success",
+	title,
+	onClose,
+}: ToastProps) {
+	if (!open) {
+		return null;
+	}
 
-// ─── Individual Toast Item ────────────────────────────────────────────────────
-
-/**
- * A single toast notification item with auto-dismiss functionality.
- * Displays an icon, message, optional description, and a dismiss button.
- */
-export function ToastItem({ toast, onDismiss }: ToastItemProps) {
-	const styles = typeStyles[toast.type];
-	const duration = toast.duration ?? 5000;
-
-	useEffect(() => {
-		if (duration <= 0) return;
-
-		const timer = setTimeout(() => {
-			onDismiss(toast.id);
-		}, duration);
-
-		return () => clearTimeout(timer);
-	}, [toast.id, duration, onDismiss]);
+	const { icon: Icon, iconClass, defaultTitle } = VARIANT_CONFIG[variant];
+	const displayTitle = title ?? defaultTitle;
 
 	return (
-		<div
-			role="alert"
-			aria-live="assertive"
-			className={`flex items-start gap-3 rounded-lg border p-4 shadow-lg transition-all duration-300 ease-in-out ${styles.bg} ${styles.border}`}
-		>
-			<span className="mt-0.5 text-lg" aria-hidden="true">
-				{styles.icon}
-			</span>
-			<div className="flex-1 min-w-0">
-				<p className="text-sm font-semibold text-gray-900 dark:text-gray-100">
-					{toast.message}
-				</p>
-				{toast.description && (
-					<p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-						{toast.description}
-					</p>
+		<div className="fixed right-4 bottom-4 z-50 max-w-xs rounded-2xl bg-zinc-950/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
+			<div role="status" aria-live="polite" className="flex items-start gap-3">
+				<Icon
+					className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`}
+					aria-hidden="true"
+				/>
+				<div className="flex-1 space-y-1">
+					<p className="text-sm font-semibold">{displayTitle}</p>
+					<p className="text-sm text-zinc-200">{message}</p>
+				</div>
+				{onClose && (
+					<button
+						onClick={onClose}
+						className="-mr-1 -mt-1 ml-auto rounded p-1 text-zinc-400 transition-colors hover:text-zinc-200"
+						aria-label="Dismiss notification"
+					>
+						<X className="h-3.5 w-3.5" aria-hidden="true" />
+					</button>
 				)}
 			</div>
 			<button

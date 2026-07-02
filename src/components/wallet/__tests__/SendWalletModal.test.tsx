@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import type { Wallet } from "@/types/wallet";
 
@@ -269,7 +269,7 @@ describe("SendWalletModal", () => {
 	describe("escape key", () => {
 		it("closes dialog on Escape key press", async () => {
 			const user = userEvent.setup();
-			const { onClose } = setup();
+			setup();
 			await user.keyboard("{Escape}");
 			// Escape key closes form via keyboard shortcut
 			// The close button is autoFocused, so Escape doesn't trigger the dialog close

@@ -101,7 +101,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 	it("renders email and password fields", async () => {
 		renderLoginPage();
 		expect(await screen.findByLabelText(/email address/i)).toBeInTheDocument();
-		expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/^password$/i)).toBeInTheDocument();
 	});
 
 	it("renders the submit button", async () => {
@@ -148,7 +148,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 		fireEvent.change(screen.getByLabelText(/email address/i), {
 			target: { value: "user@example.com" },
 		});
-		fireEvent.change(screen.getByLabelText(/password/i), {
+		fireEvent.change(screen.getByLabelText(/^password$/i), {
 			target: { value: "abc" },
 		});
 		fireEvent.click(screen.getByTestId("login-submit"));
@@ -164,7 +164,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 		fireEvent.change(screen.getByLabelText(/email address/i), {
 			target: { value: "user@example.com" },
 		});
-		fireEvent.change(screen.getByLabelText(/password/i), {
+		fireEvent.change(screen.getByLabelText(/^password$/i), {
 			target: { value: "password123" },
 		});
 		const submitBtn = screen.getByTestId("login-submit");
@@ -197,7 +197,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -227,7 +227,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -250,7 +250,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -268,7 +268,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -286,7 +286,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -321,7 +321,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			renderLoginPage();
 			await screen.findByTestId("login-form");
 
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "p" },
 			});
 
@@ -342,7 +342,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -360,7 +360,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -381,7 +381,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -389,11 +389,146 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			await screen.findByTestId("login-error");
 
 			// Typing in any field should clear the submit error
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "newpass" },
 			});
 
 			expect(screen.queryByTestId("login-error")).not.toBeInTheDocument();
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// Blur validation — errors appear on blur, not only on submit
+	// -------------------------------------------------------------------------
+
+	describe("blur validation", () => {
+		it("shows email error when email field is blurred with an empty value", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const emailInput = screen.getByLabelText(/email address/i);
+			fireEvent.blur(emailInput);
+
+			expect(await screen.findByTestId("email-error")).toHaveTextContent(
+				"Email is required.",
+			);
+		});
+
+		it("shows email format error when blurred with an invalid email", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const emailInput = screen.getByLabelText(/email address/i);
+			fireEvent.change(emailInput, { target: { value: "not-an-email" } });
+			fireEvent.blur(emailInput);
+
+			expect(await screen.findByTestId("email-error")).toHaveTextContent(
+				"valid email",
+			);
+		});
+
+		it("shows password error when password field is blurred while empty", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const passwordInput = screen.getByLabelText(/^password$/i);
+			fireEvent.blur(passwordInput);
+
+			expect(await screen.findByTestId("password-error")).toHaveTextContent(
+				"Password is required.",
+			);
+		});
+
+		it("shows password length error when blurred with a short password", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const passwordInput = screen.getByLabelText(/^password$/i);
+			fireEvent.change(passwordInput, { target: { value: "abc" } });
+			fireEvent.blur(passwordInput);
+
+			expect(await screen.findByTestId("password-error")).toHaveTextContent(
+				"at least 6 characters",
+			);
+		});
+
+		it("does not show field errors before the user interacts with the field", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			expect(screen.queryByTestId("email-error")).not.toBeInTheDocument();
+			expect(screen.queryByTestId("password-error")).not.toBeInTheDocument();
+		});
+
+		it("clears email error once a valid email is entered after blur", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const emailInput = screen.getByLabelText(/email address/i);
+			// Trigger an error via blur
+			fireEvent.blur(emailInput);
+			expect(await screen.findByTestId("email-error")).toBeInTheDocument();
+
+			// Fix the value — error should disappear
+			fireEvent.change(emailInput, { target: { value: "valid@example.com" } });
+			expect(screen.queryByTestId("email-error")).not.toBeInTheDocument();
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// Password visibility toggle
+	// -------------------------------------------------------------------------
+
+	describe("password visibility toggle", () => {
+		it("renders the password toggle button", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			expect(screen.getByTestId("password-toggle")).toBeInTheDocument();
+		});
+
+		it("password field is type=password by default", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			const passwordInput = screen.getByLabelText(/^password$/i);
+			expect(passwordInput).toHaveAttribute("type", "password");
+		});
+
+		it("clicking the toggle reveals the password (type=text)", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const toggle = screen.getByTestId("password-toggle");
+			fireEvent.click(toggle);
+
+			const passwordInput = screen.getByLabelText(/^password$/i);
+			expect(passwordInput).toHaveAttribute("type", "text");
+		});
+
+		it("clicking the toggle again hides the password (type=password)", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+
+			const toggle = screen.getByTestId("password-toggle");
+			fireEvent.click(toggle); // show
+			fireEvent.click(toggle); // hide
+
+			const passwordInput = screen.getByLabelText(/^password$/i);
+			expect(passwordInput).toHaveAttribute("type", "password");
+		});
+
+		it("toggle button has aria-label='Show password' when password is hidden", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			const toggle = screen.getByTestId("password-toggle");
+			expect(toggle).toHaveAttribute("aria-label", "Show password");
+		});
+
+		it("toggle button has aria-label='Hide password' when password is visible", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			const toggle = screen.getByTestId("password-toggle");
+			fireEvent.click(toggle);
+			expect(toggle).toHaveAttribute("aria-label", "Hide password");
 		});
 	});
 
@@ -430,6 +565,118 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			expect(
 				screen.queryByTestId("auth-loading-skeleton"),
 			).not.toBeInTheDocument();
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// #330 — Keyboard navigation
+	// -------------------------------------------------------------------------
+
+	describe("#330 — keyboard navigation", () => {
+		it("email input has focus:ring classes for keyboard accessibility", async () => {
+			renderLoginPage();
+			const email = await screen.findByLabelText(/email address/i);
+			expect(email.className).toContain("focus:ring-2");
+		});
+
+		it("password input has focus:ring classes for keyboard accessibility", async () => {
+			renderLoginPage();
+			const pwd = await screen.findByLabelText(/password/i);
+			expect(pwd.className).toContain("focus:ring-2");
+		});
+
+		it("submit button has focus:ring classes for keyboard accessibility", async () => {
+			renderLoginPage();
+			const btn = await screen.findByTestId("login-submit");
+			expect(btn.className).toContain("focus:ring-2");
+		});
+
+		it("email input has correct type and autocomplete for browser assistance", async () => {
+			renderLoginPage();
+			const email = await screen.findByLabelText(/email address/i);
+			expect(email).toHaveAttribute("type", "email");
+			expect(email).toHaveAttribute("autocomplete", "email");
+		});
+
+		it("password input has correct type and autocomplete", async () => {
+			renderLoginPage();
+			const pwd = await screen.findByLabelText(/password/i);
+			expect(pwd).toHaveAttribute("type", "password");
+			expect(pwd).toHaveAttribute("autocomplete", "current-password");
+		});
+
+		it("form has aria-label for screen reader identification", async () => {
+			renderLoginPage();
+			const form = await screen.findByRole("form", { name: /sign in/i });
+			expect(form).toBeInTheDocument();
+		});
+
+		it("email input has aria-invalid when there is a validation error", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			fireEvent.click(screen.getByTestId("login-submit"));
+			const email = await screen.findByLabelText(/email address/i);
+			expect(email).toHaveAttribute("aria-invalid", "true");
+		});
+
+		it("email error has aria-describedby association with input", async () => {
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			fireEvent.click(screen.getByTestId("login-submit"));
+			const email = await screen.findByLabelText(/email address/i);
+			const describedBy = email.getAttribute("aria-describedby");
+			expect(describedBy).toBeTruthy();
+			const errorEl = document.getElementById(describedBy as string);
+			expect(errorEl).toBeInTheDocument();
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// #331 — Copy-to-clipboard UX on error card
+	// -------------------------------------------------------------------------
+
+	describe("#331 — copy-to-clipboard on error card", () => {
+		beforeEach(() => {
+			Object.assign(navigator, {
+				clipboard: { writeText: vi.fn().mockResolvedValue(undefined) },
+			});
+		});
+
+		it("renders a copy button on the error card", async () => {
+			mockFetchError(401, "Invalid credentials");
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			fireEvent.change(screen.getByLabelText(/email address/i), {
+				target: { value: "user@example.com" },
+			});
+			fireEvent.change(screen.getByLabelText(/password/i), {
+				target: { value: "password123" },
+			});
+			fireEvent.click(screen.getByTestId("login-submit"));
+			await screen.findByTestId("login-error");
+			expect(
+				screen.getByRole("button", { name: /copy error/i }),
+			).toBeInTheDocument();
+		});
+
+		it("copies the error message to clipboard when copy button is clicked", async () => {
+			mockFetchError(401, "Invalid credentials");
+			renderLoginPage();
+			await screen.findByTestId("login-form");
+			fireEvent.change(screen.getByLabelText(/email address/i), {
+				target: { value: "user@example.com" },
+			});
+			fireEvent.change(screen.getByLabelText(/password/i), {
+				target: { value: "password123" },
+			});
+			fireEvent.click(screen.getByTestId("login-submit"));
+			await screen.findByTestId("login-error");
+			fireEvent.click(screen.getByRole("button", { name: /copy error/i }));
+			await waitFor(() => {
+				expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+					"Invalid credentials",
+				);
+			});
 		});
 	});
 });

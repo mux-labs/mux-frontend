@@ -2,11 +2,12 @@ import { render, screen } from "@testing-library/react";
 import type { Wallet } from "@/types/wallet";
 import { WalletTable } from "../WalletTable";
 
-// Mock the useCopyToClipboard hook
+// Mock the useCopyToClipboard hook (include error: null to match real hook signature)
 jest.mock("@/hooks/useCopyToClipboard", () => ({
 	useCopyToClipboard: () => ({
 		copy: jest.fn(),
 		copied: false,
+		error: null,
 	}),
 }));
 
@@ -49,31 +50,29 @@ describe("WalletTable", () => {
 
 		it("should render all wallet rows", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			expect(screen.getByText("Mainnet")).toBeInTheDocument();
-			expect(screen.getByText("Testnet")).toBeInTheDocument();
+			// Responsive layout duplicates badges across desktop table and mobile cards
+			expect(screen.getAllByText("Mainnet").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Testnet").length).toBeGreaterThan(0);
 		});
 	});
 
 	describe("NetworkBadge integration", () => {
 		it("should display network badge for each wallet", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			const mainnetBadges = screen.getAllByText("Mainnet");
-			const testnetBadges = screen.getAllByText("Testnet");
-
-			expect(mainnetBadges.length).toBeGreaterThan(0);
-			expect(testnetBadges.length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Mainnet").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Testnet").length).toBeGreaterThan(0);
 		});
 
 		it("should apply correct styles to mainnet badge", () => {
-			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const mainnetBadge = screen.getByText("Mainnet").parentElement;
+			render(<WalletTable wallets={mockWallets} />);
+			const mainnetBadge = screen.getAllByText("Mainnet")[0].parentElement;
 			expect(mainnetBadge).toHaveClass("bg-blue-100");
 			expect(mainnetBadge).toHaveClass("text-blue-800");
 		});
 
 		it("should apply correct styles to testnet badge", () => {
-			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const testnetBadge = screen.getByText("Testnet").parentElement;
+			render(<WalletTable wallets={mockWallets} />);
+			const testnetBadge = screen.getAllByText("Testnet")[0].parentElement;
 			expect(testnetBadge).toHaveClass("bg-amber-100");
 			expect(testnetBadge).toHaveClass("text-amber-800");
 		});
@@ -82,40 +81,40 @@ describe("WalletTable", () => {
 	describe("StatusIndicator integration", () => {
 		it("should display status indicator for each wallet", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			expect(screen.getByText("Active")).toBeInTheDocument();
-			expect(screen.getByText("Pending")).toBeInTheDocument();
+			expect(screen.getAllByText("Active").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Pending").length).toBeGreaterThan(0);
 		});
 
 		it("should apply correct styles to active status", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			const activeBadge = screen.getByText("Active").parentElement;
+			const activeBadge = screen.getAllByText("Active")[0].parentElement;
 			expect(activeBadge).toHaveClass("bg-green-50");
 			expect(activeBadge).toHaveClass("text-green-700");
 		});
 
 		it("should apply correct styles to pending status", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			const pendingBadge = screen.getByText("Pending").parentElement;
+			const pendingBadge = screen.getAllByText("Pending")[0].parentElement;
 			expect(pendingBadge).toHaveClass("bg-yellow-50");
 			expect(pendingBadge).toHaveClass("text-yellow-700");
 		});
 	});
 
 	describe("Empty state", () => {
-		it("should render table with empty body when no wallets", () => {
+		it("should render empty-state message and no table when wallets is empty", () => {
 			render(<WalletTable wallets={[]} />);
-			expect(screen.getByRole("table")).toBeInTheDocument();
-			const rows = screen.queryAllByRole("row");
-			// Only header row should exist
-			expect(rows.length).toBe(1);
+			expect(screen.queryByRole("table")).not.toBeInTheDocument();
+			expect(
+				screen.getByText("No wallets found for this network."),
+			).toBeInTheDocument();
 		});
 	});
 
 	describe("Data display", () => {
 		it("should display wallet balance", () => {
 			render(<WalletTable wallets={mockWallets} />);
-			expect(screen.getByText("1,250.50 XLM")).toBeInTheDocument();
-			expect(screen.getByText("500.00 XLM")).toBeInTheDocument();
+			expect(screen.getAllByText("1,250.50 XLM").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("500.00 XLM").length).toBeGreaterThan(0);
 		});
 
 		it("should display dash for missing balance", () => {
@@ -126,56 +125,41 @@ describe("WalletTable", () => {
 				},
 			];
 			render(<WalletTable wallets={walletsWithoutBalance} />);
-			expect(screen.getByText("—")).toBeInTheDocument();
+			expect(screen.getAllByText("—").length).toBeGreaterThan(0);
 		});
 
 		it("should display truncated address", () => {
 			render(<WalletTable wallets={mockWallets} />);
 			// Address should be truncated (first 6 + ... + last 4 chars)
-			expect(screen.getByText("GBZXN7...MADI")).toBeInTheDocument();
+			expect(screen.getAllByText("GBZXN7...MADI").length).toBeGreaterThan(0);
 		});
 	});
 
 	describe("Responsive design", () => {
-		it("should render all columns in table", () => {
+		it("should render all columns in the desktop table", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
 			const headers = container.querySelectorAll("th");
 			expect(headers.length).toBe(6); // Address, Network, Status, Balance, Created, Last Activity
 		});
 
-		it("should have responsive classes on balance column", () => {
+		it("should wrap the desktop table in a hidden-lg container", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const balanceHeader = Array.from(container.querySelectorAll("th")).find(
-				(th) => th.textContent === "Balance",
-			);
-			expect(balanceHeader).toHaveClass("hidden");
-			expect(balanceHeader).toHaveClass("sm:table-cell");
+			const desktopWrapper = container.querySelector(".hidden.lg\\:block");
+			expect(desktopWrapper).toBeInTheDocument();
 		});
 
-		it("should have responsive classes on created column", () => {
+		it("should render a mobile card container", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const createdHeader = Array.from(container.querySelectorAll("th")).find(
-				(th) => th.textContent === "Created",
-			);
-			expect(createdHeader).toHaveClass("hidden");
-			expect(createdHeader).toHaveClass("md:table-cell");
-		});
-
-		it("should have responsive classes on last activity column", () => {
-			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const lastActivityHeader = Array.from(
-				container.querySelectorAll("th"),
-			).find((th) => th.textContent === "Last Activity");
-			expect(lastActivityHeader).toHaveClass("hidden");
-			expect(lastActivityHeader).toHaveClass("lg:table-cell");
+			const mobileWrapper = container.querySelector(".lg\\:hidden");
+			expect(mobileWrapper).toBeInTheDocument();
 		});
 	});
 
 	describe("Edge cases", () => {
 		it("should handle single wallet", () => {
 			render(<WalletTable wallets={[mockWallets[0]]} />);
-			expect(screen.getByText("Mainnet")).toBeInTheDocument();
-			expect(screen.queryByText("Testnet")).not.toBeInTheDocument();
+			expect(screen.getAllByText("Mainnet").length).toBeGreaterThan(0);
+			expect(screen.queryAllByText("Testnet")).toHaveLength(0);
 		});
 
 		it("should handle multiple wallets with same network", () => {
@@ -187,8 +171,9 @@ describe("WalletTable", () => {
 				},
 			];
 			render(<WalletTable wallets={sameNetworkWallets} />);
+			// 2 mainnet wallets × 2 views = 4 "Mainnet" labels
 			const mainnetBadges = screen.getAllByText("Mainnet");
-			expect(mainnetBadges.length).toBe(2);
+			expect(mainnetBadges.length).toBe(4);
 		});
 
 		it("should handle multiple wallets with same status", () => {
@@ -200,8 +185,9 @@ describe("WalletTable", () => {
 				},
 			];
 			render(<WalletTable wallets={sameStatusWallets} />);
+			// 2 active wallets × 2 views = 4 "Active" labels
 			const activeBadges = screen.getAllByText("Active");
-			expect(activeBadges.length).toBe(2);
+			expect(activeBadges.length).toBe(4);
 		});
 
 		it("should handle wallet with missing lastActivity", () => {
@@ -219,15 +205,15 @@ describe("WalletTable", () => {
 			const minimalWallet: Wallet[] = [
 				{
 					id: "wallet-minimal",
-					address: "GMINIMAL",
+					address: "GMINIMAL7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNA",
 					network: "testnet",
 					status: "inactive",
 					createdAt: new Date(),
 				},
 			];
 			render(<WalletTable wallets={minimalWallet} />);
-			expect(screen.getByText("Testnet")).toBeInTheDocument();
-			expect(screen.getByText("Inactive")).toBeInTheDocument();
+			expect(screen.getAllByText("Testnet").length).toBeGreaterThan(0);
+			expect(screen.getAllByText("Inactive").length).toBeGreaterThan(0);
 		});
 	});
 
@@ -255,17 +241,17 @@ describe("WalletTable", () => {
 	describe("Styling", () => {
 		it("should apply container styles", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const wrapper = container.firstChild;
-			expect(wrapper).toHaveClass("rounded-xl");
-			expect(wrapper).toHaveClass("border");
-			expect(wrapper).toHaveClass("bg-white");
+			// The outer wrapper is space-y-4; the inner card has rounded-xl
+			const card = container.querySelector(".rounded-xl.border");
+			expect(card).toBeInTheDocument();
+			expect(card?.className).toContain("bg-white");
 		});
 
 		it("should apply dark mode styles to container", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const wrapper = container.firstChild;
-			expect(wrapper).toHaveClass("dark:border-zinc-800");
-			expect(wrapper).toHaveClass("dark:bg-zinc-900");
+			const card = container.querySelector(".rounded-xl.border");
+			expect(card?.className).toContain("dark:border-zinc-800");
+			expect(card?.className).toContain("dark:bg-zinc-900");
 		});
 
 		it("should apply header row styles", () => {

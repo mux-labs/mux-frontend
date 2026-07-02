@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import {
 	mockRecoveryEvents,
 	mockRecoveryTimelineCompleted,
@@ -399,7 +400,177 @@ describe("RecoveryTimelineList", () => {
 		});
 	});
 
-	describe("Integration scenarios", () => {
+	describe("Keyboard navigation", () => {
+	it("should navigate down with ArrowDown", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[0].focus();
+		await user.keyboard("{ArrowDown}");
+		expect(buttons[1]).toHaveFocus();
+	});
+
+	it("should navigate up with ArrowUp", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[1].focus();
+		await user.keyboard("{ArrowUp}");
+		expect(buttons[0]).toHaveFocus();
+	});
+
+	it("should navigate to first event with Home", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		const lastIndex = buttons.length - 1;
+		buttons[lastIndex].focus();
+		await user.keyboard("{Home}");
+		expect(buttons[0]).toHaveFocus();
+	});
+
+	it("should navigate to last event with End", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		const lastIndex = buttons.length - 1;
+		buttons[0].focus();
+		await user.keyboard("{End}");
+		expect(buttons[lastIndex]).toHaveFocus();
+	});
+
+	it("should trigger onEventClick on Enter", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[0].focus();
+		await user.keyboard("{Enter}");
+		expect(mockOnEventClick).toHaveBeenCalledWith(mockRecoveryEvents[0]);
+	});
+
+	it("should trigger onEventClick on Space", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[0].focus();
+		await user.keyboard(" ");
+		expect(mockOnEventClick).toHaveBeenCalledWith(mockRecoveryEvents[0]);
+	});
+
+	it("should not navigate past the first event with ArrowUp", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[0].focus();
+		await user.keyboard("{ArrowUp}");
+		expect(buttons[0]).toHaveFocus();
+	});
+
+	it("should not navigate past the last event with ArrowDown", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		const lastIndex = buttons.length - 1;
+		buttons[lastIndex].focus();
+		await user.keyboard("{ArrowDown}");
+		expect(buttons[lastIndex]).toHaveFocus();
+	});
+
+	it("should apply focus ring on focused event button", () => {
+		const { container } = render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = container.querySelectorAll("button");
+		buttons[0].focus();
+		expect(buttons[0]).toHaveClass("ring-2");
+	});
+
+	it("should handle single event keyboard navigation", async () => {
+		const user = userEvent.setup();
+		render(
+			<RecoveryTimelineList
+				events={[mockRecoveryEvents[0]]}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		const buttons = screen.getAllByRole("button");
+		buttons[0].focus();
+		await user.keyboard("{ArrowDown}");
+		expect(buttons[0]).toHaveFocus();
+		await user.keyboard("{ArrowUp}");
+		expect(buttons[0]).toHaveFocus();
+	});
+
+	it("should have accessible data-testid on event buttons", () => {
+		render(
+			<RecoveryTimelineList
+				events={mockRecoveryEvents}
+				onEventClick={mockOnEventClick}
+			/>,
+		);
+
+		mockRecoveryEvents.forEach((_, index) => {
+			expect(
+				screen.getByTestId(`recovery-event-${index}`),
+			).toBeInTheDocument();
+		});
+	});
+});
+
+describe("Integration scenarios", () => {
 		it("should display complete recovery workflow", () => {
 			render(
 				<RecoveryTimelineList

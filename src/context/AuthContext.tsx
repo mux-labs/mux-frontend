@@ -7,6 +7,10 @@ import {
 	useEffect,
 	useState,
 } from "react";
+import { 
+	trackAuthEvent, 
+	trackSessionExpired 
+} from "@/services/authAnalyticsTracking";
 
 export interface AuthUser {
 	/** The user's display name */
@@ -44,10 +48,10 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 /** sessionStorage key for the user record (client-side rehydration). */
-const SESSION_STORAGE_KEY = "mux_auth_user";
+export const SESSION_STORAGE_KEY = "mux_auth_user";
 
 /** Cookie name read by the Next.js middleware for server-side route protection. */
-const SESSION_COOKIE_NAME = "mux_auth_session";
+export const SESSION_COOKIE_NAME = "mux_auth_session";
 
 /** Default session lifetime: 8 hours. */
 const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
@@ -100,10 +104,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					// Re-sync cookie in case it was cleared (e.g. browser restart)
 					const remainingMs = record.expiresAt - Date.now();
 					setSessionCookie(remainingMs);
+					trackAuthEvent("session_rehydrated", { 
+						email: record.user.email,
+						remainingMs,
+					});
 				} else {
 					// Session expired — clean up stale data
 					sessionStorage.removeItem(SESSION_STORAGE_KEY);
 					clearSessionCookie();
+					trackSessionExpired();
 				}
 			}
 		} catch {
@@ -126,10 +135,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	const signOut = useCallback(() => {
+		const currentUser = user;
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		clearSessionCookie();
 		setUser(null);
-	}, []);
+		trackAuthEvent("logout", { 
+			email: currentUser?.email,
+		});
+	}, [user]);
 
 	return (
 		<AuthContext.Provider

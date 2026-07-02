@@ -53,6 +53,7 @@ describe("trackWalletEvent", () => {
 			name: Parameters<typeof trackWalletEvent>[0];
 			payload: Parameters<typeof trackWalletEvent>[1];
 		}> = [
+			{ name: "wallets_list_view", payload: {} },
 			{ name: "wallet_detail_view", payload: { walletId: "wallet-001" } },
 			{ name: "wallet_balance_refresh", payload: { walletId: "wallet-001" } },
 			{ name: "wallet_address_copied", payload: { walletId: "wallet-001" } },

@@ -1,8 +1,15 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("WalletsPage (/dashboard/wallets)", () => {
+	let consoleSpy: ReturnType<typeof vi.spyOn>;
+
+	beforeEach(() => {
+		consoleSpy = vi.spyOn(console, "debug").mockImplementation(() => {});
+	});
+
 	afterEach(() => {
+		consoleSpy.mockRestore();
 		vi.resetModules();
 		vi.doUnmock("@/mock-data/wallets");
 	});
@@ -13,6 +20,17 @@ describe("WalletsPage (/dashboard/wallets)", () => {
 		);
 		render(<WalletsPage />);
 	}
+
+	describe("analytics tracking", () => {
+		it("fires a page_view event for the wallets page on mount", async () => {
+			await renderPage();
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"[analytics]",
+				"page_view",
+				{ page: "wallets" },
+			);
+		});
+	});
 
 	describe("page header", () => {
 		it("renders the heading and description", async () => {

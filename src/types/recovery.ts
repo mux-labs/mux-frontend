@@ -60,6 +60,13 @@ export interface RecoveryTimelineEventProps {
 	isFirst?: boolean;
 	onClick?: () => void;
 	className?: string;
+	focused?: boolean;
+	tabIndex?: number;
+	onKeyDown?: (e: React.KeyboardEvent) => void;
+	eventRef?: React.Ref<HTMLButtonElement>;
+	testId?: string;
+	onFocus?: () => void;
+	onBlur?: () => void;
 }
 
 export interface RecoveryTimelineListProps {

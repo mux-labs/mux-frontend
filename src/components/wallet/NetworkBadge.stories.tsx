@@ -8,17 +8,29 @@ const meta: Meta<typeof NetworkBadge> = {
 	parameters: {
 		layout: "centered",
 	},
+	argTypes: {
+		network: {
+			control: "select",
+			options: ["mainnet", "testnet"],
+			description: "The network type to display",
+		},
+		className: { control: "text" },
+	},
 };
 
 export default meta;
 type Story = StoryObj<typeof NetworkBadge>;
 
 export const Mainnet: Story = {
-	args: { network: "mainnet" },
+	args: {
+		network: "mainnet",
+	},
 };
 
 export const Testnet: Story = {
-	args: { network: "testnet" },
+	args: {
+		network: "testnet",
+	},
 };
 
 /** Falls back to mainnet when an invalid network value is provided. */

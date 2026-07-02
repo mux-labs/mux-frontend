@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { fn } from "@storybook/test";
 import { useState } from "react";
 import type { WalletNetwork } from "@/types/wallet";
 import { NetworkFilter } from "./NetworkFilter";
@@ -11,14 +12,25 @@ const meta: Meta<typeof NetworkFilter> = {
 		layout: "centered",
 	},
 	argTypes: {
-		onNetworkChange: { action: "network changed" },
+		selectedNetwork: {
+			control: "select",
+			options: ["all", "mainnet", "testnet"],
+			description: "Currently active network filter",
+		},
+		disabled: {
+			control: "boolean",
+			description: "Disable all filter buttons",
+		},
+	},
+	args: {
+		onNetworkChange: fn(),
 	},
 };
 
 export default meta;
 type Story = StoryObj<typeof NetworkFilter>;
 
-export const AllSelected: Story = {
+export const AllNetworks: Story = {
 	args: {
 		selectedNetwork: "all",
 	},

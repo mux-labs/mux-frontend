@@ -8,9 +8,16 @@ import { validateStellarAddress } from "@/utils/addressFormatting";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
+/** Props for the `AddWalletModal` dialog. */
 export interface AddWalletModalProps {
+	/** Controls visibility of the modal. When `false` nothing is rendered. */
 	isOpen: boolean;
+	/** Called when the user dismisses the modal (Cancel, ✕ button, backdrop, or Escape). */
 	onClose: () => void;
+	/**
+	 * Called with the newly created `Wallet` object immediately after the user
+	 * completes the form and the simulated persistence resolves.
+	 */
 	onAdd: (wallet: Wallet) => void;
 	existingAddresses?: string[];
 }

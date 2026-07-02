@@ -16,6 +16,7 @@
 // ---------------------------------------------------------------------------
 
 export type WalletEventName =
+	| "wallets_list_view"
 	| "wallet_detail_view"
 	| "wallet_balance_refresh"
 	| "wallet_address_copied"

@@ -46,11 +46,7 @@ export function trackTransactionEvent(
 	payload: TransactionEventPayload = {},
 ): void {
 	if (process.env.NODE_ENV === "development") {
-		// biome-ignore lint/suspicious/noConsoleLog: allowed in dev
-		console.log(
-			`[Analytics] ${eventName}`,
-			payload,
-		);
+		console.log(`[Analytics] ${eventName}`, payload);
 	}
 
 	// TODO: Replace with real analytics provider integration, e.g.:

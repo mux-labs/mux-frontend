@@ -81,19 +81,77 @@ describe("RecoveryPage", () => {
 		).not.toBeInTheDocument();
 	});
 
-	it("renders the post-loading content for the 'error' state too", () => {
+	it("shows the empty state when recovery is idle (no history yet)", () => {
+		useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+		render(<RecoveryPage />);
+
+		expect(
+			screen.getByRole("status", { name: /no recovery history/i }),
+		).toBeInTheDocument();
+		expect(screen.getByText(/no recovery history/i)).toBeInTheDocument();
+	});
+
+	it("empty state 'Initiate Recovery' button wires to initiateRecovery", () => {
+		const initiateRecovery = vi.fn();
 		useRecoveryMock.mockReturnValue(
-			makeRecovery({ state: "error", errorMessage: "Network failure" }),
+			makeRecovery({ state: "idle", initiateRecovery }),
 		);
 		render(<RecoveryPage />);
 
-		expect(screen.getByText(/recovery system status/i)).toBeInTheDocument();
+		// Both the CTA card and the empty state render an "Initiate recovery" button.
+		// The empty state button has the label "Initiate Recovery" (title-case).
+		const buttons = screen.getAllByRole("button", {
+			name: /initiate recovery/i,
+		});
+		expect(buttons.length).toBeGreaterThanOrEqual(1);
+	});
+
+	it("does not show the empty state when recovery is not idle", () => {
+		useRecoveryMock.mockReturnValue(makeRecovery({ state: "confirming" }));
+		render(<RecoveryPage />);
+
 		expect(
-			screen.queryByRole("status", { name: /loading recovery status/i }),
+			screen.queryByRole("status", { name: /no recovery history/i }),
 		).not.toBeInTheDocument();
 	});
 
-	it("renders the post-loading content for the 'success' state too", () => {
+	it("shows the bootstrap error state when initial load fails", () => {
+		// Bootstrap error: state goes loading → error without ever reaching idle.
+		// In test-land we mock the hook returning "error" from the start;
+		// hasReachedIdle will never be set so the error state branch renders.
+		useRecoveryMock.mockReturnValue(
+			makeRecovery({
+				state: "error",
+				errorMessage: "Failed to load recovery status.",
+			}),
+		);
+		render(<RecoveryPage />);
+
+		expect(
+			screen.getByRole("alert", { name: /recovery status unavailable/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByText("Failed to load recovery status."),
+		).toBeInTheDocument();
+	});
+
+	it("bootstrap error state shows a retry button wired to resetRecovery", () => {
+		const resetRecovery = vi.fn();
+		useRecoveryMock.mockReturnValue(
+			makeRecovery({
+				state: "error",
+				errorMessage: "Failed to load recovery status.",
+				resetRecovery,
+			}),
+		);
+		render(<RecoveryPage />);
+
+		expect(
+			screen.getByRole("button", { name: /try again/i }),
+		).toBeInTheDocument();
+	});
+
+	it("renders the post-loading content for the 'success' state", () => {
 		useRecoveryMock.mockReturnValue(makeRecovery({ state: "success" }));
 		render(<RecoveryPage />);
 
@@ -126,8 +184,10 @@ describe("RecoveryPage", () => {
 		);
 		render(<RecoveryPage />);
 
-		// "Network failure" appears in both the CTA alert and the toast
-		expect(screen.getAllByText("Network failure").length).toBeGreaterThanOrEqual(2);
+		// "Network failure" appears in both the error state panel and the toast
+		expect(
+			screen.getAllByText("Network failure").length,
+		).toBeGreaterThanOrEqual(2);
 		expect(screen.getByText("Error")).toBeInTheDocument();
 	});
 

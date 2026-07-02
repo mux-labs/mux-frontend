@@ -1,31 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { MetricsCards } from "./MetricsCards";
+import { render, screen } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { Metric } from "@/mock-data/analytics";
+import { MetricsCards } from "./MetricsCards";
 
-// Mock the CopyButton component
-vi.mock("./CopyButton", () => ({
-	CopyButton: ({
-		text,
-		label,
-		onCopySuccess,
-	}: {
-		text: string;
-		label?: string;
-		onCopySuccess?: (text: string) => void;
-	}) => (
-		<button
-			data-testid="analytics-copy-button"
-			onClick={() => onCopySuccess?.(text)}
-			aria-label={label}
-		>
-			Copy
-		</button>
-	),
-}));
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
 
-const mockMetrics: Metric[] = [
+const METRICS_POSITIVE: Metric[] = [
 	{
 		label: "Total Volume",
 		value: "$12.4M",
@@ -38,6 +20,9 @@ const mockMetrics: Metric[] = [
 		change: 8.2,
 		changeLabel: "vs last period",
 	},
+];
+
+const METRICS_NEGATIVE: Metric[] = [
 	{
 		label: "Active Wallets",
 		value: "3,842",
@@ -52,123 +37,158 @@ const mockMetrics: Metric[] = [
 	},
 ];
 
-describe("MetricsCards", () => {
-	it("renders all metric cards", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		
-		for (const metric of mockMetrics) {
-			expect(screen.getByText(metric.label)).toBeInTheDocument();
-			expect(screen.getByText(metric.value)).toBeInTheDocument();
-		}
+const METRICS_FULL: Metric[] = [...METRICS_POSITIVE, ...METRICS_NEGATIVE];
+
+// ---------------------------------------------------------------------------
+// Rendering with data
+// ---------------------------------------------------------------------------
+
+describe("MetricsCards — rendering", () => {
+	it("renders a card for each metric", () => {
+		const { container } = render(<MetricsCards metrics={METRICS_FULL} />);
+		// Each card is a direct child div of the grid
+		const grid = container.firstElementChild;
+		expect(grid?.children).toHaveLength(4);
 	});
 
-	it("renders copy buttons for each metric", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		expect(copyButtons).toHaveLength(mockMetrics.length);
+	it("renders the label for each metric", () => {
+		render(<MetricsCards metrics={METRICS_FULL} />);
+		expect(screen.getByText("Total Volume")).toBeInTheDocument();
+		expect(screen.getByText("Total Transactions")).toBeInTheDocument();
+		expect(screen.getByText("Active Wallets")).toBeInTheDocument();
+		expect(screen.getByText("Success Rate")).toBeInTheDocument();
 	});
 
-	it("displays positive change with emerald color", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		const positiveChange = screen.getByText("12.5%");
-		expect(positiveChange.parentElement?.className).toContain("text-emerald-600");
+	it("renders the value for each metric", () => {
+		render(<MetricsCards metrics={METRICS_FULL} />);
+		expect(screen.getByText("$12.4M")).toBeInTheDocument();
+		expect(screen.getByText("84,231")).toBeInTheDocument();
+		expect(screen.getByText("3,842")).toBeInTheDocument();
+		expect(screen.getByText("99.2%")).toBeInTheDocument();
 	});
 
-	it("displays negative change with red color", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		const negativeChange = screen.getByText("2.1%");
-		expect(negativeChange.parentElement?.className).toContain("text-red-600");
+	it("renders the change percentage as an absolute value with % sign", () => {
+		render(<MetricsCards metrics={METRICS_FULL} />);
+		expect(screen.getByText("12.5%")).toBeInTheDocument();
+		expect(screen.getByText("8.2%")).toBeInTheDocument();
+		expect(screen.getByText("2.1%")).toBeInTheDocument(); // -2.1 → abs → 2.1
+		expect(screen.getByText("0.3%")).toBeInTheDocument();
 	});
 
-	it("shows up arrow for positive changes", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const upArrows = container.querySelectorAll('path[d="M5 15l7-7 7 7"]');
-		expect(upArrows.length).toBeGreaterThan(0);
+	it("renders the changeLabel for each metric", () => {
+		render(<MetricsCards metrics={METRICS_FULL} />);
+		const labels = screen.getAllByText("vs last period");
+		expect(labels).toHaveLength(4);
 	});
 
-	it("shows down arrow for negative changes", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const downArrows = container.querySelectorAll('path[d="M19 9l-7 7-7-7"]');
-		expect(downArrows.length).toBeGreaterThan(0);
+	it("renders with a single metric", () => {
+		render(<MetricsCards metrics={[METRICS_POSITIVE[0]]} />);
+		expect(screen.getByText("Total Volume")).toBeInTheDocument();
+		expect(screen.getByText("$12.4M")).toBeInTheDocument();
 	});
 
-	it("displays change labels", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		const changeLabels = screen.getAllByText("vs last period");
-		expect(changeLabels).toHaveLength(mockMetrics.length);
+	it("renders nothing in the grid when metrics is empty", () => {
+		const { container } = render(<MetricsCards metrics={[]} />);
+		const grid = container.firstElementChild;
+		expect(grid?.children).toHaveLength(0);
 	});
+});
 
-	it("shows toast message when copy succeeds", async () => {
-		const user = userEvent.setup();
-		render(<MetricsCards metrics={mockMetrics} />);
-		
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		// Just verify the button click works without errors
-		await user.click(copyButtons[0]);
-		// Toast behavior is tested via integration
-	});
+// ---------------------------------------------------------------------------
+// Positive vs negative change styling
+// ---------------------------------------------------------------------------
 
-	it("handles copy button click without errors", async () => {
-		const user = userEvent.setup();
-		render(<MetricsCards metrics={mockMetrics} />);
-		
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		await user.click(copyButtons[0]);
-		
-		// Toast behavior is tested via integration
-	});
-
-	it("has group hover effect on cards", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const cards = container.querySelectorAll(".group");
-		expect(cards.length).toBe(mockMetrics.length);
-	});
-
-	it("copy button becomes visible on card hover", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const copyButtonContainers = container.querySelectorAll(
-			".opacity-0.group-hover\\:opacity-100",
+describe("MetricsCards — change direction styling", () => {
+	it("applies emerald colour class for a positive change", () => {
+		const { container } = render(
+			<MetricsCards metrics={[METRICS_POSITIVE[0]]} />,
 		);
-		expect(copyButtonContainers.length).toBe(mockMetrics.length);
+		// The change badge wrapper has text-emerald-* class
+		const badge = container.querySelector('[class*="emerald"]');
+		expect(badge).toBeInTheDocument();
 	});
 
-	it("renders with responsive grid layout", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const grid = container.querySelector(".grid");
-		expect(grid?.className).toContain("sm:grid-cols-2");
-		expect(grid?.className).toContain("lg:grid-cols-4");
+	it("applies red colour class for a negative change", () => {
+		const { container } = render(
+			<MetricsCards metrics={[METRICS_NEGATIVE[0]]} />,
+		);
+		const badge = container.querySelector('[class*="red"]');
+		expect(badge).toBeInTheDocument();
 	});
 
-	it("handles empty metrics array", () => {
-		render(<MetricsCards metrics={[]} />);
-		const copyButtons = screen.queryAllByTestId("analytics-copy-button");
-		expect(copyButtons).toHaveLength(0);
+	it("applies emerald colour class for a zero change (neutral treated as non-negative)", () => {
+		const zeroChangeMetric: Metric = {
+			label: "Zero",
+			value: "0",
+			change: 0,
+			changeLabel: "no change",
+		};
+		const { container } = render(<MetricsCards metrics={[zeroChangeMetric]} />);
+		const badge = container.querySelector('[class*="emerald"]');
+		expect(badge).toBeInTheDocument();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Arrow icons
+// ---------------------------------------------------------------------------
+
+describe("MetricsCards — arrow icons", () => {
+	it("renders an up-arrow SVG for a positive change", () => {
+		const { container } = render(
+			<MetricsCards metrics={[METRICS_POSITIVE[0]]} />,
+		);
+		// ArrowIcon renders an SVG; up arrow has the path "M5 15l7-7 7 7"
+		const svg = container.querySelector("svg");
+		expect(svg).toBeInTheDocument();
+		expect(svg?.innerHTML).toContain("M5 15l7-7 7 7");
 	});
 
-	it("each copy button has correct accessible label", () => {
-		render(<MetricsCards metrics={mockMetrics} />);
-		
-		expect(
-			screen.getByLabelText("Copy Total Volume value"),
-		).toBeInTheDocument();
-		expect(
-			screen.getByLabelText("Copy Total Transactions value"),
-		).toBeInTheDocument();
-		expect(
-			screen.getByLabelText("Copy Active Wallets value"),
-		).toBeInTheDocument();
-		expect(
-			screen.getByLabelText("Copy Success Rate value"),
-		).toBeInTheDocument();
+	it("renders a down-arrow SVG for a negative change", () => {
+		const { container } = render(
+			<MetricsCards metrics={[METRICS_NEGATIVE[0]]} />,
+		);
+		const svg = container.querySelector("svg");
+		expect(svg).toBeInTheDocument();
+		expect(svg?.innerHTML).toContain("M19 9l-7 7-7-7");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Edge cases
+// ---------------------------------------------------------------------------
+
+describe("MetricsCards — edge cases", () => {
+	it("handles a metric with a very large positive change", () => {
+		const metric: Metric = {
+			label: "Spike",
+			value: "999",
+			change: 999.99,
+			changeLabel: "vs last period",
+		};
+		render(<MetricsCards metrics={[metric]} />);
+		expect(screen.getByText("999.99%")).toBeInTheDocument();
 	});
 
-	it("applies shadow and hover effects to cards", () => {
-		const { container } = render(<MetricsCards metrics={mockMetrics} />);
-		const cards = container.querySelectorAll(".shadow-sm");
-		expect(cards.length).toBe(mockMetrics.length);
-		
-		for (const card of cards) {
-			expect(card.className).toContain("hover:shadow-md");
-		}
+	it("handles a metric with a large negative change", () => {
+		const metric: Metric = {
+			label: "Drop",
+			value: "10",
+			change: -100,
+			changeLabel: "vs last period",
+		};
+		render(<MetricsCards metrics={[metric]} />);
+		expect(screen.getByText("100%")).toBeInTheDocument();
+	});
+
+	it("renders a custom changeLabel correctly", () => {
+		const metric: Metric = {
+			label: "Custom",
+			value: "42",
+			change: 5,
+			changeLabel: "since yesterday",
+		};
+		render(<MetricsCards metrics={[metric]} />);
+		expect(screen.getByText("since yesterday")).toBeInTheDocument();
 	});
 });

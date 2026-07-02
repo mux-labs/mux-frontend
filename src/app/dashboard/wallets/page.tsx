@@ -3,15 +3,16 @@
 import { useState } from "react";
 import { AddWalletModal } from "@/components/wallet/AddWalletModal";
 import { EmptyState } from "@/components/ui/EmptyState";
-import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
-import { Skeleton } from "@/components/ui/Skeleton";
 import { WalletTable } from "@/components/wallet/WalletTable";
-import { useWallets } from "@/hooks/useWallets";
+import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
+import { dummyWallets } from "@/mock-data/wallets";
+import type { Wallet } from "@/types/wallet";
 
 export default function WalletsPage() {
 	const [wallets, setWallets] = useState<Wallet[]>(dummyWallets);
 	const [isAddOpen, setIsAddOpen] = useState(false);
+	useAnalyticsTracking("wallets");
 
 	const openAddWallet = () => setIsAddOpen(true);
 

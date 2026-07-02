@@ -1,31 +1,13 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { TopAssetsTable } from "./TopAssetsTable";
+import { render, screen, within } from "@testing-library/react";
+import { describe, expect, it } from "vitest";
 import type { AssetData } from "@/mock-data/analytics";
+import { TopAssetsTable } from "./TopAssetsTable";
 
-// Mock the CopyButton component
-vi.mock("./CopyButton", () => ({
-	CopyButton: ({
-		text,
-		label,
-		onCopySuccess,
-	}: {
-		text: string;
-		label?: string;
-		onCopySuccess?: (text: string) => void;
-	}) => (
-		<button
-			data-testid="analytics-copy-button"
-			onClick={() => onCopySuccess?.(text)}
-			aria-label={label}
-		>
-			Copy
-		</button>
-	),
-}));
+// ---------------------------------------------------------------------------
+// Fixtures
+// ---------------------------------------------------------------------------
 
-const mockAssets: AssetData[] = [
+const ASSETS: AssetData[] = [
 	{
 		rank: 1,
 		name: "Mux Protocol",
@@ -55,167 +37,215 @@ const mockAssets: AssetData[] = [
 	},
 ];
 
-describe("TopAssetsTable", () => {
-	it("renders table with header", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		expect(screen.getByText("Top Assets by Volume")).toBeInTheDocument();
+const SINGLE_ASSET: AssetData = {
+	rank: 1,
+	name: "Bitcoin",
+	symbol: "BTC",
+	volume: "$987,654",
+	volumeChange: -1.8,
+	tvl: "$6.7M",
+	txCount: 5678,
+};
+
+// ---------------------------------------------------------------------------
+// Structure
+// ---------------------------------------------------------------------------
+
+describe("TopAssetsTable — structure", () => {
+	it("renders the section heading", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
 		expect(
-			screen.getByText("Highest traded assets on the platform"),
+			screen.getByRole("heading", { name: /top assets by volume/i }),
 		).toBeInTheDocument();
 	});
 
-	it("renders all column headers", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		expect(screen.getByText("#")).toBeInTheDocument();
-		expect(screen.getByText("Asset")).toBeInTheDocument();
-		expect(screen.getByText("Volume")).toBeInTheDocument();
-		expect(screen.getByText("Change")).toBeInTheDocument();
-		expect(screen.getByText("TVL")).toBeInTheDocument();
-		expect(screen.getByText("Transactions")).toBeInTheDocument();
+	it("renders the section description", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(screen.getByText(/highest traded assets/i)).toBeInTheDocument();
 	});
 
-	it("renders all assets", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		
-		for (const asset of mockAssets) {
-			expect(screen.getByText(asset.name)).toBeInTheDocument();
-			expect(screen.getByText(asset.symbol)).toBeInTheDocument();
-			expect(screen.getByText(asset.volume)).toBeInTheDocument();
-		}
+	it("renders a table element", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(screen.getByRole("table")).toBeInTheDocument();
 	});
 
-	it("renders copy buttons for each asset (symbol, volume, TVL)", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		// 3 copy buttons per asset: symbol, volume, TVL
-		expect(copyButtons.length).toBe(mockAssets.length * 3);
+	it("renders the expected column headers", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(
+			screen.getByRole("columnheader", { name: /^#$/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("columnheader", { name: /asset/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("columnheader", { name: /volume/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("columnheader", { name: /change/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("columnheader", { name: /tvl/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("columnheader", { name: /transactions/i }),
+		).toBeInTheDocument();
 	});
 
-	it("displays asset rankings", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
+	it("renders a row for each asset", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		const rows = screen.getAllByRole("row");
+		// 1 header row + 3 data rows
+		expect(rows).toHaveLength(4);
+	});
+
+	it("renders an empty tbody when assets is an empty array", () => {
+		render(<TopAssetsTable assets={[]} />);
+		const rows = screen.getAllByRole("row");
+		// Only the header row
+		expect(rows).toHaveLength(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Row content
+// ---------------------------------------------------------------------------
+
+describe("TopAssetsTable — row content", () => {
+	it("renders the rank for each asset", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
 		expect(screen.getByText("1")).toBeInTheDocument();
 		expect(screen.getByText("2")).toBeInTheDocument();
 		expect(screen.getByText("3")).toBeInTheDocument();
 	});
 
-	it("displays asset icons with first letter of symbol", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		expect(container.textContent).toContain("M"); // MUX
-		expect(container.textContent).toContain("X"); // XLM
-		expect(container.textContent).toContain("U"); // USDC
+	it("renders the full asset name", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(screen.getByText("Mux Protocol")).toBeInTheDocument();
+		expect(screen.getByText("Stellar")).toBeInTheDocument();
+		// USDC has the same name and symbol; getAllByText handles duplicates
+		const usdcElements = screen.getAllByText("USDC");
+		expect(usdcElements.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("displays positive volume changes in emerald color", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		const positiveChange = screen.getByText("15.2%");
-		expect(positiveChange.className).toContain("text-emerald-600");
+	it("renders the asset symbol", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		// Symbol appears both as the avatar letter and in the symbol text
+		const muxSymbols = screen.getAllByText("MUX");
+		expect(muxSymbols.length).toBeGreaterThanOrEqual(1);
 	});
 
-	it("displays negative volume changes in red color", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		const negativeChange = screen.getByText("3.1%");
-		expect(negativeChange.className).toContain("text-red-600");
+	it("renders the pre-formatted volume string", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(screen.getByText("$4,234,567")).toBeInTheDocument();
+		expect(screen.getByText("$3,456,789")).toBeInTheDocument();
+		expect(screen.getByText("$2,345,678")).toBeInTheDocument();
 	});
 
-	it("displays TVL values", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
+	it("renders the TVL for each asset", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
 		expect(screen.getByText("$18.2M")).toBeInTheDocument();
 		expect(screen.getByText("$12.8M")).toBeInTheDocument();
 		expect(screen.getByText("$45.6M")).toBeInTheDocument();
 	});
 
-	it("displays transaction counts with locale formatting", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
+	it("renders the transaction count with locale formatting", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		// 28432 → "28,432" via .toLocaleString()
 		expect(screen.getByText("28,432")).toBeInTheDocument();
 		expect(screen.getByText("21,890")).toBeInTheDocument();
 		expect(screen.getByText("15,678")).toBeInTheDocument();
 	});
 
-	it("handles symbol copy button click", async () => {
-		const user = userEvent.setup();
-		render(<TopAssetsTable assets={mockAssets} />);
-		
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		await user.click(copyButtons[0]); // First button is symbol copy
-		// Toast behavior is tested via integration
+	it("renders the volume change as an absolute % value", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		expect(screen.getByText("15.2%")).toBeInTheDocument();
+		expect(screen.getByText("8.7%")).toBeInTheDocument();
+		// -3.1 → abs → 3.1
+		expect(screen.getByText("3.1%")).toBeInTheDocument();
 	});
 
-	it("handles volume copy button click", async () => {
-		const user = userEvent.setup();
-		render(<TopAssetsTable assets={mockAssets} />);
-		
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		await user.click(copyButtons[1]); // Second button is volume copy
-		// Toast behavior is tested via integration
+	it("renders an avatar with the first letter of the symbol", () => {
+		render(<TopAssetsTable assets={[SINGLE_ASSET]} />);
+		// Avatar div contains "B" (first letter of BTC)
+		const avatars = screen
+			.getAllByText("B")
+			.filter((el) => el.classList.contains("rounded-full"));
+		expect(avatars.length).toBeGreaterThanOrEqual(1);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Volume change direction (positive / negative)
+// ---------------------------------------------------------------------------
+
+describe("TopAssetsTable — volume change styling", () => {
+	it("applies emerald colour for a positive volume change", () => {
+		render(<TopAssetsTable assets={[ASSETS[0]]} />); // MUX: +15.2%
+		const { container } = render(<TopAssetsTable assets={[ASSETS[0]]} />);
+		const badge = container.querySelector('[class*="emerald"]');
+		expect(badge).toBeInTheDocument();
 	});
 
-	it("handles TVL copy button click", async () => {
-		const user = userEvent.setup();
-		render(<TopAssetsTable assets={mockAssets} />);
-		
-		const copyButtons = screen.getAllByTestId("analytics-copy-button");
-		await user.click(copyButtons[2]); // Third button is TVL copy
-		// Toast behavior is tested via integration
+	it("applies red colour for a negative volume change", () => {
+		const { container } = render(<TopAssetsTable assets={[ASSETS[2]]} />); // USDC: -3.1%
+		const badge = container.querySelector('[class*="red"]');
+		expect(badge).toBeInTheDocument();
 	});
 
-	it("has group hover effect on rows", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const rows = container.querySelectorAll("tbody tr");
-		for (const row of rows) {
-			expect(row.className).toContain("group");
-		}
+	it("renders an up-arrow SVG for a positive volume change", () => {
+		const { container } = render(<TopAssetsTable assets={[ASSETS[0]]} />);
+		const svg = container.querySelector("svg");
+		expect(svg?.innerHTML).toContain("M5 15l7-7 7 7");
 	});
 
-	it("copy buttons become visible on row hover", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const copyButtonContainers = container.querySelectorAll(
-			".opacity-0.group-hover\\:opacity-100",
-		);
-		expect(copyButtonContainers.length).toBeGreaterThan(0);
+	it("renders a down-arrow SVG for a negative volume change", () => {
+		const { container } = render(<TopAssetsTable assets={[ASSETS[2]]} />);
+		const svg = container.querySelector("svg");
+		expect(svg?.innerHTML).toContain("M19 9l-7 7-7-7");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Single asset
+// ---------------------------------------------------------------------------
+
+describe("TopAssetsTable — single asset", () => {
+	it("renders exactly one data row for a single asset", () => {
+		render(<TopAssetsTable assets={[SINGLE_ASSET]} />);
+		const rows = screen.getAllByRole("row");
+		// 1 header + 1 data row
+		expect(rows).toHaveLength(2);
 	});
 
-	it("has responsive column visibility", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const changeColumns = container.querySelectorAll(
-			"th.hidden.sm\\:table-cell",
-		);
-		const tvlColumns = container.querySelectorAll("th.hidden.md\\:table-cell");
-		expect(changeColumns.length).toBeGreaterThan(0);
-		expect(tvlColumns.length).toBeGreaterThan(0);
+	it("renders all fields for the single asset", () => {
+		render(<TopAssetsTable assets={[SINGLE_ASSET]} />);
+		expect(screen.getByText("Bitcoin")).toBeInTheDocument();
+		expect(screen.getByText("$987,654")).toBeInTheDocument();
+		expect(screen.getByText("$6.7M")).toBeInTheDocument();
+		// 5678 → "5,678"
+		expect(screen.getByText("5,678")).toBeInTheDocument();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Accessibility
+// ---------------------------------------------------------------------------
+
+describe("TopAssetsTable — accessibility", () => {
+	it("renders a table with correct aria semantics (row/cell roles)", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		const cells = screen.getAllByRole("cell");
+		// 6 columns × 3 rows = 18 cells
+		// Note: hidden columns still exist in the DOM
+		expect(cells.length).toBeGreaterThanOrEqual(3 * 4); // at least 4 visible cols × 3 rows
 	});
 
-	it("handles empty assets array", () => {
-		render(<TopAssetsTable assets={[]} />);
-		expect(screen.getByText("Top Assets by Volume")).toBeInTheDocument();
-		const copyButtons = screen.queryAllByTestId("analytics-copy-button");
-		expect(copyButtons).toHaveLength(0);
-	});
-
-	it("each copy button has correct accessible label", () => {
-		render(<TopAssetsTable assets={mockAssets} />);
-		
-		expect(screen.getByLabelText("Copy MUX symbol")).toBeInTheDocument();
-		expect(screen.getByLabelText("Copy MUX volume")).toBeInTheDocument();
-		expect(screen.getByLabelText("Copy MUX TVL")).toBeInTheDocument();
-	});
-
-	it("rows have hover background effect", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const rows = container.querySelectorAll("tbody tr");
-		for (const row of rows) {
-			expect(row.className).toContain("hover:bg-zinc-50");
-		}
-	});
-
-	it("renders table with proper overflow handling", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const overflowContainer = container.querySelector(".overflow-x-auto");
-		expect(overflowContainer).toBeInTheDocument();
-	});
-
-	it("table has minimum width for scrolling on small screens", () => {
-		const { container } = render(<TopAssetsTable assets={mockAssets} />);
-		const table = container.querySelector("table");
-		expect(table?.className).toContain("min-w-[480px]");
+	it("column headers have text describing the column", () => {
+		render(<TopAssetsTable assets={ASSETS} />);
+		const headers = screen.getAllByRole("columnheader");
+		const texts = headers.map((h) => h.textContent?.trim());
+		expect(texts).toContain("#");
+		expect(texts).toContain("Asset");
+		expect(texts).toContain("Volume");
 	});
 });

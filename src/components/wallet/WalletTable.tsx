@@ -3,12 +3,10 @@
 import { AlertCircle, Check, Copy, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/ui/EmptyState";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { TestnetHint } from "@/components/ui/TestnetHint";
-import { Toast } from "@/components/ui/toast";
 import {
 	Table,
 	TableBody,
@@ -40,33 +38,13 @@ function WalletAddressCell({
 	const handleCopy = async (e: React.MouseEvent) => {
 		e.preventDefault();
 		e.stopPropagation();
-
-		try {
-			await copy(address, address);
-			// Success callback will be triggered by effect monitoring copied state
-		} catch (err) {
-			// Error will be set in hook state
-			const errorMessage =
-				err instanceof Error ? err.message : "Failed to copy";
-			if (onCopyError) {
-				onCopyError(errorMessage);
-			}
+		const success = await copy(address, address);
+		if (success) {
+			onCopySuccess?.(address);
+		} else {
+			onCopyError?.(error ?? "Failed to copy address");
 		}
 	};
-
-	// Trigger success callback when copied changes to true
-	React.useEffect(() => {
-		if (copied && onCopySuccess) {
-			onCopySuccess(address);
-		}
-	}, [copied, address, onCopySuccess]);
-
-	// Trigger error callback when error is set
-	React.useEffect(() => {
-		if (error && onCopyError) {
-			onCopyError(error);
-		}
-	}, [error, onCopyError]);
 
 	return (
 		<div className="flex items-center gap-1">
@@ -120,13 +98,34 @@ export function WalletTable({
 	const router = useRouter();
 	const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 	const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+	const [toastOpen, setToastOpen] = useState(false);
+	const [toastMessage, setToastMessage] = useState("");
+	const [toastType, setToastType] = useState<"success" | "error">("success");
+	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const showToast = useCallback((message: string, type: "success" | "error") => {
+		if (toastTimer.current) clearTimeout(toastTimer.current);
+		setToastMessage(message);
+		setToastType(type);
+		setToastOpen(true);
+		toastTimer.current = setTimeout(() => setToastOpen(false), 3000);
+	}, []);
+
+	const handleCopySuccess = useCallback((address: string) => {
+		showToast(`Copied ${address.slice(0, 6)}…${address.slice(-4)}`, "success");
+		onCopySuccess?.(address);
+	}, [showToast, onCopySuccess]);
+
+	const handleCopyError = useCallback((error: string) => {
+		showToast(error, "error");
+		onCopyError?.(error);
+	}, [showToast, onCopyError]);
 
 	const hasTestnetWallets = useMemo(
 		() => wallets.some((wallet) => wallet.network === "testnet"),
 		[wallets],
 	);
 
-	// Handle keyboard navigation
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLTableRowElement>, index: number) => {
 			switch (event.key) {
@@ -166,12 +165,10 @@ export function WalletTable({
 		[wallets, router],
 	);
 
-	// Handle row focus
 	const handleRowFocus = useCallback((index: number) => {
 		setFocusedIndex(index);
 	}, []);
 
-	// Handle row blur
 	const handleRowBlur = useCallback(() => {
 		setFocusedIndex(-1);
 	}, []);
@@ -200,10 +197,9 @@ export function WalletTable({
 				</div>
 
 				{wallets.length === 0 ? (
-					<EmptyState
-						title="No wallets found"
-						description="No wallets found for this network."
-					/>
+					<div className="py-12 text-center text-zinc-500">
+						No wallets found for this network.
+					</div>
 				) : (
 					<>
 						{/* Desktop Table View */}
@@ -220,18 +216,35 @@ export function WalletTable({
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{wallets.map((wallet) => (
-										<TableRow key={wallet.id}>
+									{wallets.map((wallet, index) => (
+										<TableRow
+											key={wallet.id}
+											data-testid={`wallet-row-${index}`}
+											tabIndex={0}
+											ref={(el: HTMLTableRowElement | null) => {
+												rowRefs.current[index] = el;
+											}}
+											onKeyDown={(e) => handleKeyDown(e, index)}
+											onFocus={() => handleRowFocus(index)}
+											onBlur={handleRowBlur}
+											aria-label={`${truncateAddress(wallet.address)}, ${wallet.network}, ${wallet.status}`}
+											className={
+												focusedIndex === index
+													? "ring-2 ring-blue-500 dark:ring-blue-400 focus:outline-none"
+													: "focus:outline-none"
+											}
+										>
 											<TableCell>
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<WalletAddressCell
 														address={wallet.address}
 														network={wallet.network}
-														onCopySuccess={onCopySuccess}
-														onCopyError={onCopyError}
+														onCopySuccess={handleCopySuccess}
+														onCopyError={handleCopyError}
 													/>
 												</Link>
 											</TableCell>
@@ -239,6 +252,7 @@ export function WalletTable({
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<NetworkBadge network={wallet.network} />
 												</Link>
@@ -247,6 +261,7 @@ export function WalletTable({
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<StatusIndicator status={wallet.status} />
 												</Link>
@@ -255,6 +270,7 @@ export function WalletTable({
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block text-zinc-700 dark:text-zinc-300"
+													tabIndex={-1}
 												>
 													{wallet.balance ?? "—"}
 												</Link>
@@ -263,6 +279,7 @@ export function WalletTable({
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													{formatDate(wallet.createdAt)}
 												</Link>
@@ -271,6 +288,7 @@ export function WalletTable({
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													{formatDate(wallet.lastActivity)}
 												</Link>
@@ -287,17 +305,16 @@ export function WalletTable({
 								<Link
 									key={wallet.id}
 									href={`/demo/dashboard/wallets/${wallet.id}`}
-									className="block p-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+									className="block p-4 transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 dark:active:bg-zinc-800"
 								>
 									<div className="space-y-3">
-										{/* Top row: Address and Badges */}
 										<div className="flex items-start justify-between gap-2">
 											<div className="min-w-0 flex-1">
 												<WalletAddressCell
 													address={wallet.address}
 													network={wallet.network}
-													onCopySuccess={onCopySuccess}
-													onCopyError={onCopyError}
+													onCopySuccess={handleCopySuccess}
+													onCopyError={handleCopyError}
 												/>
 											</div>
 											<div className="flex flex-shrink-0 gap-2">
@@ -306,30 +323,29 @@ export function WalletTable({
 											</div>
 										</div>
 
-										{/* Metadata grid */}
 										<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 											<div>
-												<span className="text-zinc-500 dark:text-zinc-400">
+												<p className="text-xs text-zinc-500 dark:text-zinc-400">
 													Balance
-												</span>
-												<p className="font-medium text-zinc-900 dark:text-zinc-50">
+												</p>
+												<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 													{wallet.balance ?? "—"}
 												</p>
 											</div>
 											<div>
-												<span className="text-zinc-500 dark:text-zinc-400">
+												<p className="text-xs text-zinc-500 dark:text-zinc-400">
 													Created
-												</span>
-												<p className="font-medium text-zinc-900 dark:text-zinc-50">
+												</p>
+												<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 													{formatDate(wallet.createdAt)}
 												</p>
 											</div>
 											{wallet.lastActivity && (
 												<div className="col-span-2">
-													<span className="text-zinc-500 dark:text-zinc-400">
+													<p className="text-xs text-zinc-500 dark:text-zinc-400">
 														Last Activity
-													</span>
-													<p className="font-medium text-zinc-900 dark:text-zinc-50">
+													</p>
+													<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 														{formatDate(wallet.lastActivity)}
 													</p>
 												</div>
@@ -341,50 +357,6 @@ export function WalletTable({
 						</div>
 					</>
 				)}
-			</div>
-
-			{/* Toast notification for copy feedback */}
-			<CopyToast open={toastOpen} message={toastMessage} type={toastType} />
-		</div>
-	);
-}
-
-interface CopyToastProps {
-	open: boolean;
-	message: string;
-	type: "success" | "error";
-}
-
-function CopyToast({ open, message, type }: CopyToastProps) {
-	if (!open) {
-		return null;
-	}
-
-	return (
-		<div
-			className="fixed right-4 bottom-4 z-50 max-w-sm rounded-lg bg-zinc-950/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md animate-in slide-in-from-bottom-5 fade-in duration-300"
-			role="status"
-			aria-live="polite"
-			data-testid="copy-toast"
-		>
-			<div className="flex items-start gap-3">
-				{type === "success" ? (
-					<Check
-						className="h-5 w-5 text-green-400 flex-shrink-0"
-						aria-hidden="true"
-					/>
-				) : (
-					<AlertCircle
-						className="h-5 w-5 text-red-400 flex-shrink-0"
-						aria-hidden="true"
-					/>
-				)}
-				<div className="space-y-1 flex-1 min-w-0">
-					<p className="text-sm font-semibold">
-						{type === "success" ? "Copied!" : "Copy Failed"}
-					</p>
-					<p className="text-sm text-zinc-200 break-words">{message}</p>
-				</div>
 			</div>
 		</div>
 	);

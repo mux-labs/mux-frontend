@@ -63,7 +63,7 @@ describe("WalletDetail responsive layout", () => {
 	});
 
 	it("renders balance text with responsive size classes", () => {
-		const { container } = render(<WalletDetail id="wallet-001" />);
+		render(<WalletDetail id="wallet-001" />);
 		const balanceText = screen.getByText("1250.50 XLM");
 		expect(balanceText.className).toContain("text-3xl");
 		expect(balanceText.className).toContain("sm:text-4xl");

@@ -30,11 +30,12 @@ jest.mock("@/components/ui/ExplorerLink", () => ({
 	),
 }));
 
-// Mock the useCopyToClipboard hook
+// Mock the useCopyToClipboard hook (include error: null to match real hook signature)
 jest.mock("@/hooks/useCopyToClipboard", () => ({
 	useCopyToClipboard: () => ({
 		copy: jest.fn(),
 		copied: false,
+		error: null,
 	}),
 }));
 
@@ -95,25 +96,24 @@ describe("WalletTable Integration", () => {
 	});
 
 	describe("Wallet rendering", () => {
-		it("should render all wallets in table", () => {
+		it("should render all wallets in the desktop table", () => {
 			render(<WalletTable wallets={[mainnetWallet, testnetWallet]} />);
 
 			const rows = screen.getAllByRole("row");
-			// Header row + 2 wallet rows
+			// Header row + 2 wallet rows in the desktop table
 			expect(rows).toHaveLength(3);
 		});
 
 		it("should display wallet addresses", () => {
 			render(<WalletTable wallets={[mainnetWallet]} />);
 
-			// Address should be truncated
-			expect(screen.getByText(/GBZXN7.*MADI/)).toBeInTheDocument();
+			// Responsive layout renders address in both desktop table and mobile card
+			expect(screen.getAllByText(/GBZXN7.*MADI/).length).toBeGreaterThan(0);
 		});
 
 		it("should display network badges", () => {
 			render(<WalletTable wallets={[mainnetWallet, testnetWallet]} />);
 
-			// NetworkBadge component should render network info
 			const rows = screen.getAllByRole("row");
 			expect(rows.length).toBeGreaterThan(1);
 		});
@@ -121,7 +121,6 @@ describe("WalletTable Integration", () => {
 		it("should display wallet status", () => {
 			render(<WalletTable wallets={[mainnetWallet]} />);
 
-			// StatusIndicator should render status
 			const rows = screen.getAllByRole("row");
 			expect(rows.length).toBeGreaterThan(1);
 		});
@@ -129,7 +128,7 @@ describe("WalletTable Integration", () => {
 		it("should display balance when available", () => {
 			render(<WalletTable wallets={[mainnetWallet]} />);
 
-			expect(screen.getByText("1,000 XLM")).toBeInTheDocument();
+			expect(screen.getAllByText("1,000 XLM").length).toBeGreaterThan(0);
 		});
 
 		it("should display dash when balance unavailable", () => {
@@ -140,7 +139,7 @@ describe("WalletTable Integration", () => {
 
 			render(<WalletTable wallets={[walletNoBalance]} />);
 
-			expect(screen.getByText("—")).toBeInTheDocument();
+			expect(screen.getAllByText("—").length).toBeGreaterThan(0);
 		});
 	});
 
@@ -155,9 +154,12 @@ describe("WalletTable Integration", () => {
 
 	describe("Edge cases", () => {
 		it("should handle empty wallet list", () => {
-			const { container } = render(<WalletTable wallets={[]} />);
+			render(<WalletTable wallets={[]} />);
 
-			expect(container.querySelector("table")).toBeInTheDocument();
+			expect(screen.queryByRole("table")).not.toBeInTheDocument();
+			expect(
+				screen.getByText("No wallets found for this network."),
+			).toBeInTheDocument();
 		});
 
 		it("should handle multiple testnet wallets", () => {

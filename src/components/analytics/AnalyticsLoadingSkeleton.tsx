@@ -6,12 +6,12 @@ import { Skeleton } from "@/components/ui/Skeleton";
 export function MetricsCardsSkeleton() {
 	return (
 		<div
+			role="status"
 			className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
 			aria-label="Loading metrics"
 			aria-busy="true"
 		>
 			{Array.from({ length: 4 }).map((_, i) => (
-				// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
 				<div
 					key={i}
 					className="rounded-xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
@@ -37,6 +37,7 @@ export function MetricsCardsSkeleton() {
 export function AnalyticsChartSkeleton() {
 	return (
 		<div
+			role="status"
 			className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
 			aria-label="Loading chart"
 			aria-busy="true"
@@ -50,8 +51,7 @@ export function AnalyticsChartSkeleton() {
 			{/* bar chart area */}
 			<div className="flex items-end gap-1 sm:gap-2" style={{ height: 120 }}>
 				{Array.from({ length: 7 }).map((_, i) => (
-					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
-					<div key={i} className="flex flex-1 flex-col items-center gap-1.5">
+						<div key={i} className="flex flex-1 flex-col items-center gap-1.5">
 						<Skeleton
 							className="w-full max-w-[32px] rounded-t-md"
 							style={{ height: `${40 + ((i * 17) % 60)}%` }}
@@ -76,6 +76,7 @@ export function AnalyticsChartSkeleton() {
 export function TopAssetsTableSkeleton({ rows = 5 }: { rows?: number }) {
 	return (
 		<div
+			role="status"
 			className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
 			aria-label="Loading top assets"
 			aria-busy="true"
@@ -89,8 +90,7 @@ export function TopAssetsTableSkeleton({ rows = 5 }: { rows?: number }) {
 			{/* table rows */}
 			<div className="divide-y divide-zinc-100 dark:divide-zinc-800">
 				{Array.from({ length: rows }).map((_, i) => (
-					// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton list
-					<div key={i} className="flex items-center gap-4 px-4 py-4 sm:px-6">
+						<div key={i} className="flex items-center gap-4 px-4 py-4 sm:px-6">
 						{/* rank */}
 						<Skeleton className="h-4 w-4 shrink-0" />
 						{/* avatar + name */}

@@ -49,7 +49,7 @@ export function RecoveryLoadingState({
 			className={cn("space-y-8", className)}
 		>
 			{/* Status card skeleton */}
-			<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+			<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:shadow-none dark:border-zinc-800 dark:bg-zinc-950">
 				<div className="flex items-center justify-between">
 					<div className="flex items-center gap-3">
 						<div className="h-9 w-9 rounded-full bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
@@ -63,7 +63,7 @@ export function RecoveryLoadingState({
 			</div>
 
 			{/* Explanation card skeleton */}
-			<div className="rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950 space-y-6">
+			<div className="rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:shadow-none dark:border-zinc-800 dark:bg-zinc-950 space-y-6">
 				<div className="space-y-2">
 					<div className="h-6 w-64 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />
 					<div className="h-4 w-full rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse" />

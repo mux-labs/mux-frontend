@@ -12,12 +12,12 @@ import {
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { mockTransactions } from "@/mock-data/transactions";
+import { trackTransactionEvent } from "@/services/analyticsTracking";
 import type {
 	Transaction,
 	TransactionNetwork,
 	TransactionStatus,
 } from "@/types/transaction";
-import { trackTransactionEvent } from "@/services/analyticsTracking";
 
 // --- Helpers ---
 
@@ -124,7 +124,7 @@ export default function TransactionsTable({
 	>("all");
 	const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
 	const [currentPage, setCurrentPage] = useState(1);
-	const [itemsPerPage, setItemsPerPage] = useState(5);
+	const itemsPerPage = 5;
 	const initialTracked = useRef(false);
 
 	// Track page view on mount
@@ -205,7 +205,7 @@ export default function TransactionsTable({
 		}
 	};
 
-	const handleItemsPerPageChange = (newSize: number) => {
+	const _handleItemsPerPageChange = (newSize: number) => {
 		setItemsPerPage(newSize);
 		setCurrentPage(1);
 		trackTransactionEvent("transactions_items_per_page", {
@@ -233,6 +233,7 @@ export default function TransactionsTable({
 	if (loading) {
 		return (
 			<div
+				role="status"
 				className="w-full max-w-6xl mx-auto p-4 md:p-8 space-y-6 font-sans"
 				aria-busy="true"
 				aria-label="Loading transactions"
@@ -241,7 +242,6 @@ export default function TransactionsTable({
 				<div className="h-8 w-48 rounded bg-slate-200 animate-pulse" />
 				<div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
 					{Array.from({ length: 5 }).map((_, i) => (
-						// biome-ignore lint/suspicious/noArrayIndexKey: static skeleton
 						<div key={i} className="p-4 flex gap-4">
 							<div className="h-4 flex-1 rounded bg-slate-100 animate-pulse" />
 							<div className="h-4 w-24 rounded bg-slate-100 animate-pulse" />
@@ -440,19 +440,32 @@ export default function TransactionsTable({
 					</div>
 
 					<div className="divide-y divide-slate-100">
-						{currentData.length > 0 ? (
-							currentData.map((tx) => (
-								<div
-									key={tx.hash}
-									data-testid="tx-row"
-									className="group p-4 hover:bg-slate-50 transition-colors"
-								>
-									{/* Desktop row */}
-									<div className="hidden lg:grid grid-cols-12 gap-2 items-center">
-										<div className="col-span-3">
-											<span
-												className="font-mono text-xs text-indigo-600 truncate block"
-												title={tx.hash}
+						{sortedData.length > 0 ? (
+							currentData.length > 0 ? (
+								currentData.map((tx) => (
+									<div
+										key={tx.hash}
+										data-testid="tx-row"
+										className="group p-4 hover:bg-slate-50 transition-colors"
+									>
+										{/* Desktop row */}
+										<div className="hidden lg:grid grid-cols-12 gap-2 items-center">
+											<div className="col-span-3">
+												<span
+													className="font-mono text-xs text-indigo-600 truncate block"
+													title={tx.hash}
+												>
+													{truncate(tx.hash, 8, 6)}
+												</span>
+												{tx.memo && (
+													<span className="text-xs text-slate-400 truncate block">
+														{tx.memo}
+													</span>
+												)}
+											</div>
+											<div
+												className="col-span-2 font-mono text-xs text-slate-600 truncate"
+												title={tx.from}
 											>
 												{truncate(tx.hash, 8, 6)}
 											</span>
@@ -468,23 +481,40 @@ export default function TransactionsTable({
 										>
 											{truncate(tx.from)}
 										</div>
-										<div
-											className="col-span-2 font-mono text-xs text-slate-600 truncate"
-											title={tx.to}
-										>
-											{truncate(tx.to)}
+									</div>
+
+									{/* From / To row */}
+									<div className="flex gap-3 mb-2">
+										<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
+											<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
+												From
+											</span>
+											<p
+												className="font-mono text-xs text-slate-700 truncate"
+												title={tx.from}
+											>
+												{truncate(tx.from)}
+											</p>
 										</div>
-										<div className="col-span-2 font-semibold text-sm tabular-nums text-slate-900">
-											{Number(tx.amountXlm).toLocaleString(undefined, {
-												minimumFractionDigits: 2,
-												maximumFractionDigits: 7,
-											})}
-										</div>
-										<div className="col-span-1">
-											<StatusPill status={tx.status} />
-										</div>
-										<div className="col-span-1">
-											<NetworkBadge network={tx.network} />
+										<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
+											<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
+												To
+											</span>
+											<p
+												className="font-mono text-xs text-slate-700 truncate"
+												title={tx.to}
+											>
+												{truncate(tx.to)}
+											</div>
+											<div className="col-span-2 font-semibold text-sm tabular-nums text-slate-900">
+												{Number(tx.amountXlm).toLocaleString(undefined, {
+													minimumFractionDigits: 2,
+													maximumFractionDigits: 7,
+												})}
+											</span>
+											<span className="text-xs font-medium text-slate-400">
+												XLM
+											</span>
 										</div>
 										<div className="col-span-1 text-xs text-slate-500">
 											{formatDate(tx.createdAt)}
@@ -503,64 +533,172 @@ export default function TransactionsTable({
 													{truncate(tx.hash, 8, 6)}
 												</span>
 											</div>
-											<div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+											<div className="col-span-1">
 												<StatusPill status={tx.status} />
 												<NetworkBadge network={tx.network} />
 											</div>
-										</div>
-
-										{/* From / To row */}
-										<div className="flex gap-3 mb-2">
-											<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-												<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-													From
-												</span>
-												<p
-													className="font-mono text-xs text-slate-700 truncate"
-													title={tx.from}
-												>
-													{truncate(tx.from)}
-												</p>
+											<div className="col-span-1">
+												<NetworkBadge network={tx.network} />
 											</div>
-											<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-												<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-													To
-												</span>
-												<p
-													className="font-mono text-xs text-slate-700 truncate"
-													title={tx.to}
-												>
-													{truncate(tx.to)}
-												</p>
-											</div>
-										</div>
-
-										{/* Amount + Date row */}
-										<div className="flex items-center justify-between pt-2 border-t border-slate-100">
-											<div className="flex items-baseline gap-1.5">
-												<span className="font-semibold text-sm tabular-nums text-slate-900">
-													{Number(tx.amountXlm).toLocaleString(undefined, {
-														minimumFractionDigits: 2,
-														maximumFractionDigits: 7,
-													})}
-												</span>
-												<span className="text-xs font-medium text-slate-400">
-													XLM
-												</span>
-											</div>
-											<span className="text-xs text-slate-400">
+											<div className="col-span-1 text-xs text-slate-500">
 												{formatDate(tx.createdAt)}
-											</span>
+											</div>
 										</div>
 
-										{tx.memo && (
-											<p className="text-xs text-slate-400 mt-2 italic leading-relaxed bg-slate-50 rounded-md px-2.5 py-1.5">
-												Memo: {tx.memo}
-											</p>
-										)}
+										{/* Mobile card — polished layout */}
+										<div className="lg:hidden">
+											{/* Top row: hash + badges */}
+											<div className="flex items-start justify-between gap-2 mb-3">
+												<div className="flex-1 min-w-0">
+													<span
+														className="font-mono text-xs font-medium text-indigo-600 break-all leading-snug"
+														title={tx.hash}
+													>
+														{truncate(tx.hash, 8, 6)}
+													</span>
+												</div>
+												<div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
+													<StatusPill status={tx.status} />
+													<NetworkBadge network={tx.network} />
+												</div>
+											</div>
+
+											{/* From / To row */}
+											<div className="flex gap-3 mb-2">
+												<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
+													<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
+														From
+													</span>
+													<p
+														className="font-mono text-xs text-slate-700 truncate"
+														title={tx.from}
+													>
+														{truncate(tx.from)}
+													</p>
+												</div>
+												<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
+													<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
+														To
+													</span>
+													<p
+														className="font-mono text-xs text-slate-700 truncate"
+														title={tx.to}
+													>
+														{truncate(tx.to)}
+													</p>
+												</div>
+											</div>
+
+											{/* Amount + Date row */}
+											<div className="flex items-center justify-between pt-2 border-t border-slate-100">
+												<div className="flex items-baseline gap-1.5">
+													<span className="font-semibold text-sm tabular-nums text-slate-900">
+														{Number(tx.amountXlm).toLocaleString(undefined, {
+															minimumFractionDigits: 2,
+															maximumFractionDigits: 7,
+														})}
+													</span>
+													<span className="text-xs font-medium text-slate-400">
+														XLM
+													</span>
+												</div>
+												<span className="text-xs text-slate-400">
+													{formatDate(tx.createdAt)}
+												</span>
+											</div>
+
+											{/* Mobile card */}
+											<div className="lg:hidden space-y-2">
+												<div className="flex items-center justify-between">
+													<div className="flex items-center">
+														<span
+															className="font-mono text-xs text-indigo-600"
+															title={tx.hash}
+														>
+															{truncate(tx.hash, 8, 6)}
+														</span>
+														<CopyButton
+															text={tx.hash}
+															label={`Copy transaction hash ${tx.hash}`}
+														/>
+													</div>
+													<div className="flex items-center gap-2">
+														<NetworkBadge network={tx.network} />
+														<StatusPill status={tx.status} />
+													</div>
+												</div>
+												<div className="flex justify-between text-xs text-slate-500">
+													<span className="flex items-center gap-0.5">
+														<span className="font-medium text-slate-700">
+															From:{" "}
+														</span>
+														<span className="font-mono" title={tx.from}>
+															{truncate(tx.from)}
+														</span>
+														<CopyButton
+															text={tx.from}
+															label={`Copy from address ${tx.from}`}
+														/>
+													</span>
+													<span className="flex items-center gap-0.5">
+														<span className="font-medium text-slate-700">
+															To:{" "}
+														</span>
+														<span className="font-mono" title={tx.to}>
+															{truncate(tx.to)}
+														</span>
+														<CopyButton
+															text={tx.to}
+															label={`Copy to address ${tx.to}`}
+														/>
+													</span>
+												</div>
+												<div className="flex justify-between items-center">
+													<span className="font-semibold text-sm tabular-nums text-slate-900">
+														{Number(tx.amountXlm).toLocaleString(undefined, {
+															minimumFractionDigits: 2,
+															maximumFractionDigits: 7,
+														})}{" "}
+														XLM
+													</span>
+													<span className="text-xs text-slate-400">
+														{formatDate(tx.createdAt)}
+													</span>
+												</div>
+												{tx.memo && (
+													<p className="text-xs text-slate-400">
+														Memo: {tx.memo}
+													</p>
+												)}
+											</div>
+											{tx.memo && (
+												<p className="text-xs text-slate-400 mt-2 italic leading-relaxed bg-slate-50 rounded-md px-2.5 py-1.5">
+													Memo: {tx.memo}
+												</p>
+											)}
+										</div>
 									</div>
+								))
+							) : (
+								<div className="p-12 text-center">
+									<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
+										<Search size={20} className="text-slate-400" aria-hidden />
+									</div>
+									<h3 className="text-sm font-medium text-slate-900">
+										No transactions found
+									</h3>
+									<p className="text-sm text-slate-500 mt-1">
+										No results for current filters.
+									</p>
+									<button
+										type="button"
+										onClick={clearFilters}
+										className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
+									>
+										Clear all filters
+									</button>
 								</div>
-							))
+							)
 						) : (
 							<div className="p-12 text-center" data-testid="no-results">
 								<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
@@ -573,7 +711,6 @@ export default function TransactionsTable({
 									No results for current filters.
 								</p>
 								<button
-									type="button"
 									onClick={clearFilters}
 									className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
 								>

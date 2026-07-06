@@ -518,7 +518,7 @@ export default function TransactionsTable({
 										</div>
 										<div className="col-span-1 text-xs text-slate-500">
 											{formatDate(tx.createdAt)}
-										</div>
+										</span>
 									</div>
 
 									{/* Mobile card — polished layout */}

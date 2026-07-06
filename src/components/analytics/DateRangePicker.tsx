@@ -53,8 +53,6 @@ interface Props {
 		maxYearsBack?: number;
 		maxDays?: number;
 	};
-	/** Optional callback to show toast notifications for errors */
-	onValidationError?: (message: string) => void;
 }
 
 export function DateRangePicker({
@@ -64,7 +62,6 @@ export function DateRangePicker({
 	onValidationChange,
 	showValidation = true,
 	validationOptions,
-	onValidationError,
 }: Props) {
 	const [open, setOpen] = useState(false);
 	const [fromInput, setFromInput] = useState(value.from);
@@ -118,12 +115,6 @@ export function DateRangePicker({
 			onChange({ from: fromInput, to: toInput });
 			setOpen(false);
 			setTouched({ from: false, to: false });
-		} else if (onValidationError && !validation.isValid) {
-			// Show toast for the first validation error
-			const firstError = validation.errors[0];
-			if (firstError) {
-				onValidationError(firstError.message);
-			}
 		}
 	}
 

@@ -80,7 +80,10 @@ export function CopyButton({
 			data-testid="analytics-copy-button"
 		>
 			{error ? (
-				<AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
+				<AlertCircle
+					className="h-4 w-4 text-red-500"
+					aria-hidden="true"
+				/>
 			) : copied ? (
 				<Check
 					className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200"

@@ -19,9 +19,10 @@ interface TopNavProps {
 }
 
 const networkLabel = { mainnet: "Mainnet", testnet: "Testnet" } as const;
+// Text colors darkened to -900 to meet WCAG AA (4.5:1) contrast against their badge backgrounds.
 const networkBadgeClass = {
-	mainnet: "bg-blue-100 text-blue-800",
-	testnet: "bg-amber-100 text-amber-800",
+	mainnet: "bg-blue-100 text-blue-900",
+	testnet: "bg-amber-100 text-amber-900",
 } as const;
 
 export function TopNav({ onMenuClick }: TopNavProps) {
@@ -108,13 +109,19 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 				{/* Right side actions */}
 				<div className="flex items-center gap-x-3 sm:gap-x-6">
 					{/* Network Switcher */}
-					<div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-sm font-medium">
+					<div
+						role="group"
+						aria-label="Network selector"
+						className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-sm font-medium"
+					>
 						<button
 							type="button"
 							onClick={() => setNetwork("testnet")}
+							aria-pressed={network === "testnet"}
+							aria-label="Switch to Testnet"
 							className={`rounded-md px-3 py-1 transition-colors ${
 								network === "testnet"
-									? "bg-amber-100 text-amber-800"
+									? "bg-amber-100 text-amber-900"
 									: "text-gray-500 hover:text-gray-700"
 							}`}
 						>
@@ -123,9 +130,11 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 						<button
 							type="button"
 							onClick={() => setNetwork("mainnet")}
+							aria-pressed={network === "mainnet"}
+							aria-label="Switch to Mainnet"
 							className={`rounded-md px-3 py-1 transition-colors ${
 								network === "mainnet"
-									? "bg-blue-100 text-blue-800"
+									? "bg-blue-100 text-blue-900"
 									: "text-gray-500 hover:text-gray-700"
 							}`}
 						>

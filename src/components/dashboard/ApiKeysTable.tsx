@@ -328,7 +328,8 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 						/>
 					</div>
 				) : (
-					<Table>
+					<Table aria-label="API keys">
+						<caption className="sr-only">List of API keys with status and creation date</caption>
 						<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
 							<TableRow>
 								<TableHead className="w-[200px] pl-6">Name</TableHead>

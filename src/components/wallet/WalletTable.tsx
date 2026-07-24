@@ -204,7 +204,10 @@ export function WalletTable({
 					<>
 						{/* Desktop Table View */}
 						<div className="hidden lg:block">
-							<Table>
+							<Table aria-label="Wallets">
+								<caption className="sr-only">
+									List of wallets with network, status, balance, and activity
+								</caption>
 								<TableHeader>
 									<TableRow className="hover:bg-transparent dark:hover:bg-transparent">
 										<TableHead>Address</TableHead>

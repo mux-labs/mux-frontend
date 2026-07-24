@@ -21,7 +21,10 @@ export function TopAssetsTable({ assets }: TopAssetsTableProps) {
 		<>
 			<div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
 				<div className="border-b border-zinc-200 px-4 py-4 sm:px-6 dark:border-zinc-800">
-					<h3 className="text-base font-semibold text-zinc-900 sm:text-lg dark:text-zinc-50">
+					<h3
+						id="top-assets-table-heading"
+						className="text-base font-semibold text-zinc-900 sm:text-lg dark:text-zinc-50"
+					>
 						Top Assets by Volume
 					</h3>
 					<p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
@@ -30,7 +33,10 @@ export function TopAssetsTable({ assets }: TopAssetsTableProps) {
 				</div>
 
 				<div className="overflow-x-auto">
-					<table className="w-full min-w-[480px] text-sm">
+					<table
+						aria-labelledby="top-assets-table-heading"
+						className="w-full min-w-[480px] text-sm"
+					>
 						<thead>
 							<tr className="border-b border-zinc-100 dark:border-zinc-800">
 								<th className="px-4 py-3 text-left text-xs font-medium uppercase tracking-wider text-zinc-500 sm:px-6 dark:text-zinc-400">

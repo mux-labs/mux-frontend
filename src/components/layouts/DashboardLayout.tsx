@@ -108,7 +108,7 @@ function DashboardLayoutShell({ children }: DashboardLayoutProps) {
 					<TopNav onMenuClick={toggleSidebar} />
 
 					{/* Main */}
-					<main className="flex-1">
+					<main id="main-content" className="flex-1">
 						<div className="py-6">
 							<div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
 								{children}

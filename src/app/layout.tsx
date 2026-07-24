@@ -83,6 +83,12 @@ export default function RootLayout({
 			<body
 				className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
 			>
+				<a
+					href="#main-content"
+					className="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:z-50 focus:rounded-md focus:bg-blue-600 focus:px-4 focus:py-2 focus:text-white"
+				>
+					Skip to content
+				</a>
 				<AuthProvider>
 					<ReactQueryProvider>
 						<ApiProvider>{children}</ApiProvider>

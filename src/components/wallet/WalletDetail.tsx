@@ -5,6 +5,7 @@ import { useCallback, useId } from "react";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton, WalletDetailSkeleton } from "@/components/ui/Skeleton";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
@@ -186,6 +187,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 										{copyError}
 									</p>
 								)}
+								<ExplorerLink
+									address={wallet.address}
+									network={wallet.network}
+									type="account"
+									size="icon-sm"
+									showIcon
+									title="View on Stellar Explorer"
+								/>
 							</dd>
 						</div>
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">

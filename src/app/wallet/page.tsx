@@ -8,6 +8,7 @@ import TransactionsTable from "@/components/TransactionsTable/TransactionsTable"
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
@@ -184,6 +185,14 @@ function WalletPageContent() {
 												<Copy className="h-4 w-4" aria-hidden="true" />
 											)}
 										</Button>
+										<ExplorerLink
+											address={wallet.address}
+											network={wallet.network}
+											type="account"
+											size="icon-sm"
+											showIcon
+											title="View on Stellar Explorer"
+										/>
 									</div>
 									{copyError && (
 										<p role="alert" className="mt-1 text-xs text-red-600">

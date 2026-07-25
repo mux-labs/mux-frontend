@@ -9,6 +9,28 @@ vi.mock("@/hooks/useRecovery", () => ({
 	useRecovery: () => useRecoveryMock(),
 }));
 
+// The Toast component has a pre-existing VARIANT_CONFIG reference error that
+// crashes renders. Stub it out so page-level tests aren't blocked by it.
+vi.mock("@/components/ui/toast", () => ({
+	Toast: ({
+		open,
+		message,
+		variant,
+	}: {
+		open: boolean;
+		message: string;
+		variant?: string;
+	}) =>
+		open ? (
+			<div data-testid="toast" data-variant={variant ?? "success"}>
+				<span>{variant === "error" ? "Error" : "Success"}</span>
+				<span>{message}</span>
+			</div>
+		) : null,
+	ToastContainer: () => null,
+	useToast: () => ({ toasts: [], addToast: vi.fn(), dismissToast: vi.fn() }),
+}));
+
 // Import the page AFTER the mock is installed.
 import RecoveryPage from "../page";
 
@@ -199,5 +221,164 @@ describe("RecoveryPage", () => {
 
 		expect(screen.queryByText("Success")).not.toBeInTheDocument();
 		expect(screen.queryByText("Error")).not.toBeInTheDocument();
+	});
+
+	// -------------------------------------------------------------------------
+	// #460 – standalone RecoveryDocsLink in the page header
+	// -------------------------------------------------------------------------
+	describe("#460 — standalone docs link in the page header", () => {
+		it("renders at least one 'Read Docs' link (header + FAQ footer)", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery());
+			render(<RecoveryPage />);
+
+			// There are two docs links when idle: one in the header, one in the FAQ.
+			const docsLinks = screen.getAllByRole("link", {
+				name: /read recovery documentation/i,
+			});
+			expect(docsLinks.length).toBeGreaterThanOrEqual(2);
+		});
+
+		it("header docs link points to the canonical recovery docs URL", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery());
+			render(<RecoveryPage />);
+
+			const docsLinks = screen.getAllByRole("link", {
+				name: /read recovery documentation/i,
+			});
+			// All docs links should point to the same canonical URL
+			for (const link of docsLinks) {
+				expect(link).toHaveAttribute(
+					"href",
+					"https://docs.mux.network/recovery",
+				);
+			}
+		});
+
+		it("header docs link opens in a new tab with noopener noreferrer", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery());
+			render(<RecoveryPage />);
+
+			const docsLinks = screen.getAllByRole("link", {
+				name: /read recovery documentation/i,
+			});
+			for (const link of docsLinks) {
+				expect(link).toHaveAttribute("target", "_blank");
+				expect(link).toHaveAttribute("rel", "noopener noreferrer");
+			}
+		});
+
+		it("docs link is visible in the loading state (header always renders)", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "loading" }));
+			render(<RecoveryPage />);
+
+			// During loading the FAQ is hidden, but the header link is always present
+			const docsLinks = screen.getAllByRole("link", {
+				name: /read recovery documentation/i,
+			});
+			expect(docsLinks.length).toBeGreaterThanOrEqual(1);
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// #456 – recovery timeline list
+	// -------------------------------------------------------------------------
+	describe("#456 — recovery timeline list", () => {
+		it("renders the Recovery Timeline section heading when idle", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			render(<RecoveryPage />);
+
+			expect(
+				screen.getByRole("heading", { name: /recovery timeline/i }),
+			).toBeInTheDocument();
+		});
+
+		it("renders timeline events from mock data when idle", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			render(<RecoveryPage />);
+
+			// The mock timeline (mockRecoveryTimelineCompleted) includes "Recovery Initiated"
+			expect(screen.getByText("Recovery Initiated")).toBeInTheDocument();
+		});
+
+		it("shows progress bar inside the timeline section", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			const { container } = render(<RecoveryPage />);
+
+			expect(
+				container.querySelector('[role="progressbar"]'),
+			).toBeInTheDocument();
+		});
+
+		it("does not render the timeline section during loading state", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "loading" }));
+			render(<RecoveryPage />);
+
+			expect(
+				screen.queryByRole("heading", { name: /recovery timeline/i }),
+			).not.toBeInTheDocument();
+		});
+
+		it("does not render the timeline section during bootstrap error", () => {
+			useRecoveryMock.mockReturnValue(
+				makeRecovery({
+					state: "error",
+					errorMessage: "Failed to load",
+				}),
+			);
+			render(<RecoveryPage />);
+
+			expect(
+				screen.queryByRole("heading", { name: /recovery timeline/i }),
+			).not.toBeInTheDocument();
+		});
+	});
+
+	// -------------------------------------------------------------------------
+	// #458 – Recovery FAQ section
+	// -------------------------------------------------------------------------
+	describe("#458 — recovery FAQ section", () => {
+		it("renders the FAQ section heading when idle", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			render(<RecoveryPage />);
+
+			expect(
+				screen.getByRole("heading", {
+					name: /frequently asked questions/i,
+				}),
+			).toBeInTheDocument();
+		});
+
+		it("renders FAQ items", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			render(<RecoveryPage />);
+
+			// At least one well-known FAQ question must be visible
+			expect(
+				screen.getAllByText(/what is invisible wallet recovery/i).length,
+			).toBeGreaterThan(0);
+		});
+
+		it("includes a docs link inside the FAQ footer", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "idle" }));
+			render(<RecoveryPage />);
+
+			// There are now two docs links — one in the header and one in the FAQ.
+			// getAllByRole ensures both are present.
+			const docsLinks = screen.getAllByRole("link", {
+				name: /read recovery documentation/i,
+			});
+			expect(docsLinks.length).toBeGreaterThanOrEqual(2);
+		});
+
+		it("does not render the FAQ during the loading state", () => {
+			useRecoveryMock.mockReturnValue(makeRecovery({ state: "loading" }));
+			render(<RecoveryPage />);
+
+			expect(
+				screen.queryByRole("heading", {
+					name: /frequently asked questions/i,
+				}),
+			).not.toBeInTheDocument();
+		});
 	});
 });

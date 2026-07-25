@@ -6,33 +6,56 @@ import { useCallback, useEffect, useState } from "react";
 /** Visual variant for the standalone `Toast` component. */
 export type ToastVariant = "success" | "error" | "info";
 
+/** Props for the `Toast` notification component. */
 export interface ToastProps {
+	/** Whether the toast is visible. When `false` nothing is rendered. */
 	open: boolean;
 	/** The message body displayed inside the toast. */
 	message: string;
-	/** Visual variant controlling icon and colour scheme. Defaults to "success". */
+	/**
+	 * Visual style variant.
+	 * Defaults to `"success"` when omitted.
+	 */
 	variant?: ToastVariant;
+	/**
+	 * Overrides the default title for the variant (`"Success"` / `"Error"` / `"Info"`).
+	 */
+	title?: string;
+	/**
+	 * When provided, renders a dismiss (✕) button that calls this handler.
+	 * Omit to render a non-dismissible toast.
+	 */
+	onClose?: () => void;
 }
 
-const VARIANT_STYLES: Record<
+const VARIANT_CONFIG: Record<
 	ToastVariant,
-	{ container: string; title: string }
+	{ icon: React.ElementType; iconClass: string; defaultTitle: string }
 > = {
 	success: {
-		container: "bg-zinc-950/95",
-		title: "Success",
+		icon: CheckCircle2,
+		iconClass: "text-green-400",
+		defaultTitle: "Success",
 	},
 	error: {
-		container: "bg-red-950/95",
-		title: "Error",
+		icon: AlertCircle,
+		iconClass: "text-red-400",
+		defaultTitle: "Error",
 	},
 	info: {
-		container: "bg-blue-950/95",
-		title: "Info",
+		icon: Info,
+		iconClass: "text-blue-400",
+		defaultTitle: "Info",
 	},
 };
 
-export function Toast({ open, message, variant = "success" }: ToastProps) {
+export function Toast({
+	open,
+	message,
+	variant = "success",
+	title,
+	onClose,
+}: ToastProps) {
 	if (!open) {
 		return null;
 	}
@@ -172,15 +195,39 @@ export function ToastContainer({
 
 	return (
 		<div
-			className={cn(
-				"fixed right-4 bottom-4 z-50 max-w-xs rounded-2xl p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md",
-				container,
-			)}
+			className={`fixed z-50 flex flex-col gap-2 w-full max-w-sm ${positionClasses[position]}`}
+			aria-label="Notifications"
 		>
-			<div role="status" aria-live="polite" className="space-y-1">
-				<p className="text-sm font-semibold">{title}</p>
-				<p className="text-sm text-zinc-200">{message}</p>
-			</div>
+			{toasts.map((toast) => (
+				<ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />
+			))}
 		</div>
 	);
+}
+
+// ─── useToast Hook ───────────────────────────────────────────────────────────
+
+/**
+ * Custom hook for managing toast notifications state.
+ *
+ * @returns An object containing:
+ *  - toasts: The current array of active ToastMessage items.
+ *  - addToast: Function to add a new toast (returns the generated id).
+ *  - dismissToast: Function to remove a toast by id.
+ */
+export function useToast() {
+	const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+	const addToast = useCallback((partial: Omit<ToastMessage, "id">): string => {
+		const id = `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+		const toast: ToastMessage = { ...partial, id };
+		setToasts((prev) => [...prev, toast]);
+		return id;
+	}, []);
+
+	const dismissToast = useCallback((id: string) => {
+		setToasts((prev) => prev.filter((t) => t.id !== id));
+	}, []);
+
+	return { toasts, addToast, dismissToast };
 }

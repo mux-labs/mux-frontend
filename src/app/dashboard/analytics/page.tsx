@@ -7,10 +7,12 @@ import {
 	AnalyticsHeader,
 	type DateRange,
 } from "@/components/analytics/AnalyticsHeader";
+import { AnalyticsHelpPanel } from "@/components/analytics/AnalyticsHelpPanel";
 import { AnalyticsLoadingSkeleton } from "@/components/analytics/AnalyticsLoadingSkeleton";
 import { MetricsCards } from "@/components/analytics/MetricsCards";
 import { TopAssetsTable } from "@/components/analytics/TopAssetsTable";
 import { ErrorState } from "@/components/ui/ErrorState";
+import { ToastContainer, useToast } from "@/components/ui/toast";
 import { useAnalyticsMetrics } from "@/hooks/useAnalyticsMetrics";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 
@@ -31,11 +33,9 @@ export default function AnalyticsPage() {
 	const { toasts, addToast, dismissToast } = useToast();
 
 	function handleRangeChange(newRange: DateRange) {
-		const oldRange = range;
 		setRange(newRange);
 		track("date_range_changed", { from: newRange.from, to: newRange.to });
-		
-		// Show toast confirmation for date range change
+
 		addToast({
 			type: "info",
 			message: "Date range updated",
@@ -46,7 +46,7 @@ export default function AnalyticsPage() {
 
 	async function handleRefresh() {
 		try {
-			await refetch();
+			refetch();
 			addToast({
 				type: "success",
 				message: "Analytics data refreshed",
@@ -57,7 +57,8 @@ export default function AnalyticsPage() {
 			addToast({
 				type: "error",
 				message: "Failed to refresh data",
-				description: err instanceof Error ? err.message : "Please try again later",
+				description:
+					err instanceof Error ? err.message : "Please try again later",
 				duration: 5000,
 			});
 		}
@@ -72,11 +73,13 @@ export default function AnalyticsPage() {
 			<>
 				<ErrorState
 					title="Failed to load analytics"
-					description={error ?? "An unexpected error occurred. Please try again."}
+					description={
+						error ?? "An unexpected error occurred. Please try again."
+					}
 					retry={{ onRetry: handleRefresh }}
 				/>
-				<ToastContainer 
-					toasts={toasts} 
+				<ToastContainer
+					toasts={toasts}
 					onDismiss={dismissToast}
 					position="top-right"
 				/>
@@ -94,6 +97,11 @@ export default function AnalyticsPage() {
 						onClick: refetch,
 					}}
 				/>
+				<ToastContainer
+					toasts={toasts}
+					onDismiss={dismissToast}
+					position="top-right"
+				/>
 			</div>
 		);
 	}
@@ -101,8 +109,11 @@ export default function AnalyticsPage() {
 	return (
 		<>
 			<div className="space-y-6">
-				<AnalyticsHeader 
-					range={range} 
+				{/* #454 – inline help panel documents analytics data sources */}
+				<AnalyticsHelpPanel />
+
+				<AnalyticsHeader
+					range={range}
 					onRangeChange={handleRangeChange}
 					onRefresh={handleRefresh}
 				/>
@@ -125,9 +136,9 @@ export default function AnalyticsPage() {
 
 				<TopAssetsTable assets={data.topAssets} />
 			</div>
-			
-			<ToastContainer 
-				toasts={toasts} 
+
+			<ToastContainer
+				toasts={toasts}
 				onDismiss={dismissToast}
 				position="top-right"
 			/>

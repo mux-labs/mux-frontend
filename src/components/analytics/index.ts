@@ -1,4 +1,5 @@
 export { AnalyticsChart } from "./AnalyticsChart";
+export { AnalyticsHelpPanel } from "./AnalyticsHelpPanel";
 export { AnalyticsEmptyState } from "./AnalyticsEmptyState";
 export type { DateRange } from "./AnalyticsHeader";
 export { AnalyticsHeader } from "./AnalyticsHeader";

@@ -1,6 +1,12 @@
 "use client";
 
-import { AlertCircle, AlertTriangle, CheckCircle2, Info, X } from "lucide-react";
+import {
+	AlertCircle,
+	AlertTriangle,
+	CheckCircle2,
+	Info,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 /** Visual variant for the standalone `Toast` component. */
@@ -160,7 +166,10 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
 			role="alert"
 			className="flex items-start gap-3 rounded-xl bg-white p-4 text-zinc-900 shadow-lg ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-800"
 		>
-			<Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`} aria-hidden="true" />
+			<Icon
+				className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`}
+				aria-hidden="true"
+			/>
 			<div className="flex-1 space-y-1">
 				<p className="text-sm font-semibold">{message}</p>
 				{description && (

@@ -198,9 +198,7 @@ describe("AnalyticsPage — #453 export button loading / error states", () => {
 		});
 
 		renderPage();
-		expect(
-			screen.getByRole("button", { name: /export.*csv/i }),
-		).toBeDisabled();
+		expect(screen.getByRole("button", { name: /export.*csv/i })).toBeDisabled();
 		expect(
 			screen.getByRole("button", { name: /export.*json/i }),
 		).toBeDisabled();

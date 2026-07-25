@@ -58,7 +58,10 @@ export default function AnalyticsPage() {
 		errorMessage: exportError,
 		exportAs,
 		reset: resetExport,
-	} = useAnalyticsExport({ transactions, filenameBase: `analytics-${range.from}_${range.to}` });
+	} = useAnalyticsExport({
+		transactions,
+		filenameBase: `analytics-${range.from}_${range.to}`,
+	});
 
 	function handleRangeChange(newRange: DateRange) {
 		setRange(newRange);

@@ -1,6 +1,7 @@
 "use client";
 
 import { Check, Copy } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import {
 	Table,
@@ -28,7 +29,10 @@ function WalletAddressCell({ address }: { address: string }) {
 			<Button
 				variant="ghost"
 				size="icon-sm"
-				onClick={() => copy(address)}
+				onClick={(e) => {
+					e.stopPropagation();
+					copy(address);
+				}}
 				title={copied ? "Copied!" : "Copy address"}
 			>
 				{copied ? (
@@ -42,6 +46,8 @@ function WalletAddressCell({ address }: { address: string }) {
 }
 
 export function WalletTable({ wallets }: WalletTableProps) {
+	const router = useRouter();
+
 	return (
 		<div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
 			<Table>
@@ -59,7 +65,11 @@ export function WalletTable({ wallets }: WalletTableProps) {
 				</TableHeader>
 				<TableBody>
 					{wallets.map((wallet) => (
-						<TableRow key={wallet.id}>
+						<TableRow
+							key={wallet.id}
+							onClick={() => router.push(`/demo/dashboard/wallets/${wallet.id}`)}
+							className="cursor-pointer"
+						>
 							<TableCell>
 								<WalletAddressCell address={wallet.address} />
 							</TableCell>

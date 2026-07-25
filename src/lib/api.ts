@@ -12,6 +12,14 @@ export class ApiError extends Error {
 	}
 }
 
+function reviveWallet(w: Wallet): Wallet {
+	return {
+		...w,
+		createdAt: new Date(w.createdAt),
+		lastActivity: w.lastActivity ? new Date(w.lastActivity) : undefined,
+	};
+}
+
 export async function fetchWallets(): Promise<Wallet[]> {
 	const res = await fetch(`${API_BASE_URL}/api/wallets`);
 	if (!res.ok) {
@@ -21,9 +29,17 @@ export async function fetchWallets(): Promise<Wallet[]> {
 		);
 	}
 	const data = (await res.json()) as Wallet[];
-	return data.map((w) => ({
-		...w,
-		createdAt: new Date(w.createdAt),
-		lastActivity: w.lastActivity ? new Date(w.lastActivity) : undefined,
-	}));
+	return data.map(reviveWallet);
+}
+
+export async function fetchWalletById(id: string): Promise<Wallet> {
+	const res = await fetch(`${API_BASE_URL}/api/wallets/${id}`);
+	if (!res.ok) {
+		throw new ApiError(
+			res.status,
+			`Failed to fetch wallet ${id}: ${res.statusText}`,
+		);
+	}
+	const data = (await res.json()) as Wallet;
+	return reviveWallet(data);
 }

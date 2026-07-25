@@ -16,7 +16,9 @@ describe("AnalyticsHelpPanel (#454)", () => {
 	it("renders the help panel by default", () => {
 		render(<AnalyticsHelpPanel />);
 		expect(
-			screen.getByRole("complementary", { name: /analytics data sources help/i }),
+			screen.getByRole("complementary", {
+				name: /analytics data sources help/i,
+			}),
 		).toBeInTheDocument();
 	});
 
@@ -37,9 +39,7 @@ describe("AnalyticsHelpPanel (#454)", () => {
 
 	it("shows the API endpoint for metrics cards", () => {
 		render(<AnalyticsHelpPanel />);
-		expect(
-			screen.getByText("GET /api/analytics/metrics"),
-		).toBeInTheDocument();
+		expect(screen.getByText("GET /api/analytics/metrics")).toBeInTheDocument();
 	});
 
 	it("shows a dismiss button", () => {

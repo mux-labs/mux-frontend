@@ -46,8 +46,8 @@ export function AnalyticsHelpPanel() {
 							All metrics are sourced from the Mux backend API and reflect
 							activity for the currently selected network (Testnet / Mainnet).
 							When no live API URL is configured the dashboard falls back to
-							deterministic mock data so it remains functional in development and
-							CI.
+							deterministic mock data so it remains functional in development
+							and CI.
 						</p>
 
 						<dl className="mt-4 grid grid-cols-1 gap-x-6 gap-y-3 text-sm sm:grid-cols-2">
@@ -74,9 +74,8 @@ export function AnalyticsHelpPanel() {
 						</dl>
 
 						<p className="mt-4 text-xs text-blue-700 dark:text-blue-400">
-							Data updates every 5 minutes. Use the{" "}
-							<strong>Refresh</strong> button in the header to pull the latest
-							snapshot immediately.{" "}
+							Data updates every 5 minutes. Use the <strong>Refresh</strong>{" "}
+							button in the header to pull the latest snapshot immediately.{" "}
 							<a
 								href="/docs/analytics"
 								className="underline underline-offset-2 hover:text-blue-900 dark:hover:text-blue-200"

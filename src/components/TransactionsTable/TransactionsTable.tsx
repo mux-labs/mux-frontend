@@ -11,6 +11,8 @@ import {
 	X,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { mockTransactions } from "@/mock-data/transactions";
 import { trackTransactionEvent } from "@/services/analyticsTracking";
 import type {
@@ -81,16 +83,44 @@ const NetworkBadge = ({ network }: { network: TransactionNetwork }) => {
 	);
 };
 
+/** Minimal, self-contained copy-to-clipboard icon button used inside table rows. */
+const RowCopyButton = ({ text, label }: { text: string; label: string }) => {
+	const [copied, setCopied] = useState(false);
+
+	const handleClick = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		} catch {
+			// Clipboard write failures are non-critical; UI simply won't confirm.
+		}
+	};
+
+	return (
+		<button
+			type="button"
+			onClick={handleClick}
+			aria-label={copied ? "Copied!" : label}
+			className="inline-flex items-center justify-center p-0.5 text-slate-400 hover:text-indigo-600 transition-colors"
+		>
+			{copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+		</button>
+	);
+};
+
 // --- Props ---
 
 export interface TransactionsTableProps {
 	/** Optional wallet address to scope transactions */
 	address?: string;
-	/** Pre-fetched transactions (bypasses internal hook) */
+	/** Pre-fetched transactions (defaults to mock data when omitted) */
 	transactions?: Transaction[];
-	/** Loading state (used when transactions prop is provided) */
+	/** Loading state */
 	loading?: boolean;
-	/** Error message (used when transactions prop is provided) */
+	/** Alias for `loading` */
+	isLoading?: boolean;
+	/** Error message */
 	error?: string | null;
 	/** Retry callback for error state */
 	onRetry?: () => void;
@@ -102,18 +132,14 @@ export default function TransactionsTable({
 	address,
 	transactions: transactionsProp,
 	loading: loadingProp,
+	isLoading: isLoadingProp,
 	error: errorProp,
 	onRetry,
 }: TransactionsTableProps = {}) {
-	// Use internal hook unless caller provides data directly
-	const hook = useTransactions(
-		transactionsProp === undefined ? address : undefined,
-	);
-
-	const transactions = transactionsProp ?? hook.transactions;
-	const loading = loadingProp ?? hook.loading;
-	const error = errorProp !== undefined ? errorProp : hook.error;
-	const handleRetry = onRetry ?? hook.refetch;
+	const transactions = transactionsProp ?? mockTransactions;
+	const loading = loadingProp ?? isLoadingProp ?? false;
+	const error = errorProp ?? null;
+	const handleRetry = onRetry ?? (() => {});
 
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState<"all" | TransactionStatus>(
@@ -139,12 +165,7 @@ export default function TransactionsTable({
 
 	const filteredData = useMemo(() => {
 		return transactions.filter((tx) => {
-			if (
-				address &&
-				transactionsProp !== undefined &&
-				tx.from !== address &&
-				tx.to !== address
-			) {
+			if (address && tx.from !== address && tx.to !== address) {
 				return false;
 			}
 			const q = search.toLowerCase();
@@ -159,14 +180,7 @@ export default function TransactionsTable({
 				networkFilter === "all" || tx.network === networkFilter;
 			return matchesSearch && matchesStatus && matchesNetwork;
 		});
-	}, [
-		transactions,
-		search,
-		statusFilter,
-		networkFilter,
-		address,
-		transactionsProp,
-	]);
+	}, [transactions, search, statusFilter, networkFilter, address]);
 
 	const sortedData = useMemo(() => {
 		return [...filteredData].sort((a, b) => {
@@ -188,8 +202,8 @@ export default function TransactionsTable({
 		setSortConfig((prev) => {
 			const newConfig =
 				prev?.key === key && prev.direction === "asc"
-					? { key, direction: "desc" }
-					: { key, direction: "asc" };
+					? { key, direction: "desc" as const }
+					: { key, direction: "asc" as const };
 			trackTransactionEvent("transactions_sort", {
 				key,
 				direction: newConfig.direction,
@@ -198,19 +212,21 @@ export default function TransactionsTable({
 		});
 	};
 
+	const handleSortKeyDown = (
+		e: React.KeyboardEvent,
+		key: keyof Transaction,
+	) => {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			handleSort(key);
+		}
+	};
+
 	const handlePageChange = (page: number) => {
 		if (page >= 1 && page <= totalPages) {
 			setCurrentPage(page);
 			trackTransactionEvent("transactions_page_change", { page });
 		}
-	};
-
-	const _handleItemsPerPageChange = (newSize: number) => {
-		setItemsPerPage(newSize);
-		setCurrentPage(1);
-		trackTransactionEvent("transactions_items_per_page", {
-			itemsPerPage: newSize,
-		});
 	};
 
 	const clearFilters = () => {
@@ -261,7 +277,7 @@ export default function TransactionsTable({
 		);
 	}
 
-	// --- Empty state (no data at all, no filters active) ---
+	// --- Empty state (no data at all) ---
 	if (transactions.length === 0) {
 		return (
 			<div className="w-full max-w-6xl mx-auto p-4 md:p-8">
@@ -365,7 +381,7 @@ export default function TransactionsTable({
 						<button
 							type="button"
 							onClick={clearFilters}
-							className="hidden sm:flex items-center justify-center px-3 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+							className="flex items-center justify-center px-3 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
 						>
 							Reset
 						</button>
@@ -373,415 +389,270 @@ export default function TransactionsTable({
 				</div>
 			</div>
 
-			{/* Loading skeleton */}
-			{isLoading ? (
-				<TransactionsTableSkeleton />
-			) : (
-				<div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-					{/* Desktop header */}
-					<div
-						className="hidden lg:grid grid-cols-12 gap-2 p-4 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none"
-						role="row"
-					>
-						{(
-							[
-								{ key: "hash", label: "Tx Hash", span: 3, sortable: true },
-								{ key: "from", label: "From", span: 2, sortable: false },
-								{ key: "to", label: "To", span: 2, sortable: false },
-								{
-									key: "amountXlm",
-									label: "Amount (XLM)",
-									span: 2,
-									sortable: true,
-								},
-								{ key: "status", label: "Status", span: 1, sortable: false },
-								{ key: "network", label: "Network", span: 1, sortable: false },
-								{
-									key: "createdAt",
-									label: "Date",
-									span: 1,
-									sortable: true,
-								},
-							] as const
-						).map(({ key, label, span, sortable }) =>
-							sortable ? (
-								<div
-									key={key}
-									role="columnheader"
-									aria-sort={
-										sortConfig.key === key
-											? sortConfig.direction === "asc"
-												? "ascending"
-												: "descending"
-											: "none"
-									}
-									tabIndex={0}
-									className={`col-span-${span} flex items-center gap-1 cursor-pointer hover:text-indigo-600 focus:outline-none focus:text-indigo-600 focus:underline`}
-									onClick={() => handleSort(key as keyof Transaction)}
-									onKeyDown={(e) =>
-										handleSortKeyDown(e, key as keyof Transaction)
-									}
-								>
-									{label}
-									{sortConfig.key === key && (
-										<ArrowUpDown size={12} aria-hidden />
-									)}
-								</div>
-							) : (
-								<div
-									key={key}
-									role="columnheader"
-									className={`col-span-${span}`}
-								>
-									{label}
-								</div>
-							),
-						)}
-					</div>
+			<div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
+				{/* Desktop header */}
+				<div
+					className="hidden lg:grid grid-cols-12 gap-2 p-4 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none"
+					role="row"
+				>
+					{(
+						[
+							{ key: "hash", label: "Tx Hash", span: 3, sortable: true },
+							{ key: "from", label: "From", span: 2, sortable: false },
+							{ key: "to", label: "To", span: 2, sortable: false },
+							{
+								key: "amountXlm",
+								label: "Amount (XLM)",
+								span: 2,
+								sortable: true,
+							},
+							{ key: "status", label: "Status", span: 1, sortable: false },
+							{ key: "network", label: "Network", span: 1, sortable: false },
+							{
+								key: "createdAt",
+								label: "Date",
+								span: 1,
+								sortable: true,
+							},
+						] as const
+					).map(({ key, label, span, sortable }) =>
+						sortable ? (
+							<div
+								key={key}
+								role="columnheader"
+								aria-sort={
+									sortConfig.key === key
+										? sortConfig.direction === "asc"
+											? "ascending"
+											: "descending"
+										: "none"
+								}
+								tabIndex={0}
+								className={`col-span-${span} flex items-center gap-1 cursor-pointer hover:text-indigo-600 focus:outline-none focus:text-indigo-600 focus:underline`}
+								onClick={() => handleSort(key as keyof Transaction)}
+								onKeyDown={(e) =>
+									handleSortKeyDown(e, key as keyof Transaction)
+								}
+							>
+								{label}
+								{sortConfig.key === key && (
+									<ArrowUpDown size={12} aria-hidden />
+								)}
+							</div>
+						) : (
+							<div
+								key={key}
+								role="columnheader"
+								className={`col-span-${span}`}
+							>
+								{label}
+							</div>
+						),
+					)}
+				</div>
 
-					<div className="divide-y divide-slate-100">
-						{sortedData.length > 0 ? (
-							currentData.length > 0 ? (
-								currentData.map((tx) => (
+				<div className="divide-y divide-slate-100">
+					{currentData.length > 0 ? (
+						currentData.map((tx) => (
+							<div
+								key={tx.hash}
+								data-testid="tx-row"
+								className="group p-4 hover:bg-slate-50 transition-colors"
+							>
+								{/* Desktop row */}
+								<div className="hidden lg:grid grid-cols-12 gap-2 items-center">
+									<div className="col-span-3">
+										<span
+											className="font-mono text-xs text-indigo-600 truncate block"
+											title={tx.hash}
+										>
+											{truncate(tx.hash, 8, 6)}
+										</span>
+										{tx.memo && (
+											<span className="text-xs text-slate-400 truncate block">
+												{tx.memo}
+											</span>
+										)}
+									</div>
 									<div
-										key={tx.hash}
-										data-testid="tx-row"
-										className="group p-4 hover:bg-slate-50 transition-colors"
+										className="col-span-2 font-mono text-xs text-slate-600 truncate"
+										title={tx.from}
 									>
-										{/* Desktop row */}
-										<div className="hidden lg:grid grid-cols-12 gap-2 items-center">
-											<div className="col-span-3">
-												<span
-													className="font-mono text-xs text-indigo-600 truncate block"
-													title={tx.hash}
-												>
-													{truncate(tx.hash, 8, 6)}
-												</span>
-												{tx.memo && (
-													<span className="text-xs text-slate-400 truncate block">
-														{tx.memo}
-													</span>
-												)}
-											</div>
-											<div
-												className="col-span-2 font-mono text-xs text-slate-600 truncate"
-												title={tx.from}
+										{truncate(tx.from)}
+									</div>
+									<div
+										className="col-span-2 font-mono text-xs text-slate-600 truncate"
+										title={tx.to}
+									>
+										{truncate(tx.to)}
+									</div>
+									<div className="col-span-2 font-semibold text-sm tabular-nums text-slate-900">
+										{Number(tx.amountXlm).toLocaleString(undefined, {
+											minimumFractionDigits: 2,
+											maximumFractionDigits: 7,
+										})}{" "}
+										<span className="text-xs font-medium text-slate-400">
+											XLM
+										</span>
+									</div>
+									<div className="col-span-1">
+										<StatusPill status={tx.status} />
+									</div>
+									<div className="col-span-1">
+										<NetworkBadge network={tx.network} />
+									</div>
+									<div className="col-span-1 text-xs text-slate-500">
+										{formatDate(tx.createdAt)}
+									</div>
+								</div>
+
+								{/* Mobile card */}
+								<div className="lg:hidden space-y-2">
+									<div className="flex items-center justify-between">
+										<div className="flex items-center">
+											<span
+												className="font-mono text-xs text-indigo-600"
+												title={tx.hash}
 											>
 												{truncate(tx.hash, 8, 6)}
 											</span>
-											{tx.memo && (
-												<span className="text-xs text-slate-400 truncate block">
-													{tx.memo}
-												</span>
-											)}
+											<RowCopyButton
+												text={tx.hash}
+												label={`Copy transaction hash ${tx.hash}`}
+											/>
 										</div>
-										<div
-											className="col-span-2 font-mono text-xs text-slate-600 truncate"
-											title={tx.from}
-										>
-											{truncate(tx.from)}
+										<div className="flex items-center gap-2">
+											<NetworkBadge network={tx.network} />
+											<StatusPill status={tx.status} />
 										</div>
 									</div>
-
-									{/* From / To row */}
-									<div className="flex gap-3 mb-2">
-										<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-											<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-												From
+									<div className="flex justify-between text-xs text-slate-500">
+										<span className="flex items-center gap-0.5">
+											<span className="font-medium text-slate-700">
+												From:{" "}
 											</span>
-											<p
-												className="font-mono text-xs text-slate-700 truncate"
-												title={tx.from}
-											>
+											<span className="font-mono" title={tx.from}>
 												{truncate(tx.from)}
-											</p>
-										</div>
-										<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-											<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-												To
 											</span>
-											<p
-												className="font-mono text-xs text-slate-700 truncate"
-												title={tx.to}
-											>
+											<RowCopyButton
+												text={tx.from}
+												label={`Copy from address ${tx.from}`}
+											/>
+										</span>
+										<span className="flex items-center gap-0.5">
+											<span className="font-medium text-slate-700">
+												To:{" "}
+											</span>
+											<span className="font-mono" title={tx.to}>
 												{truncate(tx.to)}
-											</div>
-											<div className="col-span-2 font-semibold text-sm tabular-nums text-slate-900">
-												{Number(tx.amountXlm).toLocaleString(undefined, {
-													minimumFractionDigits: 2,
-													maximumFractionDigits: 7,
-												})}
 											</span>
-											<span className="text-xs font-medium text-slate-400">
-												XLM
-											</span>
-										</div>
-										<div className="col-span-1 text-xs text-slate-500">
+											<RowCopyButton
+												text={tx.to}
+												label={`Copy to address ${tx.to}`}
+											/>
+										</span>
+									</div>
+									<div className="flex justify-between items-center">
+										<span className="font-semibold text-sm tabular-nums text-slate-900">
+											{Number(tx.amountXlm).toLocaleString(undefined, {
+												minimumFractionDigits: 2,
+												maximumFractionDigits: 7,
+											})}{" "}
+											XLM
+										</span>
+										<span className="text-xs text-slate-400">
 											{formatDate(tx.createdAt)}
 										</span>
 									</div>
-
-									{/* Mobile card — polished layout */}
-									<div className="lg:hidden">
-										{/* Top row: hash + badges */}
-										<div className="flex items-start justify-between gap-2 mb-3">
-											<div className="flex-1 min-w-0">
-												<span
-													className="font-mono text-xs font-medium text-indigo-600 break-all leading-snug"
-													title={tx.hash}
-												>
-													{truncate(tx.hash, 8, 6)}
-												</span>
-											</div>
-											<div className="col-span-1">
-												<StatusPill status={tx.status} />
-												<NetworkBadge network={tx.network} />
-											</div>
-											<div className="col-span-1">
-												<NetworkBadge network={tx.network} />
-											</div>
-											<div className="col-span-1 text-xs text-slate-500">
-												{formatDate(tx.createdAt)}
-											</div>
-										</div>
-
-										{/* Mobile card — polished layout */}
-										<div className="lg:hidden">
-											{/* Top row: hash + badges */}
-											<div className="flex items-start justify-between gap-2 mb-3">
-												<div className="flex-1 min-w-0">
-													<span
-														className="font-mono text-xs font-medium text-indigo-600 break-all leading-snug"
-														title={tx.hash}
-													>
-														{truncate(tx.hash, 8, 6)}
-													</span>
-												</div>
-												<div className="flex items-center gap-1.5 shrink-0 flex-wrap justify-end">
-													<StatusPill status={tx.status} />
-													<NetworkBadge network={tx.network} />
-												</div>
-											</div>
-
-											{/* From / To row */}
-											<div className="flex gap-3 mb-2">
-												<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-													<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-														From
-													</span>
-													<p
-														className="font-mono text-xs text-slate-700 truncate"
-														title={tx.from}
-													>
-														{truncate(tx.from)}
-													</p>
-												</div>
-												<div className="flex-1 min-w-0 bg-slate-50 rounded-lg p-2.5">
-													<span className="text-[11px] font-semibold uppercase tracking-wider text-slate-500 block mb-0.5">
-														To
-													</span>
-													<p
-														className="font-mono text-xs text-slate-700 truncate"
-														title={tx.to}
-													>
-														{truncate(tx.to)}
-													</p>
-												</div>
-											</div>
-
-											{/* Amount + Date row */}
-											<div className="flex items-center justify-between pt-2 border-t border-slate-100">
-												<div className="flex items-baseline gap-1.5">
-													<span className="font-semibold text-sm tabular-nums text-slate-900">
-														{Number(tx.amountXlm).toLocaleString(undefined, {
-															minimumFractionDigits: 2,
-															maximumFractionDigits: 7,
-														})}
-													</span>
-													<span className="text-xs font-medium text-slate-400">
-														XLM
-													</span>
-												</div>
-												<span className="text-xs text-slate-400">
-													{formatDate(tx.createdAt)}
-												</span>
-											</div>
-
-											{/* Mobile card */}
-											<div className="lg:hidden space-y-2">
-												<div className="flex items-center justify-between">
-													<div className="flex items-center">
-														<span
-															className="font-mono text-xs text-indigo-600"
-															title={tx.hash}
-														>
-															{truncate(tx.hash, 8, 6)}
-														</span>
-														<CopyButton
-															text={tx.hash}
-															label={`Copy transaction hash ${tx.hash}`}
-														/>
-													</div>
-													<div className="flex items-center gap-2">
-														<NetworkBadge network={tx.network} />
-														<StatusPill status={tx.status} />
-													</div>
-												</div>
-												<div className="flex justify-between text-xs text-slate-500">
-													<span className="flex items-center gap-0.5">
-														<span className="font-medium text-slate-700">
-															From:{" "}
-														</span>
-														<span className="font-mono" title={tx.from}>
-															{truncate(tx.from)}
-														</span>
-														<CopyButton
-															text={tx.from}
-															label={`Copy from address ${tx.from}`}
-														/>
-													</span>
-													<span className="flex items-center gap-0.5">
-														<span className="font-medium text-slate-700">
-															To:{" "}
-														</span>
-														<span className="font-mono" title={tx.to}>
-															{truncate(tx.to)}
-														</span>
-														<CopyButton
-															text={tx.to}
-															label={`Copy to address ${tx.to}`}
-														/>
-													</span>
-												</div>
-												<div className="flex justify-between items-center">
-													<span className="font-semibold text-sm tabular-nums text-slate-900">
-														{Number(tx.amountXlm).toLocaleString(undefined, {
-															minimumFractionDigits: 2,
-															maximumFractionDigits: 7,
-														})}{" "}
-														XLM
-													</span>
-													<span className="text-xs text-slate-400">
-														{formatDate(tx.createdAt)}
-													</span>
-												</div>
-												{tx.memo && (
-													<p className="text-xs text-slate-400">
-														Memo: {tx.memo}
-													</p>
-												)}
-											</div>
-											{tx.memo && (
-												<p className="text-xs text-slate-400 mt-2 italic leading-relaxed bg-slate-50 rounded-md px-2.5 py-1.5">
-													Memo: {tx.memo}
-												</p>
-											)}
-										</div>
-									</div>
-								))
-							) : (
-								<div className="p-12 text-center">
-									<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
-										<Search size={20} className="text-slate-400" aria-hidden />
-									</div>
-									<h3 className="text-sm font-medium text-slate-900">
-										No transactions found
-									</h3>
-									<p className="text-sm text-slate-500 mt-1">
-										No results for current filters.
-									</p>
-									<button
-										type="button"
-										onClick={clearFilters}
-										className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
-									>
-										Clear all filters
-									</button>
+									{tx.memo && (
+										<p className="text-xs text-slate-400">Memo: {tx.memo}</p>
+									)}
 								</div>
-							)
-						) : (
-							<div className="p-12 text-center" data-testid="no-results">
-								<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
-									<Search size={20} className="text-slate-400" />
-								</div>
-								<h3 className="text-sm font-medium text-slate-900">
-									No transactions found
-								</h3>
-								<p className="text-sm text-slate-500 mt-1">
-									No results for current filters.
-								</p>
-								<button
-									onClick={clearFilters}
-									className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
-								>
-									Clear all filters
-								</button>
 							</div>
-						)}
-					</div>
-
-					{/* Pagination */}
-					{sortedData.length > 0 && (
-						<div className="border-t border-slate-100 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50">
-							<span className="text-xs text-slate-500">
-								Showing{" "}
-								<span className="font-medium text-slate-700">
-									{(currentPage - 1) * itemsPerPage + 1}
-								</span>{" "}
-								–{" "}
-								<span className="font-medium text-slate-700">
-									{Math.min(currentPage * itemsPerPage, sortedData.length)}
-								</span>{" "}
-								of{" "}
-								<span className="font-medium text-slate-700">
-									{sortedData.length}
-								</span>{" "}
-								results
-							</span>
-
-							<div className="flex items-center gap-1 select-none">
-								<button
-									type="button"
-									onClick={() => handlePageChange(currentPage - 1)}
-									disabled={currentPage === 1}
-									className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
-									aria-label="Previous page"
-								>
-									<ChevronLeft size={16} aria-hidden />
-								</button>
-
-								{Array.from({ length: totalPages }, (_, i) => i + 1).map(
-									(page) => (
-										<button
-											key={page}
-											type="button"
-											onClick={() => handlePageChange(page)}
-											aria-current={currentPage === page ? "page" : undefined}
-											className={`w-7 h-7 rounded text-xs font-medium transition-all ${
-												currentPage === page
-													? "bg-white border border-slate-200 shadow-sm text-indigo-600"
-													: "text-slate-600 hover:bg-white hover:shadow-sm"
-											}`}
-										>
-											{page}
-										</button>
-									),
-								)}
-
-								<button
-									type="button"
-									onClick={() => handlePageChange(currentPage + 1)}
-									disabled={currentPage === totalPages}
-									className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
-									aria-label="Next page"
-								>
-									<ChevronRight size={16} aria-hidden />
-								</button>
+						))
+					) : (
+						<div className="p-12 text-center" data-testid="no-results">
+							<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
+								<Search size={20} className="text-slate-400" aria-hidden />
 							</div>
+							<h3 className="text-sm font-medium text-slate-900">
+								No transactions found
+							</h3>
+							<p className="text-sm text-slate-500 mt-1">
+								No results for current filters.
+							</p>
+							<button
+								type="button"
+								onClick={clearFilters}
+								className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
+							>
+								Clear all filters
+							</button>
 						</div>
 					)}
 				</div>
-			)}
+
+				{/* Pagination */}
+				{sortedData.length > 0 && (
+					<div className="border-t border-slate-100 p-4 flex flex-col sm:flex-row items-center justify-between gap-4 bg-slate-50/50">
+						<span className="text-xs text-slate-500">
+							Showing{" "}
+							<span className="font-medium text-slate-700">
+								{(currentPage - 1) * itemsPerPage + 1}
+							</span>{" "}
+							–{" "}
+							<span className="font-medium text-slate-700">
+								{Math.min(currentPage * itemsPerPage, sortedData.length)}
+							</span>{" "}
+							of{" "}
+							<span className="font-medium text-slate-700">
+								{sortedData.length}
+							</span>{" "}
+							results
+						</span>
+
+						<div className="flex items-center gap-1 select-none">
+							<button
+								type="button"
+								onClick={() => handlePageChange(currentPage - 1)}
+								disabled={currentPage === 1}
+								className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
+								aria-label="Previous page"
+							>
+								<ChevronLeft size={16} aria-hidden />
+							</button>
+
+							{Array.from({ length: totalPages }, (_, i) => i + 1).map(
+								(page) => (
+									<button
+										key={page}
+										type="button"
+										onClick={() => handlePageChange(page)}
+										aria-current={currentPage === page ? "page" : undefined}
+										className={`w-7 h-7 rounded text-xs font-medium transition-all ${
+											currentPage === page
+												? "bg-white border border-slate-200 shadow-sm text-indigo-600"
+												: "text-slate-600 hover:bg-white hover:shadow-sm"
+										}`}
+									>
+										{page}
+									</button>
+								),
+							)}
+
+							<button
+								type="button"
+								onClick={() => handlePageChange(currentPage + 1)}
+								disabled={currentPage === totalPages}
+								className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
+								aria-label="Next page"
+							>
+								<ChevronRight size={16} aria-hidden />
+							</button>
+						</div>
+					</div>
+				)}
+			</div>
 		</div>
 	);
 }

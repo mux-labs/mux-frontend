@@ -44,24 +44,14 @@ export default function AnalyticsPage() {
 		});
 	}
 
-	async function handleRefresh() {
-		try {
-			refetch();
-			addToast({
-				type: "success",
-				message: "Analytics data refreshed",
-				description: "Dashboard has been updated with the latest data",
-				duration: 3000,
-			});
-		} catch (err) {
-			addToast({
-				type: "error",
-				message: "Failed to refresh data",
-				description:
-					err instanceof Error ? err.message : "Please try again later",
-				duration: 5000,
-			});
-		}
+	function handleRefresh() {
+		refetch();
+		addToast({
+			type: "success",
+			message: "Refreshing analytics data",
+			description: "Dashboard is being updated with the latest data",
+			duration: 3000,
+		});
 	}
 
 	if (isLoading) {

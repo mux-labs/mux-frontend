@@ -1,7 +1,8 @@
 "use client";
 
 import { AlertCircle, Check, Copy, RefreshCw } from "lucide-react";
-import { useCallback, useId } from "react";
+import { useCallback, useId, useState } from "react";
+import TransactionsTable from "@/components/TransactionsTable/TransactionsTable";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -9,13 +10,18 @@ import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton, WalletDetailSkeleton } from "@/components/ui/Skeleton";
 import { TestnetHint } from "@/components/ui/TestnetHint";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
+import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
+import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
+import { WalletActivityFeed } from "@/components/wallet/WalletActivityFeed";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { trackWalletEvent } from "@/services/walletAnalyticsTracking";
 import { truncateAddress } from "@/utils/addressFormatting";
+import { isValidStellarAddress } from "@/utils/addressValidation";
 import { formatDate } from "@/utils/dateFormatting";
+import { isWalletFunded } from "@/utils/walletUtils";
 
 interface WalletDetailProps {
 	id: string;
@@ -31,6 +37,11 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	const { track } = useAnalyticsTracking("wallet_detail");
 	const balanceHeadingId = useId();
 	const infoHeadingId = useId();
+	const [isSendOpen, setIsSendOpen] = useState(false);
+	const [isReceiveOpen, setIsReceiveOpen] = useState(false);
+
+	const canReceive = !!wallet && isValidStellarAddress(wallet.address.trim());
+	const canSend = isWalletFunded(wallet);
 
 	const isNotFound =
 		!!error &&
@@ -77,6 +88,7 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	}
 
 	return (
+		<>
 		<div className="space-y-4 sm:space-y-6">
 			{wallet?.network === "testnet" && (
 				<TestnetHint
@@ -256,6 +268,75 @@ export function WalletDetail({ id }: WalletDetailProps) {
 					</div>
 				</div>
 			)}
+
+			{wallet && (
+				<section
+					aria-label="Send or receive funds"
+					className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900"
+				>
+					<div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+								Send or receive funds
+							</p>
+							<p className="mt-0.5 text-sm text-zinc-500 dark:text-zinc-400">
+								{canSend
+									? "Send XLM out or show the receive QR stub for incoming transfers."
+									: "Show the receive QR stub or copy the address to accept incoming transfers."}
+							</p>
+						</div>
+						<div className="flex flex-wrap gap-3">
+							<Button
+								disabled={!canSend}
+								onClick={() => setIsSendOpen(true)}
+								title={
+									canSend
+										? "Send funds from this wallet"
+										: "Wallet must be funded to send"
+								}
+								aria-label={
+									canSend ? "Send funds" : "Cannot send: wallet is not funded"
+								}
+							>
+								Send
+							</Button>
+							<Button
+								variant="outline"
+								disabled={!canReceive}
+								onClick={() => setIsReceiveOpen(true)}
+								title={
+									canReceive
+										? "Show receive QR stub"
+										: "Wallet address is invalid"
+								}
+								aria-label={
+									canReceive
+										? "Receive funds"
+										: "Cannot receive: wallet address is invalid"
+								}
+							>
+								Receive
+							</Button>
+						</div>
+					</div>
+				</section>
+			)}
+
+			{wallet && <WalletActivityFeed address={wallet.address} />}
+
+			{wallet && <TransactionsTable address={wallet.address} />}
 		</div>
+
+		<ReceiveWalletModal
+			isOpen={isReceiveOpen}
+			wallet={wallet}
+			onClose={() => setIsReceiveOpen(false)}
+		/>
+		<SendWalletModal
+			isOpen={isSendOpen}
+			wallet={wallet}
+			onClose={() => setIsSendOpen(false)}
+		/>
+		</>
 	);
 }

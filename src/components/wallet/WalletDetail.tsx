@@ -7,6 +7,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton, WalletDetailSkeleton } from "@/components/ui/Skeleton";
+import { TestnetHint } from "@/components/ui/TestnetHint";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
@@ -77,6 +78,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 
 	return (
 		<div className="space-y-4 sm:space-y-6">
+			{wallet?.network === "testnet" && (
+				<TestnetHint
+					variant="compact"
+					dismissible={false}
+					address={wallet.address}
+				/>
+			)}
+
 			{/* Balance card */}
 			<section
 				aria-labelledby={balanceHeadingId}

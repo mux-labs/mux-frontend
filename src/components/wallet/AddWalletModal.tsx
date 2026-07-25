@@ -1,10 +1,23 @@
 "use client";
 
-import { AlertCircle, CheckCircle2, Loader2, Plus, X } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	CheckCircle2,
+	Copy,
+	Loader2,
+	Plus,
+	X,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { TestnetHint } from "@/components/ui/TestnetHint";
+import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import type { Wallet, WalletNetwork } from "@/types/wallet";
-import { validateStellarAddress } from "@/utils/addressFormatting";
+import {
+	truncateAddress,
+	validateStellarAddress,
+} from "@/utils/addressFormatting";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -75,6 +88,7 @@ export function AddWalletModal({
 	const [addressError, setAddressError] = useState<string | undefined>();
 	const [labelError, setLabelError] = useState<string | undefined>();
 	const [addedWallet, setAddedWallet] = useState<Wallet | null>(null);
+	const { copy, copied, error: copyError } = useCopyToClipboard();
 
 	const addressInputRef = useRef<HTMLInputElement>(null);
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
@@ -407,6 +421,14 @@ export function AddWalletModal({
 								</div>
 							</div>
 
+							{addedWallet.network === "testnet" && (
+								<TestnetHint
+									variant="compact"
+									dismissible={false}
+									address={addedWallet.address}
+								/>
+							)}
+
 							<div className="rounded-lg border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-800">
 								<dl className="space-y-2 text-sm">
 									{addedWallet.label && (
@@ -419,13 +441,46 @@ export function AddWalletModal({
 											</dd>
 										</div>
 									)}
-									<div className="flex justify-between gap-4">
+									<div className="flex items-center justify-between gap-4">
 										<dt className="text-zinc-500 dark:text-zinc-400">
 											Address
 										</dt>
-										<dd className="truncate font-mono text-zinc-900 dark:text-zinc-50">
-											{addedWallet.address.slice(0, 8)}…
-											{addedWallet.address.slice(-6)}
+										<dd className="flex items-center gap-1 font-mono text-zinc-900 dark:text-zinc-50">
+											<span className="truncate">
+												{truncateAddress(addedWallet.address)}
+											</span>
+											<Button
+												variant="ghost"
+												size="icon-sm"
+												onClick={() =>
+													copy(addedWallet.address, addedWallet.address)
+												}
+												disabled={!!copyError}
+												aria-label={
+													copyError
+														? copyError
+														: copied
+															? "Address copied"
+															: "Copy wallet address"
+												}
+												title={
+													copyError ? copyError : copied ? "Copied!" : "Copy address"
+												}
+											>
+												{copyError ? (
+													<AlertCircle
+														className="h-4 w-4 text-red-500"
+														aria-hidden="true"
+													/>
+												) : copied ? (
+													<Check
+														className="h-4 w-4 text-green-500"
+														aria-hidden="true"
+													/>
+												) : (
+													<Copy className="h-4 w-4" aria-hidden="true" />
+												)}
+											</Button>
 										</dd>
 									</div>
 									<div className="flex justify-between gap-4">

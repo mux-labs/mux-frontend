@@ -1,15 +1,26 @@
 "use client";
 
 import { AlertCircle, ExternalLink, X } from "lucide-react";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { FRIENDBOT_DOCS_URL, FRIENDBOT_URL } from "@/utils/friendbot";
+import {
+	FRIENDBOT_DOCS_URL,
+	FRIENDBOT_URL,
+	getFriendbotUrl,
+	isValidAddressForFriendbot,
+} from "@/utils/friendbot";
 
 interface TestnetHintProps {
 	variant?: "default" | "compact";
 	dismissible?: boolean;
 	className?: string;
+	/**
+	 * Optional wallet address to fund directly. When provided (and valid),
+	 * the "Fund via Friendbot" link pre-fills that address instead of
+	 * linking to the generic Friendbot landing page.
+	 */
+	address?: string;
 }
 
 /**
@@ -20,17 +31,27 @@ interface TestnetHintProps {
  * - Shows only on testnet (parent component responsible for conditional rendering)
  * - Dismissible state is local to component (not persisted)
  * - Provides links to Friendbot and documentation
+ * - When `address` is a valid Stellar address, the Friendbot link funds that
+ *   address directly instead of pointing at the generic landing page
  */
 export function TestnetHint({
 	variant = "default",
 	dismissible = true,
 	className,
+	address,
 }: TestnetHintProps) {
 	const [isDismissed, setIsDismissed] = useState(false);
 
 	const handleDismiss = useCallback(() => {
 		setIsDismissed(true);
 	}, []);
+
+	const friendbotUrl = useMemo(() => {
+		if (address && isValidAddressForFriendbot(address)) {
+			return getFriendbotUrl(address);
+		}
+		return FRIENDBOT_URL;
+	}, [address]);
 
 	if (isDismissed) {
 		return null;
@@ -48,12 +69,14 @@ export function TestnetHint({
 				<p className="text-xs text-amber-700 dark:text-amber-300">
 					You&apos;re on testnet.{" "}
 					<a
-						href={FRIENDBOT_URL}
+						href={friendbotUrl}
 						target="_blank"
 						rel="noopener noreferrer"
 						className="underline hover:no-underline font-medium"
 					>
-						Fund with Friendbot
+						{address
+							? "Fund this wallet with Friendbot"
+							: "Fund with Friendbot"}
 					</a>
 				</p>
 				{dismissible && (
@@ -90,20 +113,22 @@ export function TestnetHint({
 					<p className="text-sm text-amber-800 dark:text-amber-200">
 						This is a test network for development and testing. Use{" "}
 						<a
-							href={FRIENDBOT_URL}
+							href={friendbotUrl}
 							target="_blank"
 							rel="noopener noreferrer"
 							className="font-medium underline hover:no-underline"
 						>
 							Friendbot
 						</a>{" "}
-						to fund new accounts with test XLM.
+						{address
+							? "to fund this wallet with test XLM."
+							: "to fund new accounts with test XLM."}
 					</p>
 					<div className="flex flex-wrap gap-2 pt-2">
 						<Button variant="outline" size="sm" asChild className="h-8 text-xs">
-							<a href={FRIENDBOT_URL} target="_blank" rel="noopener noreferrer">
+							<a href={friendbotUrl} target="_blank" rel="noopener noreferrer">
 								<ExternalLink className="h-3 w-3" />
-								Open Friendbot
+								{address ? "Fund via Friendbot" : "Open Friendbot"}
 							</a>
 						</Button>
 						<Button variant="outline" size="sm" asChild className="h-8 text-xs">

@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { WalletTable } from "@/components/wallet/WalletTable";
 import { NetworkProvider, useNetwork } from "@/context/NetworkContext";
 import type { Wallet } from "@/types/wallet";
@@ -55,6 +55,54 @@ describe("NetworkContext", () => {
 			"useNetwork must be used within NetworkProvider",
 		);
 		console.error = original;
+	});
+});
+
+describe("NetworkContext — localStorage persistence", () => {
+	beforeEach(() => {
+		localStorage.removeItem("mux_network");
+	});
+
+	afterEach(() => {
+		localStorage.removeItem("mux_network");
+	});
+
+	it("persists the selected network to localStorage", () => {
+		render(
+			<NetworkProvider>
+				<NetworkDisplay />
+			</NetworkProvider>,
+		);
+		fireEvent.click(screen.getByText("Switch Testnet"));
+		expect(localStorage.getItem("mux_network")).toBe("testnet");
+	});
+
+	it("restores the persisted network after a remount (e.g. page reload)", () => {
+		const { unmount } = render(
+			<NetworkProvider>
+				<NetworkDisplay />
+			</NetworkProvider>,
+		);
+		fireEvent.click(screen.getByText("Switch Testnet"));
+		expect(screen.getByTestId("network")).toHaveTextContent("testnet");
+		unmount();
+
+		render(
+			<NetworkProvider>
+				<NetworkDisplay />
+			</NetworkProvider>,
+		);
+		expect(screen.getByTestId("network")).toHaveTextContent("testnet");
+	});
+
+	it("falls back to the default network when localStorage holds an invalid value", () => {
+		localStorage.setItem("mux_network", "not-a-real-network");
+		render(
+			<NetworkProvider>
+				<NetworkDisplay />
+			</NetworkProvider>,
+		);
+		expect(screen.getByTestId("network")).toHaveTextContent("mainnet");
 	});
 });
 

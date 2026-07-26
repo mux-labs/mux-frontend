@@ -1,3 +1,5 @@
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
+
 export interface ApiResult<T> {
 	data?: T;
 	error?: string;
@@ -5,7 +7,7 @@ export interface ApiResult<T> {
 
 export async function fetchJson<T>(url: string): Promise<ApiResult<T>> {
 	try {
-		const res = await fetch(url, { cache: "no-store" });
+		const res = await fetchWithAuth(url, { cache: "no-store" });
 		if (!res.ok) {
 			const text = await res.text();
 			return { error: `HTTP ${res.status}: ${text}` };
@@ -31,7 +33,7 @@ export async function saveSpendingLimits(payload: {
 	transactionLimit?: number;
 }) {
 	try {
-		const res = await fetch("/api/spending-limits", {
+		const res = await fetchWithAuth("/api/spending-limits", {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(payload),

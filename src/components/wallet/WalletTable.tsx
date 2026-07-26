@@ -130,8 +130,8 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 		<div className="space-y-4">
 			{hasTestnetWallets && <TestnetHint variant="default" />}
 
-			<div className="rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-				<div className="flex flex-col gap-3 border-b border-zinc-200 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-zinc-800">
+			<div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-zinc-950/20">
+				<div className="flex flex-col gap-3 border-b border-zinc-200 bg-zinc-50/60 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 dark:border-zinc-700 dark:bg-zinc-900/80">
 					<div>
 						<p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
 							{wallets.length} wallet{wallets.length !== 1 ? "s" : ""}
@@ -150,27 +150,53 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 				</div>
 
 				{wallets.length === 0 ? (
-					<div className="py-12 text-center text-zinc-500">
+					<div className="py-12 text-center text-zinc-500 dark:text-zinc-400">
 						No wallets found for this network.
 					</div>
 				) : (
 					<>
 						{/* Desktop Table View */}
 						<div className="hidden lg:block">
-							<Table>
+							<Table className="dark:text-zinc-200">
 								<TableHeader>
-									<TableRow className="hover:bg-transparent dark:hover:bg-transparent">
-										<TableHead>Address</TableHead>
-										<TableHead>Network</TableHead>
-										<TableHead>Status</TableHead>
-										<TableHead>Balance</TableHead>
-										<TableHead>Created</TableHead>
-										<TableHead>Last Activity</TableHead>
+									<TableRow className="border-zinc-200 bg-zinc-50/80 hover:bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-800/70 dark:hover:bg-zinc-800/70">
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Address
+										</TableHead>
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Network
+										</TableHead>
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Status
+										</TableHead>
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Balance
+										</TableHead>
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Created
+										</TableHead>
+										<TableHead className="text-zinc-700 dark:text-zinc-200">
+											Last Activity
+										</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
-									{wallets.map((wallet) => (
-										<TableRow key={wallet.id}>
+									{wallets.map((wallet, index) => (
+										<TableRow
+											key={wallet.id}
+											ref={(node) => {
+												rowRefs.current[index] = node;
+											}}
+											tabIndex={0}
+											data-state={
+												focusedIndex === index ? "selected" : undefined
+											}
+											aria-label={`Open wallet ${truncateAddress(wallet.address)}`}
+											onKeyDown={(event) => handleKeyDown(event, index)}
+											onFocus={() => handleRowFocus(index)}
+											onBlur={handleRowBlur}
+											className="border-zinc-100 hover:bg-zinc-50/80 dark:border-zinc-800 dark:hover:bg-zinc-800/60"
+										>
 											<TableCell>
 												<Link
 													href={`/demo/dashboard/wallets/${wallet.id}`}

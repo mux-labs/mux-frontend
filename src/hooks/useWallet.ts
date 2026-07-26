@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { Wallet } from "@/types/wallet";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallet } from "@/utils/walletSerialization";
 
 interface UseWalletResult {
@@ -35,7 +36,7 @@ export function useWallet(id: string): UseWalletResult {
 			return;
 		}
 
-		fetch(`${base}/wallets/${encodeURIComponent(id)}`)
+		fetchWithAuth(`${base}/wallets/${encodeURIComponent(id)}`)
 			.then((res) => {
 				if (res.status === 404) throw new Error("not_found");
 				if (!res.ok) throw new Error(`Request failed: ${res.status}`);

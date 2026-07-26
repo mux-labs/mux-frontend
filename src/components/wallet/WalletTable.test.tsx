@@ -79,4 +79,15 @@ describe("WalletTable", () => {
 		await user.click(screen.getByRole("button", { name: /add wallet/i }));
 		expect(onAddWallet).toHaveBeenCalledOnce();
 	});
+
+	it("applies dark-mode styles to the table surface and header", () => {
+		const { container } = render(<WalletTable wallets={mockWallets} />);
+
+		const surface = container.querySelector(".dark\\:border-zinc-700");
+		const headerRow = container.querySelector("thead tr");
+
+		expect(surface).toHaveClass("dark:bg-zinc-900");
+		expect(headerRow).toHaveClass("dark:bg-zinc-800/70");
+		expect(headerRow).toHaveClass("dark:border-zinc-700");
+	});
 });

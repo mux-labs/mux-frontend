@@ -65,14 +65,14 @@ describe("WalletTable", () => {
 		});
 
 		it("should apply correct styles to mainnet badge", () => {
-			const { container } = render(<WalletTable wallets={mockWallets} />);
+			render(<WalletTable wallets={mockWallets} />);
 			const mainnetBadge = screen.getByText("Mainnet").parentElement;
 			expect(mainnetBadge).toHaveClass("bg-blue-100");
 			expect(mainnetBadge).toHaveClass("text-blue-800");
 		});
 
 		it("should apply correct styles to testnet badge", () => {
-			const { container } = render(<WalletTable wallets={mockWallets} />);
+			render(<WalletTable wallets={mockWallets} />);
 			const testnetBadge = screen.getByText("Testnet").parentElement;
 			expect(testnetBadge).toHaveClass("bg-amber-100");
 			expect(testnetBadge).toHaveClass("text-amber-800");
@@ -255,7 +255,7 @@ describe("WalletTable", () => {
 	describe("Styling", () => {
 		it("should apply container styles", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const wrapper = container.firstChild;
+			const wrapper = container.querySelector(".rounded-xl.border");
 			expect(wrapper).toHaveClass("rounded-xl");
 			expect(wrapper).toHaveClass("border");
 			expect(wrapper).toHaveClass("bg-white");
@@ -263,16 +263,17 @@ describe("WalletTable", () => {
 
 		it("should apply dark mode styles to container", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
-			const wrapper = container.firstChild;
-			expect(wrapper).toHaveClass("dark:border-zinc-800");
+			const wrapper = container.querySelector(".rounded-xl.border");
+			expect(wrapper).toHaveClass("dark:border-zinc-700");
 			expect(wrapper).toHaveClass("dark:bg-zinc-900");
 		});
 
 		it("should apply header row styles", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
 			const headerRow = container.querySelector("thead tr");
-			expect(headerRow).toHaveClass("hover:bg-transparent");
-			expect(headerRow).toHaveClass("dark:hover:bg-transparent");
+			expect(headerRow).toHaveClass("bg-zinc-50/80");
+			expect(headerRow).toHaveClass("dark:bg-zinc-800/70");
+			expect(headerRow).toHaveClass("dark:border-zinc-700");
 		});
 	});
 });

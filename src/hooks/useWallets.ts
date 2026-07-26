@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { Wallet } from "@/types/wallet";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallets } from "@/utils/walletSerialization";
 
 interface UseWalletsResult {
@@ -34,7 +35,7 @@ export function useWallets(): UseWalletsResult {
 			return;
 		}
 
-		fetch(`${base}/wallets`)
+		fetchWithAuth(`${base}/wallets`)
 			.then((res) => {
 				if (!res.ok) throw new Error(`Request failed: ${res.status}`);
 				return res.json() as Promise<Wallet[]>;

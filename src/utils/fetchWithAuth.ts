@@ -3,7 +3,7 @@
  *
  * A thin wrapper around the native `fetch` API that handles 401 Unauthorized
  * responses by clearing the client session and redirecting the user to the
- * login page (issue #43).
+ * login page with a callback URL.
  *
  * Usage:
  *   import { fetchWithAuth } from "@/utils/fetchWithAuth";
@@ -15,24 +15,37 @@ const SESSION_COOKIE_NAME = "mux_auth_session";
 const SESSION_STORAGE_KEY = "mux_auth_user";
 
 /** The path users are sent to after a 401. */
-const LOGIN_PATH = "/";
+const LOGIN_PATH = "/login";
 
 function clearClientSession(): void {
 	try {
-		sessionStorage.removeItem(SESSION_STORAGE_KEY);
+		if (typeof sessionStorage !== "undefined") {
+			sessionStorage.removeItem(SESSION_STORAGE_KEY);
+		}
 	} catch {
 		// sessionStorage unavailable (SSR / private browsing edge case)
 	}
+
+	if (typeof document === "undefined") return;
+
 	// Expire the session cookie immediately
 	document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
 }
 
 function redirectToLogin(currentPath?: string): void {
+	if (typeof window === "undefined") return;
+
 	const url = new URL(LOGIN_PATH, window.location.origin);
 	if (currentPath) {
 		url.searchParams.set("callbackUrl", currentPath);
 	}
 	window.location.replace(url.toString());
+}
+
+function getCurrentCallbackUrl(): string | undefined {
+	if (typeof window === "undefined") return undefined;
+
+	return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
 /**
@@ -56,10 +69,7 @@ export async function fetchWithAuth(
 	if (response.status === 401) {
 		clearClientSession();
 
-		const callbackUrl =
-			typeof window !== "undefined" ? window.location.pathname : undefined;
-
-		redirectToLogin(callbackUrl);
+		redirectToLogin(getCurrentCallbackUrl());
 
 		throw new UnauthorizedError(
 			"Session expired or invalid. Redirecting to login.",

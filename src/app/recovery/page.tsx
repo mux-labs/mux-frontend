@@ -3,17 +3,27 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { InitiateRecoveryCTA } from "@/components/recovery/InitiateRecoveryCTA";
+import { RecoveryDocsLink } from "@/components/recovery/RecoveryDocsLink";
 import { RecoveryEmptyState } from "@/components/recovery/RecoveryEmptyState";
 import { RecoveryErrorState } from "@/components/recovery/RecoveryErrorState";
 import { RecoveryExplanation } from "@/components/recovery/RecoveryExplanation";
 import { RecoveryFAQ } from "@/components/recovery/RecoveryFAQ";
 import { RecoveryLoadingState } from "@/components/recovery/RecoveryLoadingState";
+import { RecoveryTimelineList } from "@/components/recovery/RecoveryTimelineList";
 import { Toast } from "@/components/ui/toast";
 import { useRecovery } from "@/hooks/useRecovery";
+import { useRecoveryTimeline } from "@/hooks/useRecoveryTimeline";
+import { mockRecoveryTimelineCompleted } from "@/mock-data/recovery";
 import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
 
 export default function RecoveryPage() {
 	const recovery = useRecovery();
+
+	// #456 – recovery timeline list: initialised with mock data as a stub until
+	// a real fetchRecoveryTimeline endpoint is wired to this page. The
+	// useRecoveryTimeline hook manages the event list locally; swap
+	// mockRecoveryTimelineCompleted for a fetched payload when the API is ready.
+	const { timeline } = useRecoveryTimeline(mockRecoveryTimelineCompleted);
 
 	// Track whether recovery has ever successfully exited the loading phase so
 	// we can distinguish a bootstrap error (loading → error) from an action
@@ -80,6 +90,10 @@ export default function RecoveryPage() {
 						</p>
 					</div>
 					<div className="flex shrink-0 gap-3">
+						{/* #460 – standalone docs link in the page header so developers can
+						    jump straight to external recovery documentation without having
+						    to scroll down to the FAQ section */}
+						<RecoveryDocsLink />
 						<Link
 							href="/"
 							className="w-full sm:w-auto text-center px-4 py-2 text-sm font-medium text-zinc-600 bg-white border border-zinc-200 rounded-lg shadow-xs hover:bg-zinc-50 transition-colors dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
@@ -108,10 +122,30 @@ export default function RecoveryPage() {
 							<RecoveryEmptyState onInitiate={recovery.initiateRecovery} />
 						)}
 
+						{/* #456 – recovery timeline list: shows the sequence of events for
+						    the most recent (or active) recovery operation so developers can
+						    track progress without leaving the dashboard */}
+						{timeline.events.length > 0 && (
+							<section
+								aria-labelledby="recovery-timeline-heading"
+								className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950"
+							>
+								<h2
+									id="recovery-timeline-heading"
+									className="text-lg font-semibold text-zinc-900 dark:text-zinc-50 mb-4"
+								>
+									Recovery Timeline
+								</h2>
+								<RecoveryTimelineList events={timeline.events} />
+							</section>
+						)}
+
 						{/* Recovery Explanation Component */}
 						<RecoveryExplanation />
 
-						{/* FAQ Section */}
+						{/* #458 – FAQ section: answers common developer questions about the
+						    invisible wallet recovery mechanism. Includes a RecoveryDocsLink
+						    at the bottom for further reading */}
 						<RecoveryFAQ />
 					</>
 				)}

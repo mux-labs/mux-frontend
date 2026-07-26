@@ -22,7 +22,8 @@ export type TransactionEventName =
 	| "transactions_filters_cleared"
 	| "transactions_page_change"
 	| "transactions_items_per_page"
-	| "transaction_row_click";
+	| "transaction_row_click"
+	| "transactions_export_csv";
 
 // ---------------------------------------------------------------------------
 // Payload type

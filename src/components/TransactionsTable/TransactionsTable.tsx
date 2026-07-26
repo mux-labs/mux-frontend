@@ -6,6 +6,7 @@ import {
 	ChevronLeft,
 	ChevronRight,
 	Copy,
+	Download,
 	Filter,
 	Search,
 	X,
@@ -20,6 +21,7 @@ import type {
 	TransactionNetwork,
 	TransactionStatus,
 } from "@/types/transaction";
+import { downloadTransactionsCsv } from "@/utils/exportTransactionsTable";
 
 // --- Helpers ---
 
@@ -242,6 +244,14 @@ export default function TransactionsTable({
 		trackTransactionEvent("transactions_filter_changed", { type, value });
 	};
 
+	const handleExportCsv = () => {
+		if (sortedData.length === 0) return;
+		downloadTransactionsCsv(sortedData);
+		trackTransactionEvent("transactions_export_csv", {
+			count: sortedData.length,
+		});
+	};
+
 	const hasActiveFilters =
 		search.length > 0 || statusFilter !== "all" || networkFilter !== "all";
 
@@ -386,6 +396,17 @@ export default function TransactionsTable({
 							Reset
 						</button>
 					)}
+
+					<button
+						type="button"
+						onClick={handleExportCsv}
+						disabled={sortedData.length === 0}
+						aria-label={`Export ${sortedData.length} transaction${sortedData.length !== 1 ? "s" : ""} as CSV`}
+						className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+					>
+						<Download size={14} aria-hidden />
+						Export CSV
+					</button>
 				</div>
 			</div>
 

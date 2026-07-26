@@ -1,8 +1,13 @@
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import TransactionsTable from "./TransactionsTable";
 import type { Transaction } from "@/types/transaction";
+import { downloadTransactionsCsv } from "@/utils/exportTransactionsTable";
+
+vi.mock("@/utils/exportTransactionsTable", () => ({
+	downloadTransactionsCsv: vi.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Test fixtures
@@ -375,6 +380,63 @@ describe("TransactionsTable — data rendering", () => {
 			for (const btn of copyButtons) {
 				expect(btn).not.toHaveAttribute("tabindex", "-1");
 			}
+		});
+	});
+
+	describe("CSV export", () => {
+		beforeEach(() => {
+			vi.mocked(downloadTransactionsCsv).mockClear();
+		});
+
+		it("renders an export CSV button", () => {
+			renderWith(ALL_TXS);
+			expect(
+				screen.getByRole("button", { name: /export.*csv/i }),
+			).toBeInTheDocument();
+		});
+
+		it("calls downloadTransactionsCsv with the current filtered data when clicked", async () => {
+			const user = userEvent.setup();
+			renderWith(ALL_TXS);
+			await user.click(screen.getByRole("button", { name: /export.*csv/i }));
+			expect(downloadTransactionsCsv).toHaveBeenCalledTimes(1);
+			expect(downloadTransactionsCsv).toHaveBeenCalledWith(
+				expect.arrayContaining(ALL_TXS),
+			);
+		});
+
+		it("respects active filters when exporting", async () => {
+			const user = userEvent.setup();
+			renderWith(ALL_TXS);
+			await user.selectOptions(
+				screen.getByLabelText("Filter by status"),
+				"completed",
+			);
+			await user.click(screen.getByRole("button", { name: /export.*csv/i }));
+			const exported = vi.mocked(downloadTransactionsCsv).mock.calls[0][0];
+			expect(exported).toHaveLength(1);
+			expect(exported[0].status).toBe("completed");
+		});
+
+		it("disables the export button when there is no data to export", () => {
+			renderWith([]);
+			// Empty state is rendered instead of the table/toolbar
+			expect(
+				screen.queryByRole("button", { name: /export.*csv/i }),
+			).not.toBeInTheDocument();
+		});
+
+		it("does not call downloadTransactionsCsv when filters produce zero results", async () => {
+			const user = userEvent.setup();
+			renderWith(ALL_TXS);
+			await user.type(
+				screen.getByPlaceholderText("Hash, address, memo…"),
+				"no-such-match",
+			);
+			const exportButton = screen.getByRole("button", { name: /export.*csv/i });
+			expect(exportButton).toBeDisabled();
+			await user.click(exportButton);
+			expect(downloadTransactionsCsv).not.toHaveBeenCalled();
 		});
 	});
 });

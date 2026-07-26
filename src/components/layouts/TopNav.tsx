@@ -34,7 +34,11 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 
 	// Get current page title from pathname
 	const pageTitle = (() => {
-		const segment = pathname.split("/").pop() ?? "";
+		const segments = pathname.split("/").filter(Boolean);
+		const segment = segments.at(-1) ?? "";
+		if (segments.at(-2) === "wallets" && segment !== "wallets") {
+			return "Wallet Detail";
+		}
 		const titleMap: Record<string, string> = {
 			dashboard: "Dashboard",
 			analytics: "Analytics",
@@ -50,11 +54,6 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 		);
 	})();
 
-	useEffect(() => {
-		document.title = `${pageTitle} · ${networkLabel[network]} — Mux`;
-	}, [pageTitle, network]);
-
-	// Sync browser tab title
 	useEffect(() => {
 		document.title = `${pageTitle} · ${networkLabel[network]} — Mux`;
 	}, [pageTitle, network]);

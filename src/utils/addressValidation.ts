@@ -11,6 +11,55 @@ export type AddressValidationResult = {
 	fullAddress: string | null;
 };
 
+const BASE32_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
+
+function decodeBase32(value: string): Uint8Array | null {
+	let bits = 0;
+	let buffer = 0;
+	const bytes: number[] = [];
+
+	for (const character of value) {
+		const digit = BASE32_ALPHABET.indexOf(character);
+		if (digit === -1) return null;
+		buffer = (buffer << 5) | digit;
+		bits += 5;
+		if (bits >= 8) {
+			bits -= 8;
+			bytes.push((buffer >>> bits) & 0xff);
+		}
+	}
+
+	return Uint8Array.from(bytes);
+}
+
+function crc16Xmodem(payload: Uint8Array): number {
+	let crc = 0;
+	for (const byte of payload) {
+		crc ^= byte << 8;
+		for (let bit = 0; bit < 8; bit += 1) {
+			crc = (crc & 0x8000) !== 0 ? (crc << 1) ^ 0x1021 : crc << 1;
+			crc &= 0xffff;
+		}
+	}
+	return crc;
+}
+
+/**
+ * Verifies the CRC16-XModem checksum embedded in a Stellar StrKey account ID.
+ * Stellar serializes the checksum little-endian in the final two decoded bytes.
+ */
+export function hasValidStellarChecksum(address: string): boolean {
+	const normalized = address.trim().toUpperCase();
+	if (!/^G[A-Z2-7]{55}$/.test(normalized)) return false;
+
+	const decoded = decodeBase32(normalized);
+	if (!decoded || decoded.length !== 35 || decoded[0] !== 6 << 3) return false;
+
+	const payload = decoded.slice(0, -2);
+	const expected = decoded[decoded.length - 2] | (decoded[decoded.length - 1] << 8);
+	return crc16Xmodem(payload) === expected;
+}
+
 /**
  * Validates if a string is a valid Stellar address
  * Stellar addresses start with 'G' and are 56 characters long
@@ -19,7 +68,7 @@ export type AddressValidationResult = {
  */
 export function isValidStellarAddress(address: string): boolean {
 	if (!address || typeof address !== "string") return false;
-	return /^G[A-Z2-7]{55}$/.test(address);
+	return hasValidStellarChecksum(address);
 }
 
 /**

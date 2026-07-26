@@ -1,3 +1,5 @@
+import { hasValidStellarChecksum } from "@/utils/addressValidation";
+
 /**
  * Truncates a long address string for display.
  * Example: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI" -> "GBZXN7...MADI"
@@ -40,6 +42,13 @@ export function validateStellarAddress(address: string): {
 		return {
 			valid: false,
 			error: "Address contains invalid characters (must be A-Z or 2-7).",
+		};
+	}
+
+	if (!hasValidStellarChecksum(trimmed)) {
+		return {
+			valid: false,
+			error: "Address checksum is invalid. Check the last characters and try again.",
 		};
 	}
 

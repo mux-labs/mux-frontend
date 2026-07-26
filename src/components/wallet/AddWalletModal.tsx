@@ -18,6 +18,7 @@ import {
 	truncateAddress,
 	validateStellarAddress,
 } from "@/utils/addressFormatting";
+import { hasValidStellarChecksum } from "@/utils/addressValidation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -205,6 +206,12 @@ export function AddWalletModal({
 	if (!isOpen) return null;
 
 	const charCount = address.trim().length;
+	const checksumState =
+		charCount === 56
+			? hasValidStellarChecksum(address)
+				? "valid"
+				: "invalid"
+			: "pending";
 
 	return (
 		<div
@@ -273,7 +280,9 @@ export function AddWalletModal({
 										autoComplete="off"
 										spellCheck={false}
 										aria-describedby={
-											addressError ? `${addressId}-error` : undefined
+											addressError
+												? `${addressId}-error ${addressId}-checksum`
+												: `${addressId}-checksum`
 										}
 										aria-invalid={!!addressError}
 										className={`
@@ -295,8 +304,22 @@ export function AddWalletModal({
 										</span>
 									)}
 									<div className="mt-1.5 flex items-center justify-between">
-										<p className="text-xs text-zinc-500 dark:text-zinc-400">
-											56-character Stellar public key starting with G.
+										<p
+											id={`${addressId}-checksum`}
+											aria-live="polite"
+											className={`text-xs ${
+												checksumState === "valid"
+													? "text-green-700 dark:text-green-400"
+													: checksumState === "invalid"
+														? "text-red-600 dark:text-red-400"
+														: "text-zinc-500 dark:text-zinc-400"
+											}`}
+										>
+											{checksumState === "valid"
+												? "Checksum verified — this is a valid Stellar account."
+												: checksumState === "invalid"
+													? "Checksum does not match. Check the final characters."
+													: "56-character Stellar public key starting with G; checksum is verified locally."}
 										</p>
 										{charCount > 0 && (
 											<span

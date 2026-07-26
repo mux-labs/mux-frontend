@@ -68,6 +68,23 @@ describe("AddWalletModal form", () => {
 // ─── Address validation ───────────────────────────────────────────────────────
 
 describe("AddWalletModal address validation", () => {
+	it("shows a client-side checksum hint for a valid address", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		expect(screen.getByText(/checksum verified/i)).toBeInTheDocument();
+	});
+
+	it("warns when a complete address has a mismatched checksum", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(
+			screen.getByLabelText(/stellar address/i),
+			`${VALID_ADDRESS.slice(0, -1)}A`,
+		);
+		expect(screen.getByText(/checksum does not match/i)).toBeInTheDocument();
+	});
+
 	it("shows an error when submitting an empty address", async () => {
 		const user = userEvent.setup();
 		renderModal();

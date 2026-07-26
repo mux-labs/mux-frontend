@@ -1,7 +1,7 @@
 "use client";
 
-import { AlertCircle, Check, Copy, RefreshCw } from "lucide-react";
-import { useCallback, useId, useState } from "react";
+import { AlertCircle, Check, Copy, Pencil, RefreshCw, X } from "lucide-react";
+import { useCallback, useEffect, useId, useState } from "react";
 import TransactionsTable from "@/components/TransactionsTable/TransactionsTable";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -39,6 +39,18 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	const infoHeadingId = useId();
 	const [isSendOpen, setIsSendOpen] = useState(false);
 	const [isReceiveOpen, setIsReceiveOpen] = useState(false);
+	const [isEditingNickname, setIsEditingNickname] = useState(false);
+	const [nickname, setNickname] = useState("");
+	const [savedNickname, setSavedNickname] = useState("");
+	const [nicknameStatus, setNicknameStatus] = useState<
+		"idle" | "saving" | "error"
+	>("idle");
+
+	useEffect(() => {
+		const nextNickname = wallet?.label ?? "";
+		setNickname(nextNickname);
+		setSavedNickname(nextNickname);
+	}, [wallet?.label]);
 
 	const canReceive = !!wallet && isValidStellarAddress(wallet.address.trim());
 	const canSend = isWalletFunded(wallet);
@@ -61,6 +73,30 @@ export function WalletDetail({ id }: WalletDetailProps) {
 		},
 		[id, track, copy],
 	);
+
+	async function saveNickname(event: React.FormEvent) {
+		event.preventDefault();
+		const normalized = nickname.trim();
+		if (normalized.length > 30 || /[<>"'&]/.test(normalized)) {
+			setNicknameStatus("error");
+			return;
+		}
+		setNicknameStatus("saving");
+		try {
+			const response = await fetch(`/api/wallets/${encodeURIComponent(id)}`, {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ label: normalized }),
+			});
+			if (!response.ok) throw new Error("Unable to save nickname");
+			setSavedNickname(normalized);
+			setNickname(normalized);
+			setIsEditingNickname(false);
+			setNicknameStatus("idle");
+		} catch {
+			setNicknameStatus("error");
+		}
+	}
 
 	if (error && !wallet) {
 		return (
@@ -152,7 +188,7 @@ export function WalletDetail({ id }: WalletDetailProps) {
 						{error}
 					</p>
 				)}
-			</div>
+			</section>
 
 			{/* Wallet metadata */}
 			{wallet ? (
@@ -167,6 +203,69 @@ export function WalletDetail({ id }: WalletDetailProps) {
 						Wallet Info
 					</h2>
 					<dl className="space-y-4">
+						<div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+							<dt className="pt-2 text-sm text-zinc-500 dark:text-zinc-400">
+								Nickname
+							</dt>
+							<dd className="w-full sm:max-w-xs">
+								{isEditingNickname ? (
+									<form onSubmit={saveNickname} className="space-y-1.5">
+										<div className="flex gap-2">
+											<label htmlFor={`${id}-nickname`} className="sr-only">
+												Wallet nickname
+											</label>
+											<input
+												id={`${id}-nickname`}
+												value={nickname}
+												onChange={(event) => {
+													setNickname(event.target.value);
+													setNicknameStatus("idle");
+												}}
+												maxLength={30}
+												autoFocus
+												placeholder="Add a nickname"
+												className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-50"
+											/>
+											<Button size="icon-sm" type="submit" disabled={nicknameStatus === "saving"} aria-label="Save nickname">
+												<Check aria-hidden="true" />
+											</Button>
+											<Button
+												size="icon-sm"
+												variant="ghost"
+												type="button"
+												aria-label="Cancel nickname edit"
+												onClick={() => {
+													setNickname(savedNickname);
+													setNicknameStatus("idle");
+													setIsEditingNickname(false);
+												}}
+											>
+												<X aria-hidden="true" />
+											</Button>
+										</div>
+										{nicknameStatus === "error" && (
+											<p role="alert" className="text-xs text-red-600 dark:text-red-400">
+												Nickname could not be saved. Use at most 30 characters and try again.
+											</p>
+										)}
+									</form>
+								) : (
+									<div className="flex items-center justify-end gap-2">
+										<span className="text-sm text-zinc-700 dark:text-zinc-300">
+											{savedNickname || "No nickname"}
+										</span>
+										<Button
+											size="icon-sm"
+											variant="ghost"
+											aria-label="Edit wallet nickname"
+											onClick={() => setIsEditingNickname(true)}
+										>
+											<Pencil aria-hidden="true" />
+										</Button>
+									</div>
+								)}
+							</dd>
+						</div>
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
 							<dt className="text-sm text-zinc-500 dark:text-zinc-400">
 								Address
@@ -253,7 +352,7 @@ export function WalletDetail({ id }: WalletDetailProps) {
 							</div>
 						)}
 					</dl>
-				</div>
+				</section>
 			) : (
 				<div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900">
 					<Skeleton className="mb-4 h-4 w-24" />

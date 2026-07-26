@@ -146,7 +146,7 @@ export function WalletTable({
 				case "Enter":
 				case " ":
 					event.preventDefault();
-					router.push(`/demo/dashboard/wallets/${wallets[index].id}`);
+					router.push(`/dashboard/wallets/${wallets[index].id}`);
 					break;
 				case "Home":
 					event.preventDefault();
@@ -239,7 +239,7 @@ export function WalletTable({
 										>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
 													tabIndex={-1}
 												>
@@ -253,7 +253,7 @@ export function WalletTable({
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
 													tabIndex={-1}
 												>
@@ -262,7 +262,7 @@ export function WalletTable({
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
 													tabIndex={-1}
 												>
@@ -271,7 +271,7 @@ export function WalletTable({
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block text-zinc-700 dark:text-zinc-300"
 													tabIndex={-1}
 												>
@@ -280,7 +280,7 @@ export function WalletTable({
 											</TableCell>
 											<TableCell className="text-zinc-500 dark:text-zinc-400">
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
 													tabIndex={-1}
 												>
@@ -289,7 +289,7 @@ export function WalletTable({
 											</TableCell>
 											<TableCell className="text-zinc-500 dark:text-zinc-400">
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
 													tabIndex={-1}
 												>
@@ -307,7 +307,7 @@ export function WalletTable({
 							{wallets.map((wallet) => (
 								<Link
 									key={wallet.id}
-									href={`/demo/dashboard/wallets/${wallet.id}`}
+									href={`/dashboard/wallets/${wallet.id}`}
 									className="block p-4 transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 dark:active:bg-zinc-800"
 								>
 									<div className="space-y-3">

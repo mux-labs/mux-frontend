@@ -101,4 +101,22 @@ describe("WalletDetail", () => {
 			screen.getByRole("button", { name: /refresh balance/i }),
 		).toBeDisabled();
 	});
+
+	it("edits and saves the wallet nickname from detail", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({ ok: true, json: async () => ({}) }),
+		);
+		render(<WalletDetail id="wallet-001" />);
+		fireEvent.click(screen.getByRole("button", { name: "Edit wallet nickname" }));
+		fireEvent.change(screen.getByLabelText("Wallet nickname"), {
+			target: { value: "Treasury" },
+		});
+		fireEvent.click(screen.getByRole("button", { name: "Save nickname" }));
+		await waitFor(() => expect(screen.getByText("Treasury")).toBeInTheDocument());
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/wallets/wallet-001",
+			expect.objectContaining({ method: "PATCH" }),
+		);
+	});
 });

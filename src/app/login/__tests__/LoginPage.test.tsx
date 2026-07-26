@@ -581,7 +581,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 
 		it("password input has focus:ring classes for keyboard accessibility", async () => {
 			renderLoginPage();
-			const pwd = await screen.findByLabelText(/password/i);
+			const pwd = await screen.findByLabelText(/^password$/i);
 			expect(pwd.className).toContain("focus:ring-2");
 		});
 
@@ -600,7 +600,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 
 		it("password input has correct type and autocomplete", async () => {
 			renderLoginPage();
-			const pwd = await screen.findByLabelText(/password/i);
+			const pwd = await screen.findByLabelText(/^password$/i);
 			expect(pwd).toHaveAttribute("type", "password");
 			expect(pwd).toHaveAttribute("autocomplete", "current-password");
 		});
@@ -649,7 +649,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));
@@ -666,7 +666,7 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			fireEvent.change(screen.getByLabelText(/email address/i), {
 				target: { value: "user@example.com" },
 			});
-			fireEvent.change(screen.getByLabelText(/password/i), {
+			fireEvent.change(screen.getByLabelText(/^password$/i), {
 				target: { value: "password123" },
 			});
 			fireEvent.click(screen.getByTestId("login-submit"));

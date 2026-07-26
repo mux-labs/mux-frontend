@@ -1,6 +1,6 @@
 import "@testing-library/jest-dom";
 import { render, screen, fireEvent, act } from "@testing-library/react";
-import { ToastItem, ToastContainer, useToast } from "@/components/ui/Toast";
+import { ToastItem, ToastContainer, useToast } from "@/components/ui/toast";
 import { renderHook } from "@testing-library/react";
 
 describe("ToastItem", () => {

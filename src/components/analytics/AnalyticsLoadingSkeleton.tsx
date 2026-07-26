@@ -6,7 +6,6 @@ import { Skeleton } from "@/components/ui/Skeleton";
 export function MetricsCardsSkeleton() {
 	return (
 		<div
-			role="status"
 			className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4"
 			aria-label="Loading metrics"
 			aria-busy="true"
@@ -37,7 +36,6 @@ export function MetricsCardsSkeleton() {
 export function AnalyticsChartSkeleton() {
 	return (
 		<div
-			role="status"
 			className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
 			aria-label="Loading chart"
 			aria-busy="true"
@@ -76,7 +74,6 @@ export function AnalyticsChartSkeleton() {
 export function TopAssetsTableSkeleton({ rows = 5 }: { rows?: number }) {
 	return (
 		<div
-			role="status"
 			className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900"
 			aria-label="Loading top assets"
 			aria-busy="true"

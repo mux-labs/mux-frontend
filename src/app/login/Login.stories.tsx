@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from "@storybook/react";
-import { ToastContainer } from "@/components/ui/Toast";
-import type { ToastMessage } from "@/components/ui/Toast";
+import { ToastContainer } from "@/components/ui/toast";
+import type { ToastMessage } from "@/components/ui/toast";
 
 // ---------------------------------------------------------------------------
 // LoginErrorCard — extracted for isolated story rendering

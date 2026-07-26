@@ -33,10 +33,11 @@ vi.mock("@/services/authAnalyticsTracking");
  * success, and failure.
  */
 describe("LoginPage - Analytics Tracking", () => {
-	const trackAuthEventSpy = vi.spyOn(authAnalytics, "trackAuthEvent");
+	let trackAuthEventSpy: ReturnType<typeof vi.spyOn>;
 
 	beforeEach(() => {
-		trackAuthEventSpy.mockClear();
+		trackAuthEventSpy = vi.spyOn(authAnalytics, "trackAuthEvent");
+		trackAuthEventSpy.mockImplementation(() => undefined);
 		global.fetch = vi.fn();
 	});
 

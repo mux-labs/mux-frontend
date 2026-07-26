@@ -203,10 +203,17 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 							id="user-menu-button"
 						>
 							{isLoading ? (
-								<div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+								<div
+									data-testid="user-avatar-skeleton"
+									className="h-8 w-8 rounded-full bg-gray-200 animate-pulse"
+								/>
 							) : user ? (
 								<>
-									<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-xs font-semibold text-white">
+									<div
+										data-testid="user-avatar"
+										aria-label={`${user.name} avatar`}
+										className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-xs font-semibold text-white select-none"
+									>
 										{user.name
 											.split(" ")
 											.map((n: string) => n[0])
@@ -221,7 +228,10 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 									</div>
 								</>
 							) : (
-								<div className="h-8 w-8 rounded-full bg-linear-to-br from-gray-300 to-gray-400" />
+								<div
+									data-testid="user-avatar-empty"
+									className="h-8 w-8 rounded-full bg-linear-to-br from-gray-300 to-gray-400"
+								/>
 							)}
 							<ChevronDownIcon
 								className="hidden h-5 w-5 text-gray-400 lg:block"

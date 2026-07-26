@@ -3,8 +3,8 @@
 import { useRouter, useSearchParams } from "next/navigation";
 import { type FormEvent, Suspense, useEffect, useState } from "react";
 import { AuthLoadingSkeleton } from "@/components/layouts/AuthLoadingSkeleton";
-import { useAuth } from "@/context/AuthContext";
 import { ToastContainer, useToast } from "@/components/ui/toast";
+import { useAuth } from "@/context/AuthContext";
 import { trackAuthEvent } from "@/services/authAnalyticsTracking";
 
 // ---------------------------------------------------------------------------
@@ -145,12 +145,34 @@ function LoginErrorCard({
 				className="text-red-400 hover:text-red-600"
 			>
 				{copied ? (
-					<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-						<path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+					<svg
+						className="h-4 w-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={2}
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M4.5 12.75l6 6 9-13.5"
+						/>
 					</svg>
 				) : (
-					<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-						<path strokeLinecap="round" strokeLinejoin="round" d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184" />
+					<svg
+						className="h-4 w-4"
+						fill="none"
+						viewBox="0 0 24 24"
+						strokeWidth={2}
+						stroke="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							d="M15.666 3.888A2.25 2.25 0 0013.5 2.25h-3c-1.03 0-1.9.693-2.166 1.638m7.332 0c.055.194.084.4.084.612v0a.75.75 0 01-.75.75H9a.75.75 0 01-.75-.75v0c0-.212.03-.418.084-.612m7.332 0c.646.049 1.288.11 1.927.184 1.1.128 1.907 1.077 1.907 2.185V19.5a2.25 2.25 0 01-2.25 2.25H6.75A2.25 2.25 0 014.5 19.5V6.257c0-1.108.806-2.057 1.907-2.185a48.208 48.208 0 011.927-.184"
+						/>
 					</svg>
 				)}
 			</button>
@@ -277,7 +299,7 @@ function LoginPageContent() {
 		const errors = validate(fields);
 		if (Object.keys(errors).length > 0) {
 			setFieldErrors(errors);
-			trackAuthEvent("login_validation_failed", { 
+			trackAuthEvent("login_validation_failed", {
 				errors: Object.keys(errors),
 			});
 			return;
@@ -289,12 +311,16 @@ function LoginPageContent() {
 		try {
 			const user = await authenticateUser(fields.email, fields.password);
 			signIn(user);
-			trackAuthEvent("login_success", { 
-				email: user.email, 
+			trackAuthEvent("login_success", {
+				email: user.email,
 				role: user.role,
 				callbackUrl,
 			});
-			addToast({ type: "success", message: "Signed in successfully!", description: `Welcome back, ${user.name}.` });
+			addToast({
+				type: "success",
+				message: "Signed in successfully!",
+				description: `Welcome back, ${user.name}.`,
+			});
 			router.replace(callbackUrl);
 		} catch (err) {
 			const message =
@@ -302,11 +328,15 @@ function LoginPageContent() {
 					? err.message
 					: "Sign in failed. Please check your credentials and try again.";
 			setSubmitError(message);
-			trackAuthEvent("login_failed", { 
+			trackAuthEvent("login_failed", {
 				email: fields.email,
 				error: message,
 			});
-			addToast({ type: "error", message: "Sign in failed", description: message });
+			addToast({
+				type: "error",
+				message: "Sign in failed",
+				description: message,
+			});
 		} finally {
 			setIsSubmitting(false);
 		}
@@ -320,7 +350,11 @@ function LoginPageContent() {
 
 	return (
 		<div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-6 dark:bg-zinc-950 sm:px-6 lg:px-8">
-			<ToastContainer toasts={toasts} onDismiss={dismissToast} position="top-right" />
+			<ToastContainer
+				toasts={toasts}
+				onDismiss={dismissToast}
+				position="top-right"
+			/>
 			<div className="w-full max-w-md">
 				{/* Logo / brand */}
 				<div className="mb-6 text-center sm:mb-8">
@@ -350,7 +384,9 @@ function LoginPageContent() {
 
 				{/* Login card */}
 				<div className="rounded-2xl border border-gray-200 bg-white px-6 py-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-10">
-					<h2 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">Sign in</h2>
+					<h2 className="mb-6 text-lg font-semibold text-gray-900 dark:text-white">
+						Sign in
+					</h2>
 
 					{/* #326: Empty/welcome state — shown before the user types anything */}
 					{isPristine && !submitError && <LoginWelcomeHint />}
@@ -453,13 +489,39 @@ function LoginPageContent() {
 									tabIndex={-1}
 								>
 									{showPassword ? (
-										<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-											<path strokeLinecap="round" strokeLinejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+										<svg
+											className="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											strokeWidth={2}
+											stroke="currentColor"
+											aria-hidden="true"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88"
+											/>
 										</svg>
 									) : (
-										<svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" aria-hidden="true">
-											<path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-											<path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+										<svg
+											className="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											strokeWidth={2}
+											stroke="currentColor"
+											aria-hidden="true"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+											/>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+											/>
 										</svg>
 									)}
 								</button>
@@ -485,7 +547,9 @@ function LoginPageContent() {
 								"text-sm font-semibold text-white transition-colors",
 								"focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:focus:ring-offset-zinc-900",
 								"disabled:cursor-not-allowed disabled:opacity-60",
-								isSubmitting ? "bg-blue-400 dark:bg-blue-600" : "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-700 dark:hover:bg-blue-600",
+								isSubmitting
+									? "bg-blue-400 dark:bg-blue-600"
+									: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800 dark:bg-blue-700 dark:hover:bg-blue-600",
 							].join(" ")}
 							data-testid="login-submit"
 						>

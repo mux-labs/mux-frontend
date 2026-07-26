@@ -49,7 +49,7 @@ export function AnalyticsChartSkeleton() {
 			{/* bar chart area */}
 			<div className="flex items-end gap-1 sm:gap-2" style={{ height: 120 }}>
 				{Array.from({ length: 7 }).map((_, i) => (
-						<div key={i} className="flex flex-1 flex-col items-center gap-1.5">
+					<div key={i} className="flex flex-1 flex-col items-center gap-1.5">
 						<Skeleton
 							className="w-full max-w-[32px] rounded-t-md"
 							style={{ height: `${40 + ((i * 17) % 60)}%` }}
@@ -87,7 +87,7 @@ export function TopAssetsTableSkeleton({ rows = 5 }: { rows?: number }) {
 			{/* table rows */}
 			<div className="divide-y divide-zinc-100 dark:divide-zinc-800">
 				{Array.from({ length: rows }).map((_, i) => (
-						<div key={i} className="flex items-center gap-4 px-4 py-4 sm:px-6">
+					<div key={i} className="flex items-center gap-4 px-4 py-4 sm:px-6">
 						{/* rank */}
 						<Skeleton className="h-4 w-4 shrink-0" />
 						{/* avatar + name */}

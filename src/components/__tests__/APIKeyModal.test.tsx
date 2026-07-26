@@ -104,4 +104,27 @@ describe("APIKeyModal — one-time key reveal", () => {
 		await user.click(screen.getByRole("button", { name: /close dialog/i }));
 		expect(onClose).toHaveBeenCalledOnce();
 	});
+
+	it("closes with Escape", async () => {
+		const user = userEvent.setup();
+		const onClose = vi.fn();
+		render(<APIKeyModal isOpen onClose={onClose} />);
+		await user.keyboard("{Escape}");
+		expect(onClose).toHaveBeenCalledOnce();
+	});
+
+	it("keeps Tab focus inside the dialog", async () => {
+		const user = userEvent.setup();
+		render(<APIKeyModal isOpen onClose={vi.fn()} />);
+
+		const closeButton = screen.getByRole("button", { name: /close dialog/i });
+		const generateButton = screen.getByTestId("generate-key-btn");
+
+		closeButton.focus();
+		await user.keyboard("{Shift>}{Tab}{/Shift}");
+		expect(generateButton).toHaveFocus();
+
+		await user.tab();
+		expect(closeButton).toHaveFocus();
+	});
 });

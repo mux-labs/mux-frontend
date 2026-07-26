@@ -1,7 +1,7 @@
 "use client";
 
 import { Check, Copy, Key, RefreshCw, Shield, ShieldOff } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,7 @@ import {
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
 import { type ApiKey, mockApiKeys } from "@/mock-data/api-keys";
+import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
 
 // ---------------------------------------------------------------------------
 // Revoke confirmation — inline per-row
@@ -28,12 +29,27 @@ interface RevokeConfirmProps {
 }
 
 function RevokeConfirm({ keyName, onConfirm, onCancel }: RevokeConfirmProps) {
+	const dialogRef = useRef<HTMLDivElement>(null);
+	const confirmRef = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		confirmRef.current?.focus();
+	}, []);
+
 	return (
 		<div
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby="revoke-title"
 			aria-describedby="revoke-desc"
+			ref={dialogRef}
+			onKeyDown={(event) => {
+				createFocusTrapHandler(dialogRef)(event);
+				if (event.key === "Escape") {
+					event.preventDefault();
+					onCancel();
+				}
+			}}
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		>
 			<div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
@@ -61,6 +77,7 @@ function RevokeConfirm({ keyName, onConfirm, onCancel }: RevokeConfirmProps) {
 						Cancel
 					</Button>
 					<Button
+						ref={confirmRef}
 						variant="destructive"
 						size="sm"
 						onClick={onConfirm}
@@ -84,12 +101,27 @@ interface RotateConfirmProps {
 }
 
 function RotateConfirm({ keyName, onConfirm, onCancel }: RotateConfirmProps) {
+	const dialogRef = useRef<HTMLDivElement>(null);
+	const confirmRef = useRef<HTMLButtonElement>(null);
+
+	useEffect(() => {
+		confirmRef.current?.focus();
+	}, []);
+
 	return (
 		<div
 			role="alertdialog"
 			aria-modal="true"
 			aria-labelledby="rotate-title"
 			aria-describedby="rotate-desc"
+			ref={dialogRef}
+			onKeyDown={(event) => {
+				createFocusTrapHandler(dialogRef)(event);
+				if (event.key === "Escape") {
+					event.preventDefault();
+					onCancel();
+				}
+			}}
 			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
 		>
 			<div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
@@ -116,7 +148,12 @@ function RotateConfirm({ keyName, onConfirm, onCancel }: RotateConfirmProps) {
 					<Button variant="outline" size="sm" onClick={onCancel}>
 						Cancel
 					</Button>
-					<Button size="sm" onClick={onConfirm} data-testid="confirm-rotate">
+					<Button
+						ref={confirmRef}
+						size="sm"
+						onClick={onConfirm}
+						data-testid="confirm-rotate"
+					>
 						Rotate key
 					</Button>
 				</div>
@@ -137,7 +174,7 @@ function CopyKeyButton({ apiKey }: { apiKey: ApiKey }) {
 			<button
 				type="button"
 				onClick={() => copy(apiKey.key)}
-				className="p-1 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+				className="rounded p-1 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:text-zinc-100 dark:focus-visible:ring-offset-zinc-950"
 				title={copied ? "Copied!" : "Copy to clipboard"}
 				aria-label={copied ? "Copied!" : `Copy key ${apiKey.name}`}
 				data-testid={`copy-key-${apiKey.id}`}
@@ -291,7 +328,7 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 							onClick={() => setStatusFilter(f)}
 							aria-pressed={statusFilter === f}
 							className={cn(
-								"rounded-full px-3 py-1 text-xs font-medium transition-colors",
+								"rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
 								statusFilter === f
 									? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
 									: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",

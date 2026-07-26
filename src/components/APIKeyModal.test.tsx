@@ -44,6 +44,7 @@ describe("APIKeyModal", () => {
 		await waitFor(() => {
 			expect(onKeyCreated).toHaveBeenCalledWith({
 				name: "Test Key",
+				value: expect.any(String),
 				key: expect.any(String),
 			});
 		});
@@ -56,7 +57,7 @@ describe("APIKeyModal", () => {
 		fireEvent.click(generateButton);
 
 		await waitFor(() => {
-			expect(screen.getByText(/please enter a name/i)).toBeInTheDocument();
+			expect(screen.getByText(/key name is required/i)).toBeInTheDocument();
 		});
 	});
 
@@ -78,6 +79,15 @@ describe("APIKeyModal", () => {
 
 		const closeButton = screen.getByText("Close");
 		fireEvent.click(closeButton);
+
+		expect(onClose).toHaveBeenCalled();
+	});
+
+	it("closes when Escape is pressed", () => {
+		const onClose = vi.fn();
+		render(<APIKeyModal isOpen={true} onClose={onClose} />);
+
+		fireEvent.keyDown(screen.getByRole("dialog"), { key: "Escape" });
 
 		expect(onClose).toHaveBeenCalled();
 	});

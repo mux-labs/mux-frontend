@@ -64,7 +64,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 			<button
 				type="button"
 				onClick={onMenuClick}
-				className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+				aria-label="Open sidebar"
+				className="-m-2.5 rounded-md p-2.5 text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 			>
 				<span className="sr-only">Open sidebar</span>
 				<Bars3Icon className="h-6 w-6" aria-hidden="true" />
@@ -118,7 +119,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 							onClick={() => setNetwork("testnet")}
 							aria-pressed={network === "testnet"}
 							aria-label="Switch to Testnet"
-							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
+							className={`rounded-md px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800 sm:px-3 ${
 								network === "testnet"
 									? "bg-amber-100 text-amber-900"
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -131,7 +132,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 							onClick={() => setNetwork("mainnet")}
 							aria-pressed={network === "mainnet"}
 							aria-label="Switch to Mainnet"
-							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
+							className={`rounded-md px-2 py-1 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-800 sm:px-3 ${
 								network === "mainnet"
 									? "bg-blue-100 text-blue-900"
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
@@ -165,7 +166,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					<button
 						type="button"
 						onClick={() => setSearchOpen(!searchOpen)}
-						className="p-2 text-gray-400 hover:text-gray-500 lg:hidden"
+						aria-label={searchOpen ? "Close search" : "Open search"}
+						className="rounded-md p-2 text-gray-400 hover:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 					>
 						<span className="sr-only">Search</span>
 						<MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
@@ -188,6 +190,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					{/* Notifications */}
 					<button
 						type="button"
+						aria-label="View notifications"
 						className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
 					>
 						<span className="sr-only">View notifications</span>
@@ -199,6 +202,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					<div className="relative">
 						<button
 							type="button"
+							aria-label="Open user menu"
 							className="flex items-center gap-x-3 rounded-lg p-1.5 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
 							id="user-menu-button"
 						>

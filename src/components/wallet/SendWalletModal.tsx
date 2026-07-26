@@ -1,10 +1,11 @@
 "use client";
 
 import { AlertCircle, SendHorizonal, X } from "lucide-react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Wallet } from "@/types/wallet";
 import { isValidStellarAddress } from "@/utils/addressValidation";
+import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
 
 interface SendWalletModalProps {
 	isOpen: boolean;
@@ -62,6 +63,7 @@ export function SendWalletModal({
 	const amountId = useId();
 	const destinationErrorId = useId();
 	const amountErrorId = useId();
+	const dialogRef = useRef<HTMLDivElement>(null);
 
 	const [destination, setDestination] = useState("");
 	const [amount, setAmount] = useState("");
@@ -105,6 +107,14 @@ export function SendWalletModal({
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby={titleId}
+			ref={dialogRef}
+			onKeyDown={(event) => {
+				createFocusTrapHandler(dialogRef)(event);
+				if (event.key === "Escape") {
+					event.preventDefault();
+					handleClose();
+				}
+			}}
 			className="fixed inset-0 z-50 flex items-center justify-center p-4"
 		>
 			<div

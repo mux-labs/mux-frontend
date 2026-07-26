@@ -1,11 +1,48 @@
-import { cn } from "@/lib/utils";
 import React from "react";
+import { cn } from "@/lib/utils";
 
+/**
+ * Props for the {@link RecoveryDocsLink} anchor button.
+ *
+ * Extends the native `<a>` attributes so consumers can pass any standard HTML
+ * anchor prop (e.g. `onClick`, `tabIndex`, `aria-*`) alongside the
+ * component-specific overrides.
+ */
 export interface RecoveryDocsLinkProps
 	extends React.AnchorHTMLAttributes<HTMLAnchorElement> {
+	/**
+	 * Additional Tailwind classes merged onto the root `<a>` element.
+	 * Useful for controlling margins or width from a parent layout.
+	 */
 	className?: string;
+
+	/**
+	 * URL the link points to.
+	 *
+	 * Defaults to the canonical Mux recovery documentation page.
+	 *
+	 * @default "https://docs.mux.network/recovery"
+	 */
 	href?: string;
 }
+
+/**
+ * Anchor button that links to the Mux recovery documentation.
+ *
+ * Opens in a new tab with `rel="noopener noreferrer"` for security.
+ * The accessible label (`aria-label`) always mentions "(opens in a new tab)"
+ * so screen-reader users are informed of the navigation behaviour.
+ *
+ * @example
+ * // Default — "Read Docs" pointing to the canonical docs page
+ * <RecoveryDocsLink />
+ *
+ * @example
+ * // Custom label and destination
+ * <RecoveryDocsLink href="https://docs.mux.network/guides/recovery">
+ *   Full Recovery Guide
+ * </RecoveryDocsLink>
+ */
 
 export function RecoveryDocsLink({
 	className,

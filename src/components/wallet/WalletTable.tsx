@@ -3,7 +3,7 @@
 import { AlertCircle, Check, Copy, Plus } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { TestnetHint } from "@/components/ui/TestnetHint";
@@ -25,19 +25,30 @@ import { formatDate } from "@/utils/dateFormatting";
 function WalletAddressCell({
 	address,
 	network,
+	onCopySuccess,
+	onCopyError,
 }: {
 	address: string;
 	network: "mainnet" | "testnet";
+	onCopySuccess?: (address: string) => void;
+	onCopyError?: (error: string) => void;
 }) {
 	const { copy, copied, error } = useCopyToClipboard();
 
-	const handleCopy = async () => {
-		await copy(address, address);
+	const handleCopy = async (e: React.MouseEvent) => {
+		e.preventDefault();
+		e.stopPropagation();
+		const success = await copy(address, address);
+		if (success) {
+			onCopySuccess?.(address);
+		} else {
+			onCopyError?.(error ?? "Failed to copy address");
+		}
 	};
 
 	return (
 		<div className="flex items-center gap-1">
-			<code className="rounded bg-zinc-100 px-2 py-1 font-mono text-sm text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
+			<code className="rounded bg-zinc-100 px-2 py-1 font-mono text-sm text-zinc-700 transition-colors dark:bg-zinc-800 dark:text-zinc-300">
 				{truncateAddress(address)}
 			</code>
 			<Button
@@ -46,13 +57,24 @@ function WalletAddressCell({
 				onClick={handleCopy}
 				title={error ? error : copied ? "Copied!" : "Copy address"}
 				disabled={error !== null}
+				className="transition-all hover:scale-110"
+				aria-label={
+					copied ? "Address copied to clipboard" : "Copy address to clipboard"
+				}
+				data-testid="copy-address-button"
 			>
 				{error ? (
-					<AlertCircle className="h-4 w-4 text-red-500" />
+					<AlertCircle className="h-4 w-4 text-red-500" aria-hidden="true" />
 				) : copied ? (
-					<Check className="h-4 w-4 text-green-500" />
+					<Check
+						className="h-4 w-4 text-green-500 animate-in fade-in zoom-in duration-200"
+						aria-hidden="true"
+					/>
 				) : (
-					<Copy className="h-4 w-4" />
+					<Copy
+						className="h-4 w-4 transition-colors hover:text-blue-600 dark:hover:text-blue-400"
+						aria-hidden="true"
+					/>
 				)}
 			</Button>
 			<ExplorerLink
@@ -67,17 +89,43 @@ function WalletAddressCell({
 	);
 }
 
-export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
+export function WalletTable({
+	wallets,
+	onAddWallet,
+	onCopySuccess,
+	onCopyError,
+}: WalletTableProps) {
 	const router = useRouter();
 	const [focusedIndex, setFocusedIndex] = useState<number>(-1);
 	const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+	const [toastOpen, setToastOpen] = useState(false);
+	const [toastMessage, setToastMessage] = useState("");
+	const [toastType, setToastType] = useState<"success" | "error">("success");
+	const toastTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+	const showToast = useCallback((message: string, type: "success" | "error") => {
+		if (toastTimer.current) clearTimeout(toastTimer.current);
+		setToastMessage(message);
+		setToastType(type);
+		setToastOpen(true);
+		toastTimer.current = setTimeout(() => setToastOpen(false), 3000);
+	}, []);
+
+	const handleCopySuccess = useCallback((address: string) => {
+		showToast(`Copied ${address.slice(0, 6)}…${address.slice(-4)}`, "success");
+		onCopySuccess?.(address);
+	}, [showToast, onCopySuccess]);
+
+	const handleCopyError = useCallback((error: string) => {
+		showToast(error, "error");
+		onCopyError?.(error);
+	}, [showToast, onCopyError]);
 
 	const hasTestnetWallets = useMemo(
 		() => wallets.some((wallet) => wallet.network === "testnet"),
 		[wallets],
 	);
 
-	// Handle keyboard navigation
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent<HTMLTableRowElement>, index: number) => {
 			switch (event.key) {
@@ -98,30 +146,29 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 				case "Enter":
 				case " ":
 					event.preventDefault();
-					router.push(`/demo/dashboard/wallets/${wallets[index].id}`);
+					router.push(`/dashboard/wallets/${wallets[index].id}`);
 					break;
 				case "Home":
 					event.preventDefault();
 					setFocusedIndex(0);
 					rowRefs.current[0]?.focus();
 					break;
-				case "End":
+				case "End": {
 					event.preventDefault();
 					const lastIndex = wallets.length - 1;
 					setFocusedIndex(lastIndex);
 					rowRefs.current[lastIndex]?.focus();
 					break;
+				}
 			}
 		},
 		[wallets, router],
 	);
 
-	// Handle row focus
 	const handleRowFocus = useCallback((index: number) => {
 		setFocusedIndex(index);
 	}, []);
 
-	// Handle row blur
 	const handleRowBlur = useCallback(() => {
 		setFocusedIndex(-1);
 	}, []);
@@ -157,7 +204,10 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 					<>
 						{/* Desktop Table View */}
 						<div className="hidden lg:block">
-							<Table className="dark:text-zinc-200">
+							<Table aria-label="Wallets">
+								<caption className="sr-only">
+									List of wallets with network, status, balance, and activity
+								</caption>
 								<TableHeader>
 									<TableRow className="border-zinc-200 bg-zinc-50/80 hover:bg-zinc-50/80 dark:border-zinc-700 dark:bg-zinc-800/70 dark:hover:bg-zinc-800/70">
 										<TableHead className="text-zinc-700 dark:text-zinc-200">
@@ -184,66 +234,76 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 									{wallets.map((wallet, index) => (
 										<TableRow
 											key={wallet.id}
-											ref={(node) => {
-												rowRefs.current[index] = node;
-											}}
+											data-testid={`wallet-row-${index}`}
 											tabIndex={0}
-											data-state={
-												focusedIndex === index ? "selected" : undefined
-											}
-											aria-label={`Open wallet ${truncateAddress(wallet.address)}`}
-											onKeyDown={(event) => handleKeyDown(event, index)}
+											ref={(el: HTMLTableRowElement | null) => {
+												rowRefs.current[index] = el;
+											}}
+											onKeyDown={(e) => handleKeyDown(e, index)}
 											onFocus={() => handleRowFocus(index)}
 											onBlur={handleRowBlur}
-											className="border-zinc-100 hover:bg-zinc-50/80 dark:border-zinc-800 dark:hover:bg-zinc-800/60"
+											aria-label={`${truncateAddress(wallet.address)}, ${wallet.network}, ${wallet.status}`}
+											className={
+												focusedIndex === index
+													? "ring-2 ring-blue-500 dark:ring-blue-400 focus:outline-none"
+													: "focus:outline-none"
+											}
 										>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<WalletAddressCell
 														address={wallet.address}
 														network={wallet.network}
+														onCopySuccess={handleCopySuccess}
+														onCopyError={handleCopyError}
 													/>
 												</Link>
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<NetworkBadge network={wallet.network} />
 												</Link>
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													<StatusIndicator status={wallet.status} />
 												</Link>
 											</TableCell>
 											<TableCell>
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block text-zinc-700 dark:text-zinc-300"
+													tabIndex={-1}
 												>
 													{wallet.balance ?? "—"}
 												</Link>
 											</TableCell>
 											<TableCell className="text-zinc-500 dark:text-zinc-400">
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													{formatDate(wallet.createdAt)}
 												</Link>
 											</TableCell>
 											<TableCell className="text-zinc-500 dark:text-zinc-400">
 												<Link
-													href={`/demo/dashboard/wallets/${wallet.id}`}
+													href={`/dashboard/wallets/${wallet.id}`}
 													className="block"
+													tabIndex={-1}
 												>
 													{formatDate(wallet.lastActivity)}
 												</Link>
@@ -259,16 +319,17 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 							{wallets.map((wallet) => (
 								<Link
 									key={wallet.id}
-									href={`/demo/dashboard/wallets/${wallet.id}`}
-									className="block p-4 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
+									href={`/dashboard/wallets/${wallet.id}`}
+									className="block p-4 transition-colors hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-800/50 dark:active:bg-zinc-800"
 								>
 									<div className="space-y-3">
-										{/* Top row: Address and Badges */}
 										<div className="flex items-start justify-between gap-2">
 											<div className="min-w-0 flex-1">
 												<WalletAddressCell
 													address={wallet.address}
 													network={wallet.network}
+													onCopySuccess={handleCopySuccess}
+													onCopyError={handleCopyError}
 												/>
 											</div>
 											<div className="flex flex-shrink-0 gap-2">
@@ -277,30 +338,29 @@ export function WalletTable({ wallets, onAddWallet }: WalletTableProps) {
 											</div>
 										</div>
 
-										{/* Metadata grid */}
 										<div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 											<div>
-												<span className="text-zinc-500 dark:text-zinc-400">
+												<p className="text-xs text-zinc-500 dark:text-zinc-400">
 													Balance
-												</span>
-												<p className="font-medium text-zinc-900 dark:text-zinc-50">
+												</p>
+												<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 													{wallet.balance ?? "—"}
 												</p>
 											</div>
 											<div>
-												<span className="text-zinc-500 dark:text-zinc-400">
+												<p className="text-xs text-zinc-500 dark:text-zinc-400">
 													Created
-												</span>
-												<p className="font-medium text-zinc-900 dark:text-zinc-50">
+												</p>
+												<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 													{formatDate(wallet.createdAt)}
 												</p>
 											</div>
 											{wallet.lastActivity && (
 												<div className="col-span-2">
-													<span className="text-zinc-500 dark:text-zinc-400">
+													<p className="text-xs text-zinc-500 dark:text-zinc-400">
 														Last Activity
-													</span>
-													<p className="font-medium text-zinc-900 dark:text-zinc-50">
+													</p>
+													<p className="mt-0.5 font-medium text-zinc-900 dark:text-zinc-50">
 														{formatDate(wallet.lastActivity)}
 													</p>
 												</div>

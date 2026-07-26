@@ -1,0 +1,8 @@
+{
+	"extends": "../tsconfig.json",
+	"compilerOptions": {
+		"types": ["@storybook/react"]
+	},
+	"include": ["../src/**/*.stories.ts", "../src/**/*.stories.tsx", "./**/*.ts"],
+	"exclude": ["../node_modules"]
+}

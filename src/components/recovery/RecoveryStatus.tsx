@@ -1,6 +1,17 @@
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
+/**
+ * The possible states of the invisible wallet recovery system.
+ *
+ * - `active`       — Recovery system is running normally.
+ * - `monitoring`   — System is watching for potential issues (animated pulse).
+ * - `ready`        — System is ready to handle a recovery request.
+ * - `error`        — An error occurred in the recovery system.
+ * - `disconnected` — The recovery system cannot be reached.
+ * - `unknown`      — Status could not be determined (safe fallback for any
+ *                    value not in this union).
+ */
 export type RecoveryStatusValue =
 	| "active"
 	| "monitoring"
@@ -9,8 +20,24 @@ export type RecoveryStatusValue =
 	| "disconnected"
 	| "unknown";
 
+/**
+ * Props for the {@link RecoveryStatus} badge component.
+ */
 export interface RecoveryStatusProps {
+	/**
+	 * The current recovery system status to display.
+	 *
+	 * Any unrecognised value is silently normalised to `"unknown"` so the badge
+	 * always renders without throwing.
+	 *
+	 * @default "active"
+	 */
 	status?: RecoveryStatusValue;
+
+	/**
+	 * Additional Tailwind classes merged onto the root `<Badge>` element.
+	 * Useful for overriding margin or width from a parent layout.
+	 */
 	className?: string;
 }
 
@@ -74,6 +101,25 @@ function resolveStatus(status: string): RecoveryStatusValue {
 	return status in STATUS_STYLES ? (status as RecoveryStatusValue) : "unknown";
 }
 
+/**
+ * Status badge for the invisible wallet recovery system.
+ *
+ * Renders a coloured dot and a human-readable label inside a `<Badge>`.
+ * Each status variant has a distinct colour scheme so users can quickly
+ * identify the system's health at a glance.
+ *
+ * @example
+ * // Default (active) badge
+ * <RecoveryStatus />
+ *
+ * @example
+ * // Explicitly set status
+ * <RecoveryStatus status="monitoring" />
+ *
+ * @example
+ * // Unknown/invalid values fall back gracefully
+ * <RecoveryStatus status={"stale" as RecoveryStatusValue} />
+ */
 export function RecoveryStatus({
 	status = "active",
 	className,

@@ -1,12 +1,19 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
+import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
 import { RecoveryDocsLink } from "./RecoveryDocsLink";
 
+/**
+ * A single item in the FAQ accordion.
+ */
 export interface FAQItem {
+	/** Unique identifier used as the ARIA control/region id pair. */
 	id: string;
+	/** Short question text shown in the collapsed trigger button. */
 	question: string;
+	/** Full answer text revealed when the item is expanded. */
 	answer: string;
 }
 
@@ -49,9 +56,24 @@ export const FAQ_ITEMS: FAQItem[] = [
 	},
 ];
 
+/**
+ * Props for the {@link RecoveryFAQ} accordion component.
+ */
 interface RecoveryFAQProps {
-	/** Override the default FAQ items — useful for testing or custom content. */
+	/**
+	 * FAQ items to render in the accordion.
+	 *
+	 * Defaults to the built-in {@link FAQ_ITEMS} array. Pass a custom array
+	 * to override the content for testing or localised deployments.
+	 * An empty array renders a "No FAQ items available" fallback message.
+	 *
+	 * @default FAQ_ITEMS
+	 */
 	items?: FAQItem[];
+
+	/**
+	 * Additional Tailwind classes merged onto the root `<section>` element.
+	 */
 	className?: string;
 }
 
@@ -59,18 +81,37 @@ interface FAQItemProps {
 	item: FAQItem;
 	isOpen: boolean;
 	onToggle: () => void;
+	focused?: boolean;
+	tabIndex?: number;
+	onKeyDown?: (e: React.KeyboardEvent) => void;
+	buttonRef?: React.Ref<HTMLButtonElement>;
 }
 
-function FAQRow({ item, isOpen, onToggle }: FAQItemProps) {
+function FAQRow({
+	item,
+	isOpen,
+	onToggle,
+	focused = false,
+	tabIndex = 0,
+	onKeyDown,
+	buttonRef,
+}: FAQItemProps) {
 	return (
 		<div className="border-b border-zinc-200 dark:border-zinc-800 last:border-0">
 			<button
+				ref={buttonRef}
 				type="button"
 				aria-expanded={isOpen}
 				aria-controls={`faq-answer-${item.id}`}
 				id={`faq-question-${item.id}`}
 				onClick={onToggle}
-				className="flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 rounded-sm"
+				onKeyDown={onKeyDown}
+				tabIndex={tabIndex}
+				className={cn(
+					"flex w-full items-center justify-between gap-4 py-4 text-left text-sm font-medium text-zinc-900 dark:text-zinc-50 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-zinc-400 rounded-sm",
+					focused &&
+						"ring-2 ring-blue-500 ring-offset-2 dark:ring-blue-400 dark:ring-offset-zinc-900",
+				)}
 			>
 				<span>{item.question}</span>
 				<svg
@@ -116,16 +157,63 @@ export function RecoveryFAQ({
 	className,
 }: RecoveryFAQProps) {
 	const [openId, setOpenId] = useState<string | null>(null);
+	const [focusedIndex, setFocusedIndex] = useState<number>(-1);
+	const faqRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
 	const toggle = (id: string) => {
-		setOpenId((prev) => (prev === id ? null : id));
+		setOpenId((prev) => {
+			const isOpen = prev === id;
+			trackRecoveryEvent(isOpen ? "recovery_faq_collapsed" : "recovery_faq_expanded", { id });
+			return isOpen ? null : id;
+		});
 	};
+
+	const handleKeyDown = useCallback(
+		(event: React.KeyboardEvent, index: number) => {
+			switch (event.key) {
+				case "ArrowDown":
+					event.preventDefault();
+					if (index < items.length - 1) {
+						setFocusedIndex(index + 1);
+						faqRefs.current[index + 1]?.focus();
+					}
+					break;
+				case "ArrowUp":
+					event.preventDefault();
+					if (index > 0) {
+						setFocusedIndex(index - 1);
+						faqRefs.current[index - 1]?.focus();
+					}
+					break;
+				case "Home":
+					event.preventDefault();
+					setFocusedIndex(0);
+					faqRefs.current[0]?.focus();
+					break;
+				case "End":
+					event.preventDefault();
+					const lastIndex = items.length - 1;
+					setFocusedIndex(lastIndex);
+					faqRefs.current[lastIndex]?.focus();
+					break;
+			}
+		},
+		[items.length],
+	);
+
+	const handleFocus = useCallback((index: number) => {
+		setFocusedIndex(index);
+	}, []);
+
+	const handleBlur = useCallback(() => {
+		setFocusedIndex(-1);
+	}, []);
 
 	return (
 		<section
 			aria-labelledby="recovery-faq-heading"
 			className={cn(
-				"rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
+				"rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950",
 				className,
 			)}
 		>
@@ -142,12 +230,16 @@ export function RecoveryFAQ({
 				</p>
 			) : (
 				<div role="list" className="mb-4">
-					{items.map((item) => (
+					{items.map((item, index) => (
 						<div key={item.id} role="listitem">
 							<FAQRow
 								item={item}
 								isOpen={openId === item.id}
 								onToggle={() => toggle(item.id)}
+								focused={focusedIndex === index}
+								tabIndex={focusedIndex === index ? 0 : -1}
+								onKeyDown={(e) => handleKeyDown(e, index)}
+								buttonRef={(el) => { faqRefs.current[index] = el; }}
 							/>
 						</div>
 					))}
@@ -156,7 +248,8 @@ export function RecoveryFAQ({
 
 			<div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
 				<p className="text-sm text-zinc-600 dark:text-zinc-400">
-					Looking for more technical details? Check out our complete recovery guide.
+					Looking for more technical details? Check out our complete recovery
+					guide.
 				</p>
 				<RecoveryDocsLink />
 			</div>

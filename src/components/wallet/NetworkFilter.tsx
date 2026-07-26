@@ -83,8 +83,9 @@ export function NetworkFilter({
 					aria-pressed={selectedNetwork === option.value}
 					aria-label={`Filter by ${option.label}`}
 					className={cn(
-						"transition-all",
-						selectedNetwork === option.value && "ring-2 ring-offset-2",
+						"flex-1 sm:flex-none transition-all",
+						selectedNetwork === option.value &&
+							"ring-2 ring-offset-2 dark:ring-offset-background",
 					)}
 				>
 					{option.label}

@@ -2,7 +2,7 @@
 
 ## 📚 Complete Documentation Guide
 
-This index provides a roadmap to all documentation for implemented features including Testnet Hint, Explorer Link, Address Copy Validation, and Address Format Helper.
+This index provides a roadmap to all documentation for implemented features including Testnet Hint, Explorer Link, Address Copy Validation, Address Format Helper, and Spending Limits UI.
 
 ## 🎯 Start Here
 
@@ -18,6 +18,11 @@ This index provides a roadmap to all documentation for implemented features incl
    - Six formatting options
    - Quick API reference
    - Usage examples
+
+3. **[SPENDING_LIMITS_UI.md](./SPENDING_LIMITS_UI.md)** ⭐ NEW FEATURE
+   - Spending limits card props
+   - API request/response contract
+   - Runtime fallback behavior
 
 ### For Implementation Details
 3. **[SENIOR_IMPLEMENTATION_SUMMARY.md](./SENIOR_IMPLEMENTATION_SUMMARY.md)**
@@ -41,6 +46,11 @@ This index provides a roadmap to all documentation for implemented features incl
    - Complete API reference
    - Usage examples
    - Integration patterns
+
+6. **[SPENDING_LIMITS_UI.md](./SPENDING_LIMITS_UI.md)** ⭐ NEW FEATURE
+   - Spending-limits UI behavior
+   - Runtime caching and fallback notes
+   - API contract
 
 ## 📖 Documentation by Purpose
 

@@ -1,12 +1,25 @@
-import { RecoveryStatus } from "./RecoveryStatus";
 import { RecoveryDocsLink } from "./RecoveryDocsLink";
+import { RecoveryStatus } from "./RecoveryStatus";
 
+/**
+ * Detailed educational section explaining how invisible wallet recovery works.
+ *
+ * This is a presentational component with no required props. It renders a
+ * fixed layout containing:
+ * - A recovery system status card (always shows `"active"`)
+ * - A written explanation of the recovery mechanism and its three-step process
+ * - A warning panel with important caveats
+ * - A security & transparency trust-builder grid
+ *
+ * @example
+ * <RecoveryExplanation />
+ */
 export function RecoveryExplanation() {
 	return (
 		<div className="space-y-8">
 			{/* Status Placeholder Section */}
-			<section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-				<div className="flex items-center justify-between">
+			<section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+				<div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-0 sm:justify-between">
 					<div className="flex items-center gap-3">
 						<div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-full">
 							<svg
@@ -38,31 +51,31 @@ export function RecoveryExplanation() {
 			</section>
 
 			{/* Recovery Explanation Section */}
-			<section className="rounded-xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-				<div className="space-y-6">
-					<div className="flex flex-col md:flex-row md:items-start justify-between gap-6">
+			<section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 md:p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+				<div className="space-y-4 sm:space-y-6">
+					<div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
 						<div>
-							<h2 className="text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">
+							<h2 className="text-xl sm:text-2xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mb-2">
 								What is Invisible Wallet Recovery?
 							</h2>
 							<p className="text-base text-zinc-600 dark:text-zinc-400 leading-relaxed">
-								Invisible Wallet Recovery is an automatic system that ensures your
-								wallet remains accessible even if you lose access to your device
-								or account. Unlike traditional wallets that require seed phrases
-								or private keys, Mux&apos;s invisible recovery system works
-								seamlessly in the background without requiring any action from
-								you.
+								Invisible Wallet Recovery is an automatic system that ensures
+								your wallet remains accessible even if you lose access to your
+								device or account. Unlike traditional wallets that require seed
+								phrases or private keys, Mux&apos;s invisible recovery system
+								works seamlessly in the background without requiring any action
+								from you.
 							</p>
 						</div>
 						<RecoveryDocsLink />
 					</div>
 
-					<div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
-						<h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-4">
+					<div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 sm:pt-6">
+						<h3 className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-4">
 							How It Works
 						</h3>
-						<div className="space-y-4">
-							<div className="flex gap-4">
+						<div className="space-y-3 sm:space-y-4">
+							<div className="flex gap-3 sm:gap-4">
 								<div className="flex-shrink-0">
 									<div className="flex h-8 w-8 items-center justify-center rounded-full bg-zinc-100 dark:bg-zinc-800 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
 										1
@@ -117,8 +130,8 @@ export function RecoveryExplanation() {
 						</div>
 					</div>
 
-					<div className="border-t border-zinc-200 dark:border-zinc-800 pt-6">
-						<h3 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-4">
+					<div className="border-t border-zinc-200 dark:border-zinc-800 pt-4 sm:pt-6">
+						<h3 className="text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-50 mb-4">
 							When Recovery Occurs
 						</h3>
 						<ul className="space-y-2 text-sm text-zinc-600 dark:text-zinc-400">
@@ -168,7 +181,7 @@ export function RecoveryExplanation() {
 			</section>
 
 			{/* Warning Messaging Section */}
-			<section className="bg-amber-50 border border-amber-200 rounded-xl p-6 flex items-start gap-4 shadow-sm dark:bg-amber-900/10 dark:border-amber-800">
+			<section className="bg-amber-50 border border-amber-200 rounded-xl p-4 sm:p-6 flex items-start gap-3 sm:gap-4 shadow-sm dark:bg-amber-900/10 dark:border-amber-800">
 				<div className="p-2 bg-amber-100 dark:bg-amber-900/20 rounded-full text-amber-600 dark:text-amber-400 shrink-0">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -215,12 +228,12 @@ export function RecoveryExplanation() {
 			</section>
 
 			{/* Trust-Building Section */}
-			<section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+			<section className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
 				<div className="space-y-4">
 					<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
 						Security & Transparency
 					</h3>
-					<div className="grid gap-4 md:grid-cols-2">
+					<div className="grid gap-3 sm:gap-4 md:grid-cols-2">
 						<div className="flex gap-3 items-start">
 							<div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg shrink-0">
 								<svg

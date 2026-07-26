@@ -6,6 +6,9 @@ import { AddWalletModal } from "./AddWalletModal";
 const VALID_ADDRESS =
 	"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 
+const ANOTHER_VALID_ADDRESS =
+	"GCFONE23AB7Y6C5YZOMKUKGETPIAJA752ZPMORQO5VKA6LHXHC7Y3YPE";
+
 function renderModal(
 	props?: Partial<React.ComponentProps<typeof AddWalletModal>>,
 ) {
@@ -35,10 +38,11 @@ describe("AddWalletModal visibility", () => {
 // ─── Form fields ──────────────────────────────────────────────────────────────
 
 describe("AddWalletModal form", () => {
-	it("renders address input and network select", () => {
+	it("renders address input, network select, and label input", () => {
 		renderModal();
 		expect(screen.getByLabelText(/stellar address/i)).toBeInTheDocument();
 		expect(screen.getByLabelText(/network/i)).toBeInTheDocument();
+		expect(screen.getByLabelText(/label/i)).toBeInTheDocument();
 	});
 
 	it("defaults network to mainnet", () => {
@@ -54,11 +58,33 @@ describe("AddWalletModal form", () => {
 		await user.selectOptions(select, "testnet");
 		expect((select as HTMLSelectElement).value).toBe("testnet");
 	});
+
+	it("label field is marked as optional", () => {
+		renderModal();
+		expect(screen.getByText(/optional/i)).toBeInTheDocument();
+	});
 });
 
-// ─── Validation ───────────────────────────────────────────────────────────────
+// ─── Address validation ───────────────────────────────────────────────────────
 
-describe("AddWalletModal validation", () => {
+describe("AddWalletModal address validation", () => {
+	it("shows a client-side checksum hint for a valid address", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		expect(screen.getByText(/checksum verified/i)).toBeInTheDocument();
+	});
+
+	it("warns when a complete address has a mismatched checksum", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(
+			screen.getByLabelText(/stellar address/i),
+			`${VALID_ADDRESS.slice(0, -1)}A`,
+		);
+		expect(screen.getByText(/checksum does not match/i)).toBeInTheDocument();
+	});
+
 	it("shows an error when submitting an empty address", async () => {
 		const user = userEvent.setup();
 		renderModal();
@@ -90,15 +116,239 @@ describe("AddWalletModal validation", () => {
 		);
 	});
 
+	it("shows an error on blur for an invalid address", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), "GABC");
+		await user.tab();
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			/56 characters/i,
+		);
+	});
+
+	it("does not show an error on blur when address field is empty", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.click(screen.getByLabelText(/stellar address/i));
+		await user.tab();
+		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+
 	it("clears the error when the user starts typing again", async () => {
 		const user = userEvent.setup();
 		renderModal();
-		// Trigger error
 		await user.click(screen.getByRole("button", { name: /add wallet/i }));
 		expect(await screen.findByRole("alert")).toBeInTheDocument();
-		// Start typing
 		await user.type(screen.getByLabelText(/stellar address/i), "G");
 		expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+	});
+});
+
+// ─── Duplicate address detection ──────────────────────────────────────────────
+
+describe("AddWalletModal duplicate address detection", () => {
+	it("shows an error on submit when address is already in existingAddresses", async () => {
+		const user = userEvent.setup();
+		renderModal({ existingAddresses: [VALID_ADDRESS] });
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			/already been added/i,
+		);
+	});
+
+	it("shows duplicate error on blur after typing a known address", async () => {
+		const user = userEvent.setup();
+		renderModal({ existingAddresses: [VALID_ADDRESS] });
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.tab();
+		expect(await screen.findByRole("alert")).toHaveTextContent(
+			/already been added/i,
+		);
+	});
+
+	it("accepts a valid address that is not in existingAddresses", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal({
+			existingAddresses: [ANOTHER_VALID_ADDRESS],
+		});
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(onAdd).toHaveBeenCalledOnce();
+	});
+
+	it("does not call onAdd when address is a duplicate", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal({ existingAddresses: [VALID_ADDRESS] });
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await screen.findByRole("alert");
+		expect(onAdd).not.toHaveBeenCalled();
+	});
+
+	it("works correctly when existingAddresses is empty", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal({ existingAddresses: [] });
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(onAdd).toHaveBeenCalledOnce();
+	});
+});
+
+// ─── Label validation ─────────────────────────────────────────────────────────
+
+describe("AddWalletModal label validation", () => {
+	it("allows submitting without a label (label is optional)", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(onAdd.mock.calls[0][0].label).toBeUndefined();
+	});
+
+	it("shows an error when label exceeds 30 characters", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/label/i), "A".repeat(31));
+		await user.tab();
+		expect(
+			await screen.findByText(/30 characters or less/i),
+		).toBeInTheDocument();
+	});
+
+	it("blocks submission when label exceeds 30 characters", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.type(screen.getByLabelText(/label/i), "A".repeat(31));
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		expect(
+			await screen.findByText(/30 characters or less/i),
+		).toBeInTheDocument();
+		expect(onAdd).not.toHaveBeenCalled();
+	});
+
+	it("shows an error when label contains invalid characters", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/label/i), "My <Wallet>");
+		await user.tab();
+		expect(await screen.findByText(/invalid characters/i)).toBeInTheDocument();
+	});
+
+	it("blocks submission when label contains invalid characters", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.type(screen.getByLabelText(/label/i), 'My "wallet"');
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		expect(await screen.findByText(/invalid characters/i)).toBeInTheDocument();
+		expect(onAdd).not.toHaveBeenCalled();
+	});
+
+	it("accepts a valid label and passes it to onAdd", async () => {
+		const user = userEvent.setup();
+		const { onAdd } = renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.type(screen.getByLabelText(/label/i), "My Main Wallet");
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(onAdd.mock.calls[0][0].label).toBe("My Main Wallet");
+	});
+
+	it("shows the label in the success summary when provided", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.type(screen.getByLabelText(/label/i), "My Main Wallet");
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(screen.getByText("My Main Wallet")).toBeInTheDocument();
+	});
+
+	it("omits label from success summary when not provided", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		expect(screen.queryByText(/^Label$/i)).not.toBeInTheDocument();
+	});
+
+	it("clears label error when user starts typing", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/label/i), "My <bad>");
+		await user.tab();
+		expect(await screen.findByText(/invalid characters/i)).toBeInTheDocument();
+		await user.type(screen.getByLabelText(/label/i), "x");
+		expect(screen.queryByText(/invalid characters/i)).not.toBeInTheDocument();
+	});
+});
+
+// ─── Character count ──────────────────────────────────────────────────────────
+
+describe("AddWalletModal character count", () => {
+	it("shows no character count when address is empty", () => {
+		renderModal();
+		expect(screen.queryByTestId("char-count")).not.toBeInTheDocument();
+	});
+
+	it("shows the character count while typing", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), "GABC");
+		const counter = screen.getByTestId("char-count");
+		expect(counter).toHaveTextContent("4/56");
+	});
+
+	it("shows 56/56 when a complete valid address is entered", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		const counter = screen.getByTestId("char-count");
+		expect(counter).toHaveTextContent("56/56");
+	});
+
+	it("resets character count after form is reset via Add Another", async () => {
+		const user = userEvent.setup();
+		renderModal();
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+		await user.click(screen.getByRole("button", { name: /add another/i }));
+		expect(screen.queryByTestId("char-count")).not.toBeInTheDocument();
 	});
 });
 
@@ -112,7 +362,6 @@ describe("AddWalletModal successful submission", () => {
 		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
 		await user.click(screen.getByRole("button", { name: /add wallet/i }));
 
-		// Success banner
 		await waitFor(() =>
 			expect(
 				screen.getByText(/wallet added successfully/i),
@@ -157,11 +406,13 @@ describe("AddWalletModal successful submission", () => {
 
 		await user.click(screen.getByRole("button", { name: /add another/i }));
 
-		// Back to form
 		expect(screen.getByLabelText(/stellar address/i)).toBeInTheDocument();
 		expect(
 			(screen.getByLabelText(/stellar address/i) as HTMLInputElement).value,
 		).toBe("");
+		expect((screen.getByLabelText(/label/i) as HTMLInputElement).value).toBe(
+			"",
+		);
 	});
 });
 
@@ -185,7 +436,6 @@ describe("AddWalletModal close behaviour", () => {
 	it("calls onClose when the backdrop is clicked", async () => {
 		const user = userEvent.setup();
 		const { onClose } = renderModal();
-		// The backdrop is the sibling div with aria-hidden
 		const backdrop = document.querySelector(
 			'[aria-hidden="true"]',
 		) as HTMLElement;

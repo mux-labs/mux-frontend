@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { dummyWallets } from "@/mock-data/wallets";
 import type { Wallet } from "@/types/wallet";
+import { normalizeWallet } from "@/utils/walletSerialization";
 
 export interface WalletBalanceState {
 	wallet: Wallet | null;
@@ -13,15 +13,16 @@ export interface WalletBalanceState {
 	refresh: () => void;
 }
 
-/** Simulates fetching a wallet's live balance from the backend. */
 async function fetchWalletBalance(id: string): Promise<Wallet> {
-	// Simulate network latency
-	await new Promise((resolve) => setTimeout(resolve, 600));
+	const res = await fetch(`/api/wallets/${encodeURIComponent(id)}`);
+	if (res.status === 404) throw new Error("Wallet not found");
+	if (!res.ok) throw new Error(`Request failed: ${res.status}`);
 
-	const wallet = dummyWallets.find((w) => w.id === id);
-	if (!wallet) {
-		throw new Error(`Wallet ${id} not found`);
-	}
+	const data = (await res.json()) as Wallet & {
+		createdAt: string;
+		lastActivity?: string | null;
+	};
+	const wallet = normalizeWallet(data);
 
 	// Simulate a live balance with minor fluctuation for demo purposes
 	const base = Number.parseFloat(

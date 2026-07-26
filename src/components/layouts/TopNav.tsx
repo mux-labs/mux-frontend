@@ -5,20 +5,24 @@ import {
 	BellIcon,
 	ChevronDownIcon,
 	MagnifyingGlassIcon,
+	MoonIcon,
+	SunIcon,
 } from "@heroicons/react/24/outline";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
+import { useDarkMode } from "@/hooks/useDarkMode";
 
 interface TopNavProps {
 	onMenuClick: () => void;
 }
 
 const networkLabel = { mainnet: "Mainnet", testnet: "Testnet" } as const;
+// Text colors darkened to -900 to meet WCAG AA (4.5:1) contrast against their badge backgrounds.
 const networkBadgeClass = {
-	mainnet: "bg-blue-100 text-blue-800",
-	testnet: "bg-amber-100 text-amber-800",
+	mainnet: "bg-blue-100 text-blue-900",
+	testnet: "bg-amber-100 text-amber-900",
 } as const;
 
 export function TopNav({ onMenuClick }: TopNavProps) {
@@ -26,10 +30,15 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 	const pathname = usePathname();
 	const { network, setNetwork } = useNetwork();
 	const { user, isLoading } = useAuth();
+	const { isDark, toggle: toggleDark } = useDarkMode();
 
 	// Get current page title from pathname
 	const pageTitle = (() => {
-		const segment = pathname.split("/").pop() ?? "";
+		const segments = pathname.split("/").filter(Boolean);
+		const segment = segments.at(-1) ?? "";
+		if (segments.at(-2) === "wallets" && segment !== "wallets") {
+			return "Wallet Detail";
+		}
 		const titleMap: Record<string, string> = {
 			dashboard: "Dashboard",
 			analytics: "Analytics",
@@ -49,13 +58,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 		document.title = `${pageTitle} · ${networkLabel[network]} — Mux`;
 	}, [pageTitle, network]);
 
-	// Sync browser tab title
-	useEffect(() => {
-		document.title = `${pageTitle} · ${networkLabel[network]} — Mux`;
-	}, [pageTitle, network]);
-
 	return (
-		<header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white/95 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 backdrop-blur supports-backdrop-filter:bg-white/60">
+		<header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white/95 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 backdrop-blur supports-backdrop-filter:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/95 dark:supports-backdrop-filter:bg-zinc-900/60">
 			{/* Menu button for mobile */}
 			<button
 				type="button"
@@ -103,15 +107,21 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 
 				{/* Right side actions */}
 				<div className="flex items-center gap-x-3 sm:gap-x-6">
-					{/* Network Switcher */}
-					<div className="flex items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-sm font-medium">
+					{/* Network Switcher — global testnet/mainnet toggle, persisted via NetworkContext */}
+					<div
+						role="group"
+						aria-label="Network selector"
+						className="flex shrink-0 items-center rounded-lg border border-gray-200 bg-gray-50 p-0.5 text-xs font-medium dark:border-zinc-700 dark:bg-zinc-800 sm:text-sm"
+					>
 						<button
 							type="button"
 							onClick={() => setNetwork("testnet")}
-							className={`rounded-md px-3 py-1 transition-colors ${
+							aria-pressed={network === "testnet"}
+							aria-label="Switch to Testnet"
+							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
 								network === "testnet"
-									? "bg-amber-100 text-amber-800"
-									: "text-gray-500 hover:text-gray-700"
+									? "bg-amber-100 text-amber-900"
+									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
 						>
 							Testnet
@@ -119,10 +129,12 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 						<button
 							type="button"
 							onClick={() => setNetwork("mainnet")}
-							className={`rounded-md px-3 py-1 transition-colors ${
+							aria-pressed={network === "mainnet"}
+							aria-label="Switch to Mainnet"
+							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
 								network === "mainnet"
-									? "bg-blue-100 text-blue-800"
-									: "text-gray-500 hover:text-gray-700"
+									? "bg-blue-100 text-blue-900"
+									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
 						>
 							Mainnet
@@ -157,6 +169,20 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					>
 						<span className="sr-only">Search</span>
 						<MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
+					</button>
+
+					{/* Dark mode toggle */}
+					<button
+						type="button"
+						onClick={toggleDark}
+						aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+						className="rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 dark:text-zinc-400 dark:hover:text-zinc-300"
+					>
+						{isDark ? (
+							<SunIcon className="h-5 w-5" aria-hidden="true" />
+						) : (
+							<MoonIcon className="h-5 w-5" aria-hidden="true" />
+						)}
 					</button>
 
 					{/* Notifications */}

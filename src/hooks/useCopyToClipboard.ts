@@ -5,7 +5,7 @@ import { getAddressToCopy, isSafeToCopy } from "@/utils/addressValidation";
 import { copyToClipboard } from "@/utils/copyToClipboard";
 
 interface UseCopyToClipboardReturn {
-	copy: (text: string, fullAddress?: string) => Promise<void>;
+	copy: (text: string, fullAddress?: string) => Promise<boolean>;
 	copied: boolean;
 	error: string | null;
 }
@@ -22,7 +22,7 @@ export function useCopyToClipboard(
 	const [error, setError] = useState<string | null>(null);
 
 	const copy = useCallback(
-		async (text: string, fullAddress?: string) => {
+		async (text: string, fullAddress?: string): Promise<boolean> => {
 			try {
 				// Clear previous error
 				setError(null);
@@ -32,14 +32,14 @@ export function useCopyToClipboard(
 					// Validate address format
 					if (!isSafeToCopy(text, fullAddress)) {
 						setError("Invalid address format");
-						return;
+						return false;
 					}
 
 					// Get the address to copy (expands truncated if needed)
 					const addressToCopy = getAddressToCopy(text, fullAddress);
 					if (!addressToCopy) {
 						setError("Unable to copy address");
-						return;
+						return false;
 					}
 
 					// Copy the validated address
@@ -51,11 +51,13 @@ export function useCopyToClipboard(
 
 				setCopied(true);
 				setTimeout(() => setCopied(false), resetDelay);
+				return true;
 			} catch (err) {
 				const errorMessage =
 					err instanceof Error ? err.message : "Failed to copy to clipboard";
 				setError(errorMessage);
 				setCopied(false);
+				return false;
 			}
 		},
 		[resetDelay],

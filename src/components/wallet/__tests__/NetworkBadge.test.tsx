@@ -195,4 +195,19 @@ describe("NetworkBadge", () => {
 			expect(badge).toHaveClass("rounded-full");
 		});
 	});
+
+	describe("Invalid / unknown network values", () => {
+		it("defaults to mainnet label for unrecognised network value", () => {
+			// Cast to bypass TS since real-world data may be untrusted
+			render(<NetworkBadge network={"unknown" as never} />);
+			expect(screen.getByText("Mainnet")).toBeInTheDocument();
+		});
+
+		it("defaults to mainnet styles for unrecognised network value", () => {
+			const { container } = render(<NetworkBadge network={"" as never} />);
+			const badge = container.querySelector("span");
+			expect(badge).toHaveClass("bg-blue-100");
+			expect(badge).toHaveClass("text-blue-800");
+		});
+	});
 });

@@ -33,7 +33,7 @@ function isNavItemActive(pathname: string, itemHref: string): boolean {
 	// Exact match
 	if (pathname === itemHref) return true;
 	// For the Dashboard root item, only match exact
-	if (itemHref === "/demo/dashboard") return false;
+	if (itemHref === "/dashboard") return false;
 	// For other items, match if the pathname starts with the item's href
 	// (handles nested routes like /demo/dashboard/settings/profile)
 	return pathname.startsWith(itemHref + "/") || pathname.startsWith(itemHref);

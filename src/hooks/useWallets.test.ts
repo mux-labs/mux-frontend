@@ -78,11 +78,19 @@ describe("useWallets", () => {
 		expect(result.current.wallets).toEqual([]);
 	});
 
-	it("sets error when NEXT_PUBLIC_API_URL is missing", async () => {
+	it("falls back to the local Next.js wallets route when NEXT_PUBLIC_API_URL is missing", async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
 		vi.unstubAllEnvs();
+
 		const { result } = renderHook(() => useWallets());
 		await waitFor(() => expect(result.current.loading).toBe(false));
-		expect(result.current.error).toMatch(/not configured/i);
+		expect(fetchMock).toHaveBeenCalledWith("/api/wallets");
+		expect(result.current.error).toBeNull();
+		expect(result.current.wallets).toEqual([mockWallet]);
 	});
 
 	it("refetch triggers a new request", async () => {
@@ -164,11 +172,19 @@ describe("useWallet", () => {
 		expect(result.current.error).toMatch(/503/);
 	});
 
-	it("sets error when NEXT_PUBLIC_API_URL is missing", async () => {
+	it("falls back to the local Next.js wallet route when NEXT_PUBLIC_API_URL is missing", async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve(mockWallet),
+		});
+		vi.stubGlobal("fetch", fetchMock);
 		vi.unstubAllEnvs();
+
 		const { result } = renderHook(() => useWallet("wallet-001"));
 		await waitFor(() => expect(result.current.loading).toBe(false));
-		expect(result.current.error).toMatch(/not configured/i);
+		expect(fetchMock).toHaveBeenCalledWith("/api/wallets/wallet-001");
+		expect(result.current.error).toBeNull();
+		expect(result.current.wallet).toEqual(mockWallet);
 	});
 
 	it("encodes the wallet id in the request URL", async () => {

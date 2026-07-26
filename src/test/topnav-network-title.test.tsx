@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it } from "vitest";
 import { TopNav } from "@/components/layouts/TopNav";
+import { AuthProvider } from "@/context/AuthContext";
 import { NetworkProvider } from "@/context/NetworkContext";
 
 // next/navigation is used by TopNav; mock it
@@ -10,9 +11,11 @@ vi.mock("next/navigation", () => ({
 
 function renderTopNav() {
 	return render(
-		<NetworkProvider>
-			<TopNav onMenuClick={() => {}} />
-		</NetworkProvider>,
+		<AuthProvider>
+			<NetworkProvider>
+				<TopNav onMenuClick={() => {}} />
+			</NetworkProvider>
+		</AuthProvider>,
 	);
 }
 

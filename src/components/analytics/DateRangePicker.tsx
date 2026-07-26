@@ -1,7 +1,12 @@
 "use client";
 
-import { CalendarDays, ChevronDown } from "lucide-react";
+import { AlertCircle, CalendarDays, ChevronDown } from "lucide-react";
 import React, { useEffect, useRef, useState } from "react";
+import {
+	getFieldError,
+	validateDateRange,
+	type DateRangeValidation,
+} from "@/lib/dateRangeValidation";
 
 export interface DateRange {
 	from: string; // YYYY-MM-DD
@@ -38,12 +43,34 @@ interface Props {
 	value: DateRange;
 	onChange: (range: DateRange) => void;
 	maxDate?: string;
+	/** Optional callback when validation state changes */
+	onValidationChange?: (validation: DateRangeValidation) => void;
+	/** Whether to show validation errors inline (default: true) */
+	showValidation?: boolean;
+	/** Custom validation options */
+	validationOptions?: {
+		allowFuture?: boolean;
+		maxYearsBack?: number;
+		maxDays?: number;
+	};
 }
 
-export function DateRangePicker({ value, onChange, maxDate }: Props) {
+export function DateRangePicker({
+	value,
+	onChange,
+	maxDate,
+	onValidationChange,
+	showValidation = true,
+	validationOptions,
+}: Props) {
 	const [open, setOpen] = useState(false);
 	const [fromInput, setFromInput] = useState(value.from);
 	const [toInput, setToInput] = useState(value.to);
+	const [validation, setValidation] = useState<DateRangeValidation>({
+		isValid: true,
+		errors: [],
+	});
+	const [touched, setTouched] = useState({ from: false, to: false });
 	const ref = useRef<HTMLDivElement>(null);
 
 	// Sync inputs when value changes externally
@@ -51,6 +78,16 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 		setFromInput(value.from);
 		setToInput(value.to);
 	}, [value.from, value.to]);
+
+	// Validate on input change
+	useEffect(() => {
+		const newValidation = validateDateRange(
+			{ from: fromInput, to: toInput },
+			validationOptions,
+		);
+		setValidation(newValidation);
+		onValidationChange?.(newValidation);
+	}, [fromInput, toInput, validationOptions, onValidationChange]);
 
 	// Close on outside click
 	useEffect(() => {
@@ -68,15 +105,24 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 		const from = addDays(to, -(days - 1));
 		onChange({ from, to });
 		setOpen(false);
+		setTouched({ from: false, to: false });
 	}
 
 	function applyCustom() {
-		if (fromInput && toInput && fromInput <= toInput) {
+		setTouched({ from: true, to: true });
+
+		if (validation.isValid && fromInput && toInput) {
 			onChange({ from: fromInput, to: toInput });
 			setOpen(false);
+			setTouched({ from: false, to: false });
 		}
 	}
 
+	const fromError = showValidation && touched.from ? getFieldError(validation, "from") : null;
+	const toError = showValidation && touched.to ? getFieldError(validation, "to") : null;
+	const rangeError = showValidation && touched.from && touched.to ? getFieldError(validation, "range") : null;
+
+	const hasErrors = !validation.isValid && (touched.from || touched.to);
 	const label = `${value.from} → ${value.to}`;
 
 	return (
@@ -84,9 +130,15 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 			<button
 				type="button"
 				onClick={() => setOpen((o) => !o)}
-				className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+				className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-sm font-medium shadow-sm hover:bg-zinc-50 focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:hover:bg-zinc-800 ${
+					hasErrors
+						? "border-red-300 bg-red-50 text-red-700 dark:border-red-700 dark:bg-red-900/20 dark:text-red-400"
+						: "border-zinc-200 bg-white text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300"
+				}`}
 				aria-haspopup="true"
 				aria-expanded={open}
+				aria-invalid={hasErrors}
+				aria-describedby={hasErrors ? "date-range-error" : undefined}
 			>
 				<CalendarDays className="size-4 text-zinc-400" />
 				<span>{label}</span>
@@ -121,7 +173,7 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 						<p className="text-xs font-semibold uppercase tracking-wide text-zinc-400">
 							Custom range
 						</p>
-						<div className="flex gap-2 items-center">
+						<div className="flex gap-2 items-start">
 							<div className="flex-1">
 								<label
 									htmlFor="drp-from"
@@ -135,10 +187,27 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 									value={fromInput}
 									max={toInput || maxDate}
 									onChange={(e) => setFromInput(e.target.value)}
-									className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+									onBlur={() => setTouched((t) => ({ ...t, from: true }))}
+									aria-invalid={!!fromError}
+									aria-describedby={fromError ? "from-error" : undefined}
+									className={`w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${
+										fromError
+											? "border-red-300 bg-red-50 focus:ring-red-500/30 dark:border-red-700 dark:bg-red-900/20"
+											: "border-zinc-200 bg-zinc-50 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-800"
+									} dark:text-zinc-200`}
 								/>
+								{fromError && (
+									<p
+										id="from-error"
+										className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-start gap-1"
+										role="alert"
+									>
+										<AlertCircle className="size-3 mt-0.5 flex-shrink-0" />
+										<span>{fromError}</span>
+									</p>
+								)}
 							</div>
-							<span className="mt-4 text-zinc-400">–</span>
+							<span className="mt-6 text-zinc-400">–</span>
 							<div className="flex-1">
 								<label
 									htmlFor="drp-to"
@@ -153,15 +222,42 @@ export function DateRangePicker({ value, onChange, maxDate }: Props) {
 									min={fromInput}
 									max={maxDate}
 									onChange={(e) => setToInput(e.target.value)}
-									className="w-full rounded-md border border-zinc-200 bg-zinc-50 px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-200"
+									onBlur={() => setTouched((t) => ({ ...t, to: true }))}
+									aria-invalid={!!toError}
+									aria-describedby={toError ? "to-error" : undefined}
+									className={`w-full rounded-md border px-2 py-1.5 text-sm focus:outline-none focus:ring-2 ${
+										toError
+											? "border-red-300 bg-red-50 focus:ring-red-500/30 dark:border-red-700 dark:bg-red-900/20"
+											: "border-zinc-200 bg-zinc-50 focus:ring-blue-500/30 dark:border-zinc-700 dark:bg-zinc-800"
+									} dark:text-zinc-200`}
 								/>
+								{toError && (
+									<p
+										id="to-error"
+										className="mt-1 text-xs text-red-600 dark:text-red-400 flex items-start gap-1"
+										role="alert"
+									>
+										<AlertCircle className="size-3 mt-0.5 flex-shrink-0" />
+										<span>{toError}</span>
+									</p>
+								)}
 							</div>
 						</div>
+						{rangeError && (
+							<p
+								className="text-xs text-red-600 dark:text-red-400 flex items-start gap-1"
+								role="alert"
+							>
+								<AlertCircle className="size-3 mt-0.5 flex-shrink-0" />
+								<span>{rangeError}</span>
+							</p>
+						)}
 						<button
 							type="button"
 							onClick={applyCustom}
-							disabled={!fromInput || !toInput || fromInput > toInput}
-							className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed"
+							disabled={!validation.isValid || !fromInput || !toInput}
+							className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-40 disabled:cursor-not-allowed transition-opacity"
+							aria-label="Apply custom date range"
 						>
 							Apply
 						</button>

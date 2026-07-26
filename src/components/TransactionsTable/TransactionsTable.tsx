@@ -2,19 +2,26 @@
 
 import {
 	ArrowUpDown,
+	Check,
 	ChevronLeft,
 	ChevronRight,
+	Copy,
+	Download,
 	Filter,
 	Search,
 	X,
 } from "lucide-react";
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import { mockTransactions } from "@/mock-data/transactions";
+import { trackTransactionEvent } from "@/services/analyticsTracking";
 import type {
 	Transaction,
 	TransactionNetwork,
 	TransactionStatus,
 } from "@/types/transaction";
+import { downloadTransactionsCsv } from "@/utils/exportTransactionsTable";
 
 // --- Helpers ---
 
@@ -36,7 +43,6 @@ function formatDate(iso: string): string {
 
 // --- Sub-components ---
 
-/** Default sort: newest transactions first. */
 type SortConfig = {
 	key: keyof Transaction;
 	direction: "asc" | "desc";
@@ -79,9 +85,64 @@ const NetworkBadge = ({ network }: { network: TransactionNetwork }) => {
 	);
 };
 
+/** Minimal, self-contained copy-to-clipboard icon button used inside table rows. */
+const RowCopyButton = ({ text, label }: { text: string; label: string }) => {
+	const [copied, setCopied] = useState(false);
+
+	const handleClick = async () => {
+		try {
+			await navigator.clipboard.writeText(text);
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		} catch {
+			// Clipboard write failures are non-critical; UI simply won't confirm.
+		}
+	};
+
+	return (
+		<button
+			type="button"
+			onClick={handleClick}
+			aria-label={copied ? "Copied!" : label}
+			className="inline-flex items-center justify-center p-0.5 text-slate-400 hover:text-indigo-600 transition-colors"
+		>
+			{copied ? <Check size={12} aria-hidden /> : <Copy size={12} aria-hidden />}
+		</button>
+	);
+};
+
+// --- Props ---
+
+export interface TransactionsTableProps {
+	/** Optional wallet address to scope transactions */
+	address?: string;
+	/** Pre-fetched transactions (defaults to mock data when omitted) */
+	transactions?: Transaction[];
+	/** Loading state */
+	loading?: boolean;
+	/** Alias for `loading` */
+	isLoading?: boolean;
+	/** Error message */
+	error?: string | null;
+	/** Retry callback for error state */
+	onRetry?: () => void;
+}
+
 // --- Main Component ---
 
-export default function TransactionsTable({ address }: { address?: string } = {}) {
+export default function TransactionsTable({
+	address,
+	transactions: transactionsProp,
+	loading: loadingProp,
+	isLoading: isLoadingProp,
+	error: errorProp,
+	onRetry,
+}: TransactionsTableProps = {}) {
+	const transactions = transactionsProp ?? mockTransactions;
+	const loading = loadingProp ?? isLoadingProp ?? false;
+	const error = errorProp ?? null;
+	const handleRetry = onRetry ?? (() => {});
+
 	const [search, setSearch] = useState("");
 	const [statusFilter, setStatusFilter] = useState<"all" | TransactionStatus>(
 		"all",
@@ -91,10 +152,21 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 	>("all");
 	const [sortConfig, setSortConfig] = useState<SortConfig>(DEFAULT_SORT);
 	const [currentPage, setCurrentPage] = useState(1);
-	const [itemsPerPage, setItemsPerPage] = useState(5);
+	const itemsPerPage = 5;
+	const initialTracked = useRef(false);
+
+	// Track page view on mount
+	useEffect(() => {
+		if (!initialTracked.current) {
+			initialTracked.current = true;
+			trackTransactionEvent("transactions_view", {
+				address: address ?? "all",
+			});
+		}
+	}, [address]);
 
 	const filteredData = useMemo(() => {
-		return mockTransactions.filter((tx) => {
+		return transactions.filter((tx) => {
 			if (address && tx.from !== address && tx.to !== address) {
 				return false;
 			}
@@ -110,7 +182,7 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 				networkFilter === "all" || tx.network === networkFilter;
 			return matchesSearch && matchesStatus && matchesNetwork;
 		});
-	}, [search, statusFilter, networkFilter]);
+	}, [transactions, search, statusFilter, networkFilter, address]);
 
 	const sortedData = useMemo(() => {
 		return [...filteredData].sort((a, b) => {
@@ -129,21 +201,34 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 	);
 
 	const handleSort = (key: keyof Transaction) => {
-		setSortConfig((prev) =>
-			prev?.key === key && prev.direction === "asc"
-				? { key, direction: "desc" }
-				: { key, direction: "asc" },
-		);
+		setSortConfig((prev) => {
+			const newConfig =
+				prev?.key === key && prev.direction === "asc"
+					? { key, direction: "desc" as const }
+					: { key, direction: "asc" as const };
+			trackTransactionEvent("transactions_sort", {
+				key,
+				direction: newConfig.direction,
+			});
+			return newConfig;
+		});
+	};
+
+	const handleSortKeyDown = (
+		e: React.KeyboardEvent,
+		key: keyof Transaction,
+	) => {
+		if (e.key === "Enter" || e.key === " ") {
+			e.preventDefault();
+			handleSort(key);
+		}
 	};
 
 	const handlePageChange = (page: number) => {
-		if (page >= 1 && page <= totalPages) setCurrentPage(page);
-	};
-
-	const handleItemsPerPageChange = (newSize: number) => {
-		setItemsPerPage(newSize);
-		// Reset to page 1 when changing page size
-		setCurrentPage(1);
+		if (page >= 1 && page <= totalPages) {
+			setCurrentPage(page);
+			trackTransactionEvent("transactions_page_change", { page });
+		}
 	};
 
 	const clearFilters = () => {
@@ -152,15 +237,72 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 		setNetworkFilter("all");
 		setSortConfig(DEFAULT_SORT);
 		setCurrentPage(1);
+		trackTransactionEvent("transactions_filters_cleared", {});
+	};
+
+	const handleFilterChange = (type: "status" | "network", value: string) => {
+		trackTransactionEvent("transactions_filter_changed", { type, value });
+	};
+
+	const handleExportCsv = () => {
+		if (sortedData.length === 0) return;
+		downloadTransactionsCsv(sortedData);
+		trackTransactionEvent("transactions_export_csv", {
+			count: sortedData.length,
+		});
 	};
 
 	const hasActiveFilters =
 		search.length > 0 || statusFilter !== "all" || networkFilter !== "all";
 
+	// --- Loading skeleton ---
+	if (loading) {
+		return (
+			<div
+				role="status"
+				className="w-full max-w-6xl mx-auto p-4 md:p-8 space-y-6 font-sans"
+				aria-busy="true"
+				aria-label="Loading transactions"
+				data-testid="transactions-loading"
+			>
+				<div className="h-8 w-48 rounded bg-slate-200 animate-pulse" />
+				<div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden divide-y divide-slate-100">
+					{Array.from({ length: 5 }).map((_, i) => (
+						<div key={i} className="p-4 flex gap-4">
+							<div className="h-4 flex-1 rounded bg-slate-100 animate-pulse" />
+							<div className="h-4 w-24 rounded bg-slate-100 animate-pulse" />
+						</div>
+					))}
+				</div>
+			</div>
+		);
+	}
+
+	// --- Error state ---
+	if (error) {
+		return (
+			<div className="w-full max-w-6xl mx-auto p-4 md:p-8">
+				<ErrorState description={error} retry={{ onRetry: handleRetry }} />
+			</div>
+		);
+	}
+
+	// --- Empty state (no data at all) ---
+	if (transactions.length === 0) {
+		return (
+			<div className="w-full max-w-6xl mx-auto p-4 md:p-8">
+				<EmptyState
+					title="No transactions yet"
+					description="Transactions will appear here once your Mux wallets start sending or receiving XLM."
+				/>
+			</div>
+		);
+	}
+
 	return (
-		<div className="w-full max-w-6xl mx-auto p-4 md:p-8 space-y-6 font-sans">
+		<div className="w-full max-w-6xl mx-auto p-4 sm:p-6 md:p-8 space-y-6 font-sans">
 			{/* Header */}
-			<div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+			<div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
 				<div>
 					<h2 className="text-2xl font-bold text-slate-900 tracking-tight">
 						Transactions
@@ -170,17 +312,18 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 					</p>
 				</div>
 
-				<div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+				<div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
 					{/* Search */}
 					<div className="relative flex-grow sm:flex-grow-0 sm:w-64">
 						<Search
 							className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400"
 							size={16}
+							aria-hidden
 						/>
 						<input
 							type="text"
 							placeholder="Hash, address, memo…"
-						aria-label="Search transactions"
+							aria-label="Search transactions"
 							className="w-full pl-9 pr-8 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
 							value={search}
 							onChange={(e) => {
@@ -190,11 +333,12 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 						/>
 						{search && (
 							<button
+								type="button"
 								onClick={() => setSearch("")}
 								className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
 								aria-label="Clear search"
 							>
-								<X size={14} />
+								<X size={14} aria-hidden />
 							</button>
 						)}
 					</div>
@@ -204,13 +348,16 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 						<Filter
 							className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
 							size={16}
+							aria-hidden
 						/>
 						<select
 							className="w-full sm:w-36 pl-9 pr-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none cursor-pointer"
 							value={statusFilter}
 							onChange={(e) => {
-								setStatusFilter(e.target.value as "all" | TransactionStatus);
+								const val = e.target.value as "all" | TransactionStatus;
+								setStatusFilter(val);
 								setCurrentPage(1);
+								handleFilterChange("status", val);
 							}}
 							aria-label="Filter by status"
 						>
@@ -227,8 +374,10 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 							className="w-full sm:w-32 px-3 py-2 bg-white border border-slate-200 text-slate-700 text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 appearance-none cursor-pointer"
 							value={networkFilter}
 							onChange={(e) => {
-								setNetworkFilter(e.target.value as "all" | TransactionNetwork);
+								const val = e.target.value as "all" | TransactionNetwork;
+								setNetworkFilter(val);
 								setCurrentPage(1);
+								handleFilterChange("network", val);
 							}}
 							aria-label="Filter by network"
 						>
@@ -240,77 +389,96 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 
 					{hasActiveFilters && (
 						<button
+							type="button"
 							onClick={clearFilters}
-							className="hidden sm:flex items-center justify-center px-3 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
+							className="flex items-center justify-center px-3 text-xs font-medium text-rose-600 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition-colors"
 						>
 							Reset
 						</button>
 					)}
+
+					<button
+						type="button"
+						onClick={handleExportCsv}
+						disabled={sortedData.length === 0}
+						aria-label={`Export ${sortedData.length} transaction${sortedData.length !== 1 ? "s" : ""} as CSV`}
+						className="flex items-center justify-center gap-1.5 px-3 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+					>
+						<Download size={14} aria-hidden />
+						Export CSV
+					</button>
 				</div>
 			</div>
 
-			{/* Table */}
 			<div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
 				{/* Desktop header */}
-				<div className="hidden lg:grid grid-cols-12 gap-2 p-4 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none">
-					<div
-						className="col-span-3 flex items-center gap-1 cursor-pointer hover:text-indigo-600"
-						role="button"
-						aria-sort={
-							sortConfig.key === "hash"
-								? sortConfig.direction === "asc"
-									? "ascending"
-									: "descending"
-								: "none"
-						}
-						onClick={() => handleSort("hash")}
-					>
-						Tx Hash
-						{sortConfig.key === "hash" && <ArrowUpDown size={12} />}
-					</div>
-					<div className="col-span-2">From</div>
-					<div className="col-span-2">To</div>
-					<div
-						className="col-span-2 flex items-center gap-1 cursor-pointer hover:text-indigo-600"
-						role="button"
-						aria-sort={
-							sortConfig.key === "amountXlm"
-								? sortConfig.direction === "asc"
-									? "ascending"
-									: "descending"
-								: "none"
-						}
-						onClick={() => handleSort("amountXlm")}
-					>
-						Amount (XLM)
-						{sortConfig.key === "amountXlm" && <ArrowUpDown size={12} />}
-					</div>
-					<div className="col-span-1">Status</div>
-					<div className="col-span-1">Network</div>
-					<div
-						className="col-span-1 flex items-center gap-1 cursor-pointer hover:text-indigo-600"
-						role="button"
-						aria-sort={
-							sortConfig.key === "createdAt"
-								? sortConfig.direction === "asc"
-									? "ascending"
-									: "descending"
-								: "none"
-						}
-						onClick={() => handleSort("createdAt")}
-					>
-						Date
-						{sortConfig.key === "createdAt" && <ArrowUpDown size={12} />}
-					</div>
+				<div
+					className="hidden lg:grid grid-cols-12 gap-2 p-4 border-b border-slate-100 bg-slate-50/50 text-xs font-semibold text-slate-500 uppercase tracking-wider select-none"
+					role="row"
+				>
+					{(
+						[
+							{ key: "hash", label: "Tx Hash", span: 3, sortable: true },
+							{ key: "from", label: "From", span: 2, sortable: false },
+							{ key: "to", label: "To", span: 2, sortable: false },
+							{
+								key: "amountXlm",
+								label: "Amount (XLM)",
+								span: 2,
+								sortable: true,
+							},
+							{ key: "status", label: "Status", span: 1, sortable: false },
+							{ key: "network", label: "Network", span: 1, sortable: false },
+							{
+								key: "createdAt",
+								label: "Date",
+								span: 1,
+								sortable: true,
+							},
+						] as const
+					).map(({ key, label, span, sortable }) =>
+						sortable ? (
+							<div
+								key={key}
+								role="columnheader"
+								aria-sort={
+									sortConfig.key === key
+										? sortConfig.direction === "asc"
+											? "ascending"
+											: "descending"
+										: "none"
+								}
+								tabIndex={0}
+								className={`col-span-${span} flex items-center gap-1 cursor-pointer hover:text-indigo-600 focus:outline-none focus:text-indigo-600 focus:underline`}
+								onClick={() => handleSort(key as keyof Transaction)}
+								onKeyDown={(e) =>
+									handleSortKeyDown(e, key as keyof Transaction)
+								}
+							>
+								{label}
+								{sortConfig.key === key && (
+									<ArrowUpDown size={12} aria-hidden />
+								)}
+							</div>
+						) : (
+							<div
+								key={key}
+								role="columnheader"
+								className={`col-span-${span}`}
+							>
+								{label}
+							</div>
+						),
+					)}
 				</div>
 
 				<div className="divide-y divide-slate-100">
 					{currentData.length > 0 ? (
 						currentData.map((tx) => (
-								<div
-									key={tx.hash}
-									data-testid="tx-row"
-									className="group p-4 hover:bg-slate-50 transition-colors"
+							<div
+								key={tx.hash}
+								data-testid="tx-row"
+								className="group p-4 hover:bg-slate-50 transition-colors"
 							>
 								{/* Desktop row */}
 								<div className="hidden lg:grid grid-cols-12 gap-2 items-center">
@@ -343,7 +511,10 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 										{Number(tx.amountXlm).toLocaleString(undefined, {
 											minimumFractionDigits: 2,
 											maximumFractionDigits: 7,
-										})}
+										})}{" "}
+										<span className="text-xs font-medium text-slate-400">
+											XLM
+										</span>
 									</div>
 									<div className="col-span-1">
 										<StatusPill status={tx.status} />
@@ -359,29 +530,47 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 								{/* Mobile card */}
 								<div className="lg:hidden space-y-2">
 									<div className="flex items-center justify-between">
-										<span
-											className="font-mono text-xs text-indigo-600"
-											title={tx.hash}
-										>
-											{truncate(tx.hash, 8, 6)}
-										</span>
+										<div className="flex items-center">
+											<span
+												className="font-mono text-xs text-indigo-600"
+												title={tx.hash}
+											>
+												{truncate(tx.hash, 8, 6)}
+											</span>
+											<RowCopyButton
+												text={tx.hash}
+												label={`Copy transaction hash ${tx.hash}`}
+											/>
+										</div>
 										<div className="flex items-center gap-2">
 											<NetworkBadge network={tx.network} />
 											<StatusPill status={tx.status} />
 										</div>
 									</div>
 									<div className="flex justify-between text-xs text-slate-500">
-										<span>
-											<span className="font-medium text-slate-700">From: </span>
+										<span className="flex items-center gap-0.5">
+											<span className="font-medium text-slate-700">
+												From:{" "}
+											</span>
 											<span className="font-mono" title={tx.from}>
 												{truncate(tx.from)}
 											</span>
+											<RowCopyButton
+												text={tx.from}
+												label={`Copy from address ${tx.from}`}
+											/>
 										</span>
-										<span>
-											<span className="font-medium text-slate-700">To: </span>
+										<span className="flex items-center gap-0.5">
+											<span className="font-medium text-slate-700">
+												To:{" "}
+											</span>
 											<span className="font-mono" title={tx.to}>
 												{truncate(tx.to)}
 											</span>
+											<RowCopyButton
+												text={tx.to}
+												label={`Copy to address ${tx.to}`}
+											/>
 										</span>
 									</div>
 									<div className="flex justify-between items-center">
@@ -403,9 +592,9 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 							</div>
 						))
 					) : (
-						<div className="p-12 text-center">
+						<div className="p-12 text-center" data-testid="no-results">
 							<div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-slate-100 mb-3">
-								<Search size={20} className="text-slate-400" />
+								<Search size={20} className="text-slate-400" aria-hidden />
 							</div>
 							<h3 className="text-sm font-medium text-slate-900">
 								No transactions found
@@ -414,6 +603,7 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 								No results for current filters.
 							</p>
 							<button
+								type="button"
 								onClick={clearFilters}
 								className="mt-4 text-sm text-indigo-600 font-medium hover:text-indigo-700"
 							>
@@ -444,19 +634,22 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 
 						<div className="flex items-center gap-1 select-none">
 							<button
+								type="button"
 								onClick={() => handlePageChange(currentPage - 1)}
 								disabled={currentPage === 1}
 								className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
 								aria-label="Previous page"
 							>
-								<ChevronLeft size={16} />
+								<ChevronLeft size={16} aria-hidden />
 							</button>
 
 							{Array.from({ length: totalPages }, (_, i) => i + 1).map(
 								(page) => (
 									<button
 										key={page}
+										type="button"
 										onClick={() => handlePageChange(page)}
+										aria-current={currentPage === page ? "page" : undefined}
 										className={`w-7 h-7 rounded text-xs font-medium transition-all ${
 											currentPage === page
 												? "bg-white border border-slate-200 shadow-sm text-indigo-600"
@@ -469,12 +662,13 @@ export default function TransactionsTable({ address }: { address?: string } = {}
 							)}
 
 							<button
+								type="button"
 								onClick={() => handlePageChange(currentPage + 1)}
 								disabled={currentPage === totalPages}
 								className="p-1.5 rounded-md hover:bg-white hover:shadow-sm border border-transparent hover:border-slate-200 text-slate-400 hover:text-slate-600 disabled:opacity-30 transition-all"
 								aria-label="Next page"
 							>
-								<ChevronRight size={16} />
+								<ChevronRight size={16} aria-hidden />
 							</button>
 						</div>
 					</div>

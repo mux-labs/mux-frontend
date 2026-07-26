@@ -79,6 +79,13 @@ export function TransactionVolumeChart({ data, metric = "count" }: Props) {
 		setTooltip({ x: nearest.x, y: nearest.y, point: nearest.d });
 	}
 
+	// Resolve CSS variable values for SVG (SVG doesn't inherit Tailwind dark: variants)
+	const isDark =
+		typeof window !== "undefined" &&
+		document.documentElement.classList.contains("dark");
+	const gridColor = isDark ? "oklch(1 0 0 / 10%)" : "#e4e4e7";
+	const axisColor = isDark ? "#a1a1aa" : "#71717a";
+
 	return (
 		<div className="relative w-full">
 			<svg
@@ -106,7 +113,7 @@ export function TransactionVolumeChart({ data, metric = "count" }: Props) {
 						x2={W - PADDING.right}
 						y1={t.y}
 						y2={t.y}
-						stroke="#e4e4e7"
+						stroke={gridColor}
 						strokeWidth="1"
 					/>
 				))}
@@ -132,7 +139,7 @@ export function TransactionVolumeChart({ data, metric = "count" }: Props) {
 						y={t.y + 4}
 						textAnchor="end"
 						fontSize="11"
-						fill="#71717a"
+						fill={axisColor}
 					>
 						{t.label}
 					</text>
@@ -146,7 +153,7 @@ export function TransactionVolumeChart({ data, metric = "count" }: Props) {
 						y={HEIGHT - 8}
 						textAnchor="middle"
 						fontSize="11"
-						fill="#71717a"
+						fill={axisColor}
 					>
 						{t.label}
 					</text>

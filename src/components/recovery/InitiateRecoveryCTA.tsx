@@ -2,14 +2,45 @@
 
 import { Button } from "@/components/ui/button";
 import { type UseRecoveryReturn } from "@/hooks/useRecovery";
+import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
 
+/**
+ * Props for the {@link InitiateRecoveryCTA} component.
+ */
 interface InitiateRecoveryCTAProps {
+	/**
+	 * The full return value of the {@link useRecovery} hook.
+	 *
+	 * The component reads `state` and `errorMessage` to decide which UI to
+	 * render, and wires the callback functions (`initiateRecovery`,
+	 * `confirmRecovery`, `cancelRecovery`, `resetRecovery`) to the relevant
+	 * buttons so that state transitions happen without any additional wiring in
+	 * the parent.
+	 */
 	recovery: UseRecoveryReturn;
 }
 
 /**
- * CTA stub for initiating wallet recovery.
- * Renders different UI based on the current recovery state.
+ * Call-to-action card that drives the wallet recovery state machine.
+ *
+ * Renders a different UI for each phase of the recovery flow:
+ *
+ * | `recovery.state` | Rendered UI                                              |
+ * |------------------|----------------------------------------------------------|
+ * | `"idle"`         | Primary "Initiate recovery" button                       |
+ * | `"error"`        | Same as idle but with an inline error alert above button |
+ * | `"confirming"`   | Amber confirmation panel with confirm / cancel buttons   |
+ * | `"pending"`      | Spinner with "Submitting recovery request…" message      |
+ * | `"success"`      | Green success banner with a "Dismiss" button             |
+ *
+ * All state transitions are delegated to the `recovery` prop so this component
+ * remains a pure presentation layer.
+ *
+ * @example
+ * function Page() {
+ *   const recovery = useRecovery();
+ *   return <InitiateRecoveryCTA recovery={recovery} />;
+ * }
  */
 export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 	const {
@@ -26,7 +57,7 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 			<div
 				role="status"
 				aria-live="polite"
-				className="rounded-xl border border-green-200 bg-green-50 p-6 flex items-start gap-4 dark:bg-green-900/10 dark:border-green-800"
+				className="rounded-xl border border-green-200 bg-green-50 p-4 sm:p-6 flex items-start gap-3 sm:gap-4 dark:bg-green-900/10 dark:border-green-800"
 			>
 				<div className="p-2 bg-green-100 dark:bg-green-900/20 rounded-full text-green-600 dark:text-green-400 shrink-0">
 					<svg
@@ -57,7 +88,10 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 						variant="ghost"
 						size="sm"
 						className="mt-3 text-green-700 hover:text-green-900 dark:text-green-400 dark:hover:text-green-200"
-						onClick={resetRecovery}
+						onClick={() => {
+							trackRecoveryEvent("recovery_reset");
+							resetRecovery();
+						}}
 					>
 						Dismiss
 					</Button>
@@ -72,7 +106,7 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 				role="dialog"
 				aria-modal="false"
 				aria-labelledby="recovery-confirm-title"
-				className="rounded-xl border border-amber-200 bg-amber-50 p-6 space-y-4 dark:bg-amber-900/10 dark:border-amber-800"
+				className="rounded-xl border border-amber-200 bg-amber-50 p-4 sm:p-6 space-y-4 dark:bg-amber-900/10 dark:border-amber-800"
 			>
 				<div>
 					<h3
@@ -87,15 +121,18 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 						want to proceed?
 					</p>
 				</div>
-				<div className="flex gap-3">
+				<div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
 					<Button
-						onClick={confirmRecovery}
+						onClick={() => {
+							trackRecoveryEvent("recovery_confirmed");
+							confirmRecovery();
+						}}
 						size="sm"
-						className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:hover:bg-amber-600"
+						className="bg-amber-600 hover:bg-amber-700 text-white dark:bg-amber-500 dark:hover:bg-amber-600 w-full sm:w-auto"
 					>
 						Yes, initiate recovery
 					</Button>
-					<Button variant="outline" size="sm" onClick={cancelRecovery}>
+					<Button variant="outline" size="sm" onClick={cancelRecovery} className="w-full sm:w-auto">
 						Cancel
 					</Button>
 				</div>
@@ -108,7 +145,7 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 			<div
 				role="status"
 				aria-live="polite"
-				className="rounded-xl border border-zinc-200 bg-white p-6 flex items-center gap-4 dark:border-zinc-800 dark:bg-zinc-950"
+				className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 flex items-center gap-3 sm:gap-4 dark:border-zinc-800 dark:bg-zinc-950"
 			>
 				<svg
 					className="w-5 h-5 animate-spin text-zinc-500 shrink-0"
@@ -140,7 +177,7 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 
 	// idle or error state — show the primary CTA
 	return (
-		<div className="rounded-xl border border-zinc-200 bg-white p-6 space-y-4 dark:border-zinc-800 dark:bg-zinc-950">
+		<div className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 space-y-4 dark:border-zinc-800 dark:bg-zinc-950">
 			<div>
 				<h3 className="font-semibold text-zinc-900 dark:text-zinc-50">
 					Initiate manual recovery
@@ -154,13 +191,13 @@ export function InitiateRecoveryCTA({ recovery }: InitiateRecoveryCTAProps) {
 			{state === "error" && errorMessage && (
 				<div
 					role="alert"
-					className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
+					className="rounded-lg border border-red-200 bg-red-50 px-3 sm:px-4 py-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-900/20 dark:text-red-400"
 				>
 					{errorMessage}
 				</div>
 			)}
 
-			<Button onClick={initiateRecovery} disabled={state === "loading"}>
+			<Button onClick={initiateRecovery} disabled={state === "loading"} className="w-full sm:w-auto">
 				Initiate recovery
 			</Button>
 		</div>

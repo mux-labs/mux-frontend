@@ -1,8 +1,12 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 // Import the page
 import WalletsPage from "@/app/demo/dashboard/wallets/page";
 import { NetworkProvider } from "@/context/NetworkContext";
+
+const VALID_ADDRESS =
+	"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
 
 // ---------------------------------------------------------------------------
 // Helper to render with providers
@@ -131,6 +135,163 @@ describe("WalletsPage (/demo/dashboard/wallets)", () => {
 				const statuses = screen.queryAllByText(/Active|Pending|Inactive/);
 				expect(statuses.length).toBeGreaterThan(0);
 			});
+		});
+	});
+
+	describe("Add Wallet modal", () => {
+		async function loadTable() {
+			const user = userEvent.setup({
+				advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+			});
+			renderWithProviders(<WalletsPage />);
+			vi.advanceTimersByTime(1000);
+			await waitFor(() =>
+				expect(screen.getByRole("table")).toBeInTheDocument(),
+			);
+			return user;
+		}
+
+		it("opens AddWalletModal when the Add Wallet button is clicked", async () => {
+			const user = await loadTable();
+			await user.click(screen.getByRole("button", { name: /add wallet/i }));
+			expect(screen.getByRole("dialog")).toBeInTheDocument();
+		});
+
+		it("closes the modal when Cancel is clicked", async () => {
+			const user = await loadTable();
+			await user.click(screen.getByRole("button", { name: /add wallet/i }));
+			expect(screen.getByRole("dialog")).toBeInTheDocument();
+			await user.click(screen.getByRole("button", { name: /cancel/i }));
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+		});
+
+		it("shows a success toast and closes the modal after adding a wallet", async () => {
+			const user = await loadTable();
+
+			// Open modal
+			await user.click(screen.getByRole("button", { name: /add wallet/i }));
+
+			// Fill in form
+			await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+
+			// Submit form — triggers 800ms fake API delay inside AddWalletModal
+			await user.click(screen.getByRole("button", { name: /^add wallet$/i }));
+
+			// Advance past the simulated API delay
+			vi.advanceTimersByTime(1000);
+
+			// Wait for success step in the modal
+			await waitFor(() =>
+				expect(
+					screen.getByText(/wallet added successfully/i),
+				).toBeInTheDocument(),
+			);
+
+			// Click Done to close modal, which triggers handleWalletAdded
+			await user.click(screen.getByRole("button", { name: /done/i }));
+
+			// Modal should be closed
+			expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+			// Toast should appear
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toBeInTheDocument(),
+			);
+			expect(screen.getByText(/added successfully/i)).toBeInTheDocument();
+		});
+
+		it("adds the new wallet to the list after submission", async () => {
+			const user = await loadTable();
+
+			const initialCount = screen
+				.getAllByText(/\d+ wallets?/)
+				.at(0)
+				?.textContent?.match(/\d+/)?.[0];
+
+			await user.click(screen.getByRole("button", { name: /add wallet/i }));
+			await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+			await user.click(screen.getByRole("button", { name: /^add wallet$/i }));
+			vi.advanceTimersByTime(1000);
+			await waitFor(() =>
+				expect(
+					screen.getByText(/wallet added successfully/i),
+				).toBeInTheDocument(),
+			);
+			await user.click(screen.getByRole("button", { name: /done/i }));
+
+			await waitFor(() => {
+				const newCount = screen
+					.getAllByText(/\d+ wallets?/)
+					.at(0)
+					?.textContent?.match(/\d+/)?.[0];
+				expect(Number(newCount)).toBeGreaterThan(Number(initialCount));
+			});
+		});
+	});
+
+	describe("copy toast feedback", () => {
+		it("shows success toast when an address is copied", async () => {
+			const user = userEvent.setup({
+				advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+			});
+			renderWithProviders(<WalletsPage />);
+			vi.advanceTimersByTime(1000);
+			await waitFor(() =>
+				expect(screen.getByRole("table")).toBeInTheDocument(),
+			);
+
+			const copyButtons = screen.getAllByTitle("Copy address");
+			await user.click(copyButtons[0]);
+
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toBeInTheDocument(),
+			);
+			expect(
+				screen.getByText(/address copied to clipboard/i),
+			).toBeInTheDocument();
+		});
+
+		it("shows error toast when clipboard write fails", async () => {
+			vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(
+				new Error("Permission denied"),
+			);
+			const user = userEvent.setup({
+				advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+			});
+			renderWithProviders(<WalletsPage />);
+			vi.advanceTimersByTime(1000);
+			await waitFor(() =>
+				expect(screen.getByRole("table")).toBeInTheDocument(),
+			);
+
+			const copyButtons = screen.getAllByTitle("Copy address");
+			await user.click(copyButtons[0]);
+
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toBeInTheDocument(),
+			);
+			expect(screen.getByText(/copy failed/i)).toBeInTheDocument();
+		});
+
+		it("dismisses the toast when the dismiss button is clicked", async () => {
+			const user = userEvent.setup({
+				advanceTimers: (ms) => vi.advanceTimersByTime(ms),
+			});
+			renderWithProviders(<WalletsPage />);
+			vi.advanceTimersByTime(1000);
+			await waitFor(() =>
+				expect(screen.getByRole("table")).toBeInTheDocument(),
+			);
+
+			await user.click(screen.getAllByTitle("Copy address")[0]);
+			await waitFor(() =>
+				expect(screen.getByRole("status")).toBeInTheDocument(),
+			);
+
+			await user.click(
+				screen.getByRole("button", { name: /dismiss notification/i }),
+			);
+			expect(screen.queryByRole("status")).not.toBeInTheDocument();
 		});
 	});
 });

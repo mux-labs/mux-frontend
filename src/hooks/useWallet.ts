@@ -30,13 +30,11 @@ export function useWallet(id: string): UseWalletResult {
 		setWallet(null);
 
 		const base = getApiBaseUrl();
-		if (!base) {
-			setError("API URL is not configured.");
-			setLoading(false);
-			return;
-		}
+		const url = base
+			? `${base}/wallets/${encodeURIComponent(id)}`
+			: `/api/wallets/${encodeURIComponent(id)}`;
 
-		fetchWithAuth(`${base}/wallets/${encodeURIComponent(id)}`)
+		fetch(url)
 			.then((res) => {
 				if (res.status === 404) throw new Error("not_found");
 				if (!res.ok) throw new Error(`Request failed: ${res.status}`);

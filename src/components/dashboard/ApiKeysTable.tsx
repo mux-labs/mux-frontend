@@ -1,6 +1,6 @@
 "use client";
 
-import { Check, Copy, Key, Shield, ShieldOff } from "lucide-react";
+import { Check, Copy, Key, RefreshCw, Shield, ShieldOff } from "lucide-react";
 import { useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
 import { Badge } from "@/components/ui/badge";
@@ -15,6 +15,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { cn } from "@/lib/utils";
 import { type ApiKey, mockApiKeys } from "@/mock-data/api-keys";
 
 // ---------------------------------------------------------------------------
@@ -74,6 +75,57 @@ function RevokeConfirm({ keyName, onConfirm, onCancel }: RevokeConfirmProps) {
 }
 
 // ---------------------------------------------------------------------------
+// Rotate confirmation — inline per-row
+// ---------------------------------------------------------------------------
+interface RotateConfirmProps {
+	keyName: string;
+	onConfirm: () => void;
+	onCancel: () => void;
+}
+
+function RotateConfirm({ keyName, onConfirm, onCancel }: RotateConfirmProps) {
+	return (
+		<div
+			role="alertdialog"
+			aria-modal="true"
+			aria-labelledby="rotate-title"
+			aria-describedby="rotate-desc"
+			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+		>
+			<div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
+				<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
+					<RefreshCw className="size-6 text-amber-600 dark:text-amber-400" />
+				</div>
+				<h3
+					id="rotate-title"
+					className="mb-1 text-base font-semibold text-zinc-900 dark:text-zinc-50"
+				>
+					Rotate API key?
+				</h3>
+				<p
+					id="rotate-desc"
+					className="mb-6 text-sm text-zinc-500 dark:text-zinc-400"
+				>
+					<span className="font-medium text-zinc-700 dark:text-zinc-300">
+						{keyName}
+					</span>{" "}
+					will be replaced with a new key. The old key will stop working
+					immediately. This action cannot be undone.
+				</p>
+				<div className="flex justify-end gap-3">
+					<Button variant="outline" size="sm" onClick={onCancel}>
+						Cancel
+					</Button>
+					<Button size="sm" onClick={onConfirm} data-testid="confirm-rotate">
+						Rotate key
+					</Button>
+				</div>
+			</div>
+		</div>
+	);
+}
+
+// ---------------------------------------------------------------------------
 // Copy button with feedback — uses useCopyToClipboard hook
 // ---------------------------------------------------------------------------
 function CopyKeyButton({ apiKey }: { apiKey: ApiKey }) {
@@ -116,15 +168,36 @@ interface ApiKeysTableProps {
 export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 	const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
 	const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
+	const [pendingRotateId, setPendingRotateId] = useState<string | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
+	const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Revoked">("all");
+
+	const filteredKeys =
+		statusFilter === "all" ? keys : keys.filter((k) => k.status === statusFilter);
 
 	const pendingKey = keys.find((k) => k.id === pendingRevokeId);
+	const pendingRotateKey = keys.find((k) => k.id === pendingRotateId);
 
 	const handleRevoke = (id: string) => {
 		setKeys((prev) =>
 			prev.map((k) => (k.id === id ? { ...k, status: "Revoked" as const } : k)),
 		);
 		setPendingRevokeId(null);
+	};
+
+	const handleRotate = (id: string) => {
+		const chars =
+			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+		const suffix = Array.from(
+			{ length: 12 },
+			() => chars[Math.floor(Math.random() * chars.length)],
+		).join("");
+		setKeys((prev) =>
+			prev.map((k) =>
+				k.id === id ? { ...k, key: `sk_live_${suffix}...` } : k,
+			),
+		);
+		setPendingRotateId(null);
 	};
 
 	const handleKeyCreated = ({
@@ -163,6 +236,15 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 				/>
 			)}
 
+			{/* Rotate confirmation modal */}
+			{pendingRotateId && pendingRotateKey && (
+				<RotateConfirm
+					keyName={pendingRotateKey.name}
+					onConfirm={() => handleRotate(pendingRotateId)}
+					onCancel={() => setPendingRotateId(null)}
+				/>
+			)}
+
 			{/* Create key modal */}
 			<APIKeyModal
 				isOpen={isModalOpen}
@@ -196,6 +278,30 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 					</Button>
 				</div>
 
+				{/* Status filter */}
+				<div
+					className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800 px-6 py-3"
+					role="group"
+					aria-label="Filter by status"
+				>
+					{(["all", "Active", "Revoked"] as const).map((f) => (
+						<button
+							key={f}
+							type="button"
+							onClick={() => setStatusFilter(f)}
+							aria-pressed={statusFilter === f}
+							className={cn(
+								"rounded-full px-3 py-1 text-xs font-medium transition-colors",
+								statusFilter === f
+									? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+									: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
+							)}
+						>
+							{f === "all" ? "All" : f}
+						</button>
+					))}
+				</div>
+
 				{/* Empty state */}
 				{keys.length === 0 ? (
 					<div className="p-6">
@@ -211,8 +317,19 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 							}}
 						/>
 					</div>
+				) : filteredKeys.length === 0 ? (
+					<div className="p-6">
+						<EmptyState
+							icon={
+								<Key className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
+							}
+							title={`No ${statusFilter} keys`}
+							description={`You have no ${statusFilter.toLowerCase()} API keys.`}
+						/>
+					</div>
 				) : (
-					<Table>
+					<Table aria-label="API keys">
+						<caption className="sr-only">List of API keys with status and creation date</caption>
 						<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
 							<TableRow>
 								<TableHead className="w-[200px] pl-6">Name</TableHead>
@@ -223,7 +340,7 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 							</TableRow>
 						</TableHeader>
 						<TableBody>
-							{keys.map((key) => (
+							{filteredKeys.map((key) => (
 								<TableRow key={key.id} className="group transition-colors">
 									<TableCell className="font-medium pl-6 text-zinc-900 dark:text-zinc-100">
 										{key.name}
@@ -256,15 +373,26 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 									</TableCell>
 									<TableCell className="text-right pr-6">
 										{key.status === "Active" ? (
-											<Button
-												variant="ghost"
-												size="sm"
-												className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400 h-8 px-3 rounded-lg"
-												onClick={() => setPendingRevokeId(key.id)}
-												data-testid={`revoke-btn-${key.id}`}
-											>
-												Revoke
-											</Button>
+											<div className="flex items-center justify-end gap-1">
+												<Button
+													variant="ghost"
+													size="sm"
+													className="text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 h-8 px-3 rounded-lg"
+													onClick={() => setPendingRotateId(key.id)}
+													data-testid={`rotate-btn-${key.id}`}
+												>
+													Rotate
+												</Button>
+												<Button
+													variant="ghost"
+													size="sm"
+													className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400 h-8 px-3 rounded-lg"
+													onClick={() => setPendingRevokeId(key.id)}
+													data-testid={`revoke-btn-${key.id}`}
+												>
+													Revoke
+												</Button>
+											</div>
 										) : (
 											<span className="text-xs text-zinc-400 dark:text-zinc-600 pr-1">
 												Revoked

@@ -241,4 +241,26 @@ describe("StatusIndicator", () => {
 			expect(text).toBeInTheDocument();
 		});
 	});
+
+	describe("Invalid / unknown status values", () => {
+		it("defaults to 'Inactive' label for unrecognised status", () => {
+			render(<StatusIndicator status={"broken" as never} />);
+			expect(screen.getByText("Inactive")).toBeInTheDocument();
+		});
+
+		it("defaults to inactive styles for unrecognised status", () => {
+			const { container } = render(<StatusIndicator status={"" as never} />);
+			const badge = container.querySelector("span");
+			expect(badge).toHaveClass("bg-zinc-100");
+			expect(badge).toHaveClass("text-zinc-600");
+		});
+
+		it("does not show pulse animation for unknown status", () => {
+			const { container } = render(
+				<StatusIndicator status={"broken" as never} />,
+			);
+			const dot = container.querySelector(".animate-pulse");
+			expect(dot).not.toBeInTheDocument();
+		});
+	});
 });

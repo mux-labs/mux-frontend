@@ -59,6 +59,43 @@ export function WalletTableSkeleton() {
 	);
 }
 
+export function WalletDetailSkeleton() {
+	return (
+		<div
+			className="space-y-6"
+			role="status"
+			aria-label="Loading wallet details"
+			aria-busy="true"
+			aria-live="polite"
+		>
+			{/* Balance card skeleton */}
+			<div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+				<div className="mb-4 flex items-center justify-between">
+					<Skeleton className="h-4 w-24" />
+					<div className="flex items-center gap-2">
+						<Skeleton className="h-4 w-28" />
+						<Skeleton className="h-8 w-8 rounded-md" />
+					</div>
+				</div>
+				<Skeleton className="h-12 w-48" />
+			</div>
+
+			{/* Wallet info card skeleton */}
+			<div className="rounded-xl border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-900">
+				<Skeleton className="mb-4 h-4 w-24" />
+				<div className="space-y-4">
+					{Array.from({ length: 5 }).map((_, i) => (
+						<div key={i} className="flex items-center justify-between">
+							<Skeleton className="h-4 w-20" />
+							<Skeleton className="h-6 w-32" />
+						</div>
+					))}
+				</div>
+			</div>
+		</div>
+	);
+}
+
 export function CardSkeleton() {
 	return (
 		<div className="flex flex-col gap-4 rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">

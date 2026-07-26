@@ -24,7 +24,7 @@ const CSV_HEADERS = [
  * Escapes a single CSV cell value.
  * Wraps in double-quotes and escapes internal double-quotes per RFC 4180.
  */
-function escapeCsvCell(value: string | number): string {
+export function escapeCsvCell(value: string | number): string {
 	const str = String(value);
 	// Wrap in quotes if the value contains a comma, newline, or double-quote
 	if (str.includes(",") || str.includes("\n") || str.includes('"')) {

@@ -22,11 +22,13 @@ describe("RecoveryDocsLink", () => {
 	});
 
 	it("renders correctly with custom children and className", () => {
-		render(<RecoveryDocsLink className="custom-class">Custom Text</RecoveryDocsLink>);
+		render(
+			<RecoveryDocsLink className="custom-class">Custom Text</RecoveryDocsLink>,
+		);
 		const link = screen.getByRole("link", {
 			name: /read recovery documentation/i,
 		});
-		
+
 		expect(link).toHaveTextContent("Custom Text");
 		expect(link).toHaveClass("custom-class");
 	});

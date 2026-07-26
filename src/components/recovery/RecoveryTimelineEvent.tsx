@@ -141,6 +141,13 @@ export function RecoveryTimelineEvent({
 	isFirst = false,
 	onClick,
 	className,
+	focused = false,
+	tabIndex = -1,
+	onKeyDown,
+	eventRef,
+	testId,
+	onFocus,
+	onBlur,
 }: RecoveryTimelineEventProps) {
 	const statusColor = statusColors[event.status] || statusColors.pending;
 	const dotColor = dotColors[event.status] || dotColors.pending;
@@ -148,7 +155,7 @@ export function RecoveryTimelineEvent({
 
 	return (
 		<div
-			className={cn("flex gap-4", className)}
+			className={cn("flex gap-2 sm:gap-4", className)}
 			role="listitem"
 			aria-label={`${event.title} - ${event.status}`}
 		>
@@ -156,14 +163,22 @@ export function RecoveryTimelineEvent({
 			<div className="flex flex-col items-center">
 				{/* Dot */}
 				<button
+					ref={eventRef}
 					onClick={onClick}
+					onKeyDown={onKeyDown}
+					onFocus={onFocus}
+					onBlur={onBlur}
+					tabIndex={tabIndex}
 					className={cn(
-						"p-2 rounded-full transition-all",
+						"p-2 rounded-full transition-all focus-visible:outline-none",
 						statusColor,
 						onClick && "cursor-pointer hover:scale-110",
+						focused &&
+							"ring-2 ring-blue-500 ring-offset-2 dark:ring-blue-400 dark:ring-offset-zinc-900",
 					)}
 					aria-pressed={false}
 					title={event.title}
+					data-testid={testId}
 				>
 					{icon}
 				</button>
@@ -172,7 +187,7 @@ export function RecoveryTimelineEvent({
 				{!isLast && (
 					<div
 						className={cn(
-							"w-1 flex-1 my-2",
+							"w-0.5 sm:w-1 flex-1 my-1 sm:my-2",
 							event.status === "completed"
 								? "bg-green-300 dark:bg-green-700"
 								: event.status === "failed"
@@ -184,33 +199,33 @@ export function RecoveryTimelineEvent({
 			</div>
 
 			{/* Event content */}
-			<div className="flex-1 pb-4">
-				<div className="flex items-start justify-between gap-2">
+			<div className="flex-1 pb-2 sm:pb-4">
+				<div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-2">
 					<div className="flex-1">
-						<h4 className="font-semibold text-zinc-900 dark:text-zinc-50">
+						<h4 className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-50">
 							{event.title}
 						</h4>
-						<p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1">
+						<p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-0.5 sm:mt-1">
 							{event.description}
 						</p>
 
 						{/* Details section */}
 						{event.details && (
-							<p className="text-xs text-zinc-500 dark:text-zinc-500 mt-2 italic">
+							<p className="text-xs text-zinc-500 dark:text-zinc-500 mt-1 sm:mt-2 italic">
 								{event.details}
 							</p>
 						)}
 
 						{/* Error message */}
 						{event.errorMessage && (
-							<div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
+							<div className="mt-1 sm:mt-2 p-1.5 sm:p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-400">
 								{event.errorMessage}
 							</div>
 						)}
 					</div>
 
 					{/* Timestamp */}
-					<div className="text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+					<div className="text-xs text-zinc-500 dark:text-zinc-400 whitespace-nowrap sm:shrink-0">
 						{event.timestamp.toLocaleTimeString([], {
 							hour: "2-digit",
 							minute: "2-digit",

@@ -516,19 +516,19 @@ describe("LoginPage (issue #47 + #325–#328)", () => {
 			expect(passwordInput).toHaveAttribute("type", "password");
 		});
 
-		it("toggle button has aria-label='Show password' when password is hidden", async () => {
+		it("toggle button has aria-label='Show' when password is hidden", async () => {
 			renderLoginPage();
 			await screen.findByTestId("login-form");
 			const toggle = screen.getByTestId("password-toggle");
-			expect(toggle).toHaveAttribute("aria-label", "Show password");
+			expect(toggle).toHaveAttribute("aria-label", "Show");
 		});
 
-		it("toggle button has aria-label='Hide password' when password is visible", async () => {
+		it("toggle button has aria-label='Hide' when password is visible", async () => {
 			renderLoginPage();
 			await screen.findByTestId("login-form");
 			const toggle = screen.getByTestId("password-toggle");
 			fireEvent.click(toggle);
-			expect(toggle).toHaveAttribute("aria-label", "Hide password");
+			expect(toggle).toHaveAttribute("aria-label", "Hide");
 		});
 	});
 

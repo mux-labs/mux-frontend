@@ -17,7 +17,7 @@ function SparkBar({ height, label }: { height: number; label: string }) {
 				style={{ height: 120 }}
 			>
 				<div
-					className="w-full max-w-[32px] rounded-t-md bg-blue-500 transition-all duration-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
+					className="w-full max-w-[32px] rounded-t-md bg-blue-500 transition-all duration-500 hover:bg-blue-600 motion-reduce:transition-none dark:bg-blue-600 dark:hover:bg-blue-500"
 					style={{ height: `${height}%` }}
 				/>
 			</div>

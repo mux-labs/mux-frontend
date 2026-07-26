@@ -65,6 +65,12 @@ describe("AnalyticsChart — with data", () => {
 		expect(screen.getByText("Total: $450")).toBeInTheDocument();
 		expect(screen.getByText("Avg: $150")).toBeInTheDocument();
 	});
+
+	it("disables nonessential bar transitions for reduced motion users", () => {
+		const { container } = render(<AnalyticsChart title="Volume" data={DATA} />);
+		const bar = container.querySelector(".motion-reduce\\:transition-none");
+		expect(bar).toBeInTheDocument();
+	});
 });
 
 // ---------------------------------------------------------------------------

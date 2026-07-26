@@ -1,6 +1,20 @@
 import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { Sidebar } from "../Sidebar";
+
+vi.mock("next/navigation", () => ({
+	usePathname: () => "/dashboard",
+}));
+
+vi.mock("@/context/AuthContext", () => ({
+	useAuth: () => ({
+		user: { name: "Jane Doe", email: "jane@example.com", role: "admin" },
+		isLoading: false,
+		isAuthenticated: true,
+		signIn: vi.fn(),
+		signOut: vi.fn(),
+	}),
+}));
 
 describe("Sidebar navigation", () => {
 	it("includes API Keys and Spending Limits links and excludes Orders", () => {

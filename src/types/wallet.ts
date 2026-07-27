@@ -14,6 +14,8 @@ export interface Wallet {
 	balance?: string;
 	/** Timestamp of the most recent on-chain activity, if known. */
 	lastActivity?: Date;
+	/** Whether the wallet has been archived. Archived wallets are hidden from the default list view. */
+	archived?: boolean;
 }
 
 export type WalletNetwork = Wallet["network"];

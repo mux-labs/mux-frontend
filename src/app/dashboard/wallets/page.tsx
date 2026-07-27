@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AddWalletModal } from "@/components/wallet/AddWalletModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
@@ -15,9 +15,19 @@ export default function WalletsPage() {
 	const { wallets: fetchedWallets, loading, error, refetch } = useWallets();
 	const [addedWallets, setAddedWallets] = useState<Wallet[]>([]);
 	const [isAddOpen, setIsAddOpen] = useState(false);
+	const [showArchived, setShowArchived] = useState(false);
 	useAnalyticsTracking("wallets");
 
 	const wallets = [...addedWallets, ...fetchedWallets];
+	const archivedCount = useMemo(
+		() => wallets.filter((wallet) => wallet.archived).length,
+		[wallets],
+	);
+	const visibleWallets = useMemo(
+		() =>
+			showArchived ? wallets : wallets.filter((wallet) => !wallet.archived),
+		[wallets, showArchived],
+	);
 
 	const openAddWallet = () => setIsAddOpen(true);
 
@@ -28,10 +38,24 @@ export default function WalletsPage() {
 
 	return (
 		<div className="space-y-8">
-			<PageHeader
-				title="Wallet Monitoring"
-				description="Track and manage your Stellar wallets"
-			/>
+			<div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+				<PageHeader
+					title="Wallet Monitoring"
+					description="Track and manage your Stellar wallets"
+				/>
+				{!loading && archivedCount > 0 && (
+					<label className="flex shrink-0 items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+						<input
+							type="checkbox"
+							checked={showArchived}
+							onChange={(event) => setShowArchived(event.target.checked)}
+							data-testid="show-archived-toggle"
+							className="h-4 w-4 rounded border-zinc-300 text-blue-600 focus:ring-blue-500 dark:border-zinc-600"
+						/>
+						Show archived ({archivedCount})
+					</label>
+				)}
+			</div>
 
 			{loading ? (
 				<WalletTableSkeleton />
@@ -41,8 +65,13 @@ export default function WalletsPage() {
 					description={`${error} Check your connection and try again.`}
 					retry={{ label: "Retry", onRetry: refetch }}
 				/>
+			) : visibleWallets.length > 0 ? (
+				<WalletTable wallets={visibleWallets} onAddWallet={openAddWallet} />
 			) : wallets.length > 0 ? (
-				<WalletTable wallets={wallets} onAddWallet={openAddWallet} />
+				<EmptyState
+					title="No wallets to show"
+					description="All of your wallets are archived. Toggle “Show archived” to see them."
+				/>
 			) : (
 				<EmptyState
 					title="No wallets found"

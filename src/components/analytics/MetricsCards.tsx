@@ -1,9 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { Toast } from "@/components/ui/toast";
 import type { Metric } from "@/mock-data/analytics";
 import { CopyButton } from "./CopyButton";
-import { Toast } from "@/components/ui/toast";
 
 interface MetricsCardsProps {
 	metrics: Metric[];

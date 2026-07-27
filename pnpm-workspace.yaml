@@ -3,6 +3,8 @@ packages:
 allowBuilds:
   core-js-pure: false
   esbuild: true
+  sharp: false
+  unrs-resolver: false
 ignoredBuiltDependencies:
   - sharp
   - unrs-resolver

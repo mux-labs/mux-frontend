@@ -4,6 +4,8 @@ export interface Wallet {
 	id: string;
 	/** Full 56-character Stellar public key (G-address). */
 	address: string;
+	/** Optional display name for this wallet. */
+	name?: string;
 	label?: string;
 	network: "testnet" | "mainnet";
 	/** Lifecycle status of the wallet. `pending` until confirmed on-chain. */

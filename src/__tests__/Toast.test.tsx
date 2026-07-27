@@ -6,22 +6,23 @@ import {
 	renderHook,
 	screen,
 } from "@testing-library/react";
+import { vi } from "vitest";
 import { ToastContainer, ToastItem, useToast } from "@/components/ui/toast";
 
 describe("ToastItem", () => {
 	beforeEach(() => {
-		jest.useFakeTimers();
+		vi.useFakeTimers();
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	it("renders the toast message", () => {
 		render(
 			<ToastItem
 				toast={{ id: "1", type: "info", message: "Hello" }}
-				onDismiss={jest.fn()}
+				onDismiss={vi.fn()}
 			/>,
 		);
 		expect(screen.getByText("Hello")).toBeInTheDocument();
@@ -36,14 +37,14 @@ describe("ToastItem", () => {
 					message: "Done",
 					description: "Operation completed",
 				}}
-				onDismiss={jest.fn()}
+				onDismiss={vi.fn()}
 			/>,
 		);
 		expect(screen.getByText("Operation completed")).toBeInTheDocument();
 	});
 
 	it("calls onDismiss when dismiss button is clicked", () => {
-		const onDismiss = jest.fn();
+		const onDismiss = vi.fn();
 		render(
 			<ToastItem
 				toast={{ id: "1", type: "error", message: "Error!" }}
@@ -55,7 +56,7 @@ describe("ToastItem", () => {
 	});
 
 	it("auto-dismisses after the specified duration", () => {
-		const onDismiss = jest.fn();
+		const onDismiss = vi.fn();
 		render(
 			<ToastItem
 				toast={{
@@ -69,14 +70,14 @@ describe("ToastItem", () => {
 		);
 
 		act(() => {
-			jest.advanceTimersByTime(3000);
+			vi.advanceTimersByTime(3000);
 		});
 
 		expect(onDismiss).toHaveBeenCalledWith("1");
 	});
 
 	it("does not auto-dismiss when duration is 0", () => {
-		const onDismiss = jest.fn();
+		const onDismiss = vi.fn();
 		render(
 			<ToastItem
 				toast={{ id: "1", type: "info", message: "Persistent", duration: 0 }}
@@ -85,14 +86,14 @@ describe("ToastItem", () => {
 		);
 
 		act(() => {
-			jest.advanceTimersByTime(10000);
+			vi.advanceTimersByTime(10000);
 		});
 
 		expect(onDismiss).not.toHaveBeenCalled();
 	});
 
 	it("cleans up timer on unmount", () => {
-		const onDismiss = jest.fn();
+		const onDismiss = vi.fn();
 		const { unmount } = render(
 			<ToastItem
 				toast={{ id: "1", type: "info", message: "Cleanup", duration: 5000 }}
@@ -103,7 +104,7 @@ describe("ToastItem", () => {
 		unmount();
 
 		act(() => {
-			jest.advanceTimersByTime(5000);
+			vi.advanceTimersByTime(5000);
 		});
 
 		expect(onDismiss).not.toHaveBeenCalled();
@@ -113,7 +114,7 @@ describe("ToastItem", () => {
 		render(
 			<ToastItem
 				toast={{ id: "1", type: "warning", message: "Warning!" }}
-				onDismiss={jest.fn()}
+				onDismiss={vi.fn()}
 			/>,
 		);
 		expect(screen.getByRole("alert")).toBeInTheDocument();
@@ -126,14 +127,14 @@ describe("ToastContainer", () => {
 			{ id: "1", type: "info" as const, message: "First" },
 			{ id: "2", type: "success" as const, message: "Second" },
 		];
-		render(<ToastContainer toasts={toasts} onDismiss={jest.fn()} />);
+		render(<ToastContainer toasts={toasts} onDismiss={vi.fn()} />);
 		expect(screen.getByText("First")).toBeInTheDocument();
 		expect(screen.getByText("Second")).toBeInTheDocument();
 	});
 
 	it("returns null when there are no toasts (empty state)", () => {
 		const { container } = render(
-			<ToastContainer toasts={[]} onDismiss={jest.fn()} />,
+			<ToastContainer toasts={[]} onDismiss={vi.fn()} />,
 		);
 		expect(container.innerHTML).toBe("");
 	});
@@ -143,7 +144,7 @@ describe("ToastContainer", () => {
 		const { container } = render(
 			<ToastContainer
 				toasts={toasts}
-				onDismiss={jest.fn()}
+				onDismiss={vi.fn()}
 				position="bottom-left"
 			/>,
 		);
@@ -154,7 +155,7 @@ describe("ToastContainer", () => {
 
 	it("has correct aria label", () => {
 		const toasts = [{ id: "1", type: "info" as const, message: "Test" }];
-		render(<ToastContainer toasts={toasts} onDismiss={jest.fn()} />);
+		render(<ToastContainer toasts={toasts} onDismiss={vi.fn()} />);
 		expect(screen.getByLabelText("Notifications")).toBeInTheDocument();
 	});
 });

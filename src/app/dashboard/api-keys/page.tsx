@@ -5,8 +5,8 @@ export default function ApiKeysPage() {
 	return (
 		<div className="space-y-8">
 			<PageHeader
-				title="Settings"
-				description="Manage your account settings, API keys, and developer preferences."
+				title="API Keys"
+				description="Manage API keys and developer access for your Mux account."
 			/>
 
 			<div className="grid gap-8">

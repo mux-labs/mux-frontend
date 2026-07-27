@@ -1,13 +1,14 @@
 import { render, screen } from "@testing-library/react";
 import React from "react";
+import { vi } from "vitest";
 import { ExplorerLink } from "../ExplorerLink";
 
 // Mock the getExplorerUrl function
-jest.mock("@/utils/explorerUrl", () => ({
-	getExplorerUrl: jest.fn((address, network) => {
+vi.mock("@/utils/explorerUrl", () => ({
+	getExplorerUrl: vi.fn((address, network) => {
 		return `https://stellar.expert/explorer/${network}/account/${address}`;
 	}),
-	isValidStellarAddress: jest.fn((address) => {
+	isValidStellarAddress: vi.fn((address) => {
 		return /^G[A-Z2-7]{55}$/.test(address);
 	}),
 }));

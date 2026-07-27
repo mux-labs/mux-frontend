@@ -14,5 +14,13 @@ export async function GET(request: Request) {
 		return NextResponse.json({ error: "invalid_token" }, { status: 401 });
 	}
 
+	const { searchParams } = new URL(request.url);
+	const network = searchParams.get("network");
+	if (network === "mainnet" || network === "testnet") {
+		return NextResponse.json(
+			dummyWallets.filter((wallet) => wallet.network === network),
+		);
+	}
+
 	return NextResponse.json(dummyWallets);
 }

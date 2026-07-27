@@ -46,7 +46,7 @@ export function AnalyticsExportButton({
 				{/* Status icon */}
 				{isExporting && (
 					<Loader2
-						className="h-4 w-4 animate-spin text-slate-400"
+						className="h-4 w-4 animate-spin text-slate-400 motion-reduce:animate-none"
 						aria-hidden="true"
 					/>
 				)}

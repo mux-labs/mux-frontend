@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import type { RecoveryTimelineEvent as RecoveryTimelineEventType } from "@/types/recovery";
 import { RecoveryTimelineEvent } from "../RecoveryTimelineEvent";
 
@@ -13,7 +14,7 @@ describe("RecoveryTimelineEvent", () => {
 		details: "User initiated recovery from device loss",
 	};
 
-	const mockOnClick = jest.fn();
+	const mockOnClick = vi.fn();
 
 	beforeEach(() => {
 		mockOnClick.mockClear();
@@ -365,6 +366,38 @@ describe("RecoveryTimelineEvent", () => {
 			fireEvent.click(button);
 
 			expect(mockOnClick).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe("Responsive layout (narrow mobile viewport)", () => {
+		it("stacks title/description above the timestamp on mobile, side-by-side from sm breakpoint up", () => {
+			const { container } = render(
+				<RecoveryTimelineEvent event={mockEvent} onClick={mockOnClick} />,
+			);
+
+			const contentRow = container.querySelector(
+				".flex.flex-col.sm\\:flex-row",
+			);
+			expect(contentRow).toBeInTheDocument();
+			expect(contentRow).toHaveClass("sm:items-start");
+			expect(contentRow).toHaveClass("sm:justify-between");
+		});
+
+		it("uses tighter gap and dot spacing on mobile than on larger screens", () => {
+			const { container } = render(
+				<RecoveryTimelineEvent event={mockEvent} onClick={mockOnClick} />,
+			);
+
+			const row = container.firstChild as HTMLElement;
+			expect(row).toHaveClass("gap-2");
+			expect(row).toHaveClass("sm:gap-4");
+		});
+
+		it("keeps the timestamp non-wrapping so it doesn't collapse the row on narrow screens", () => {
+			render(<RecoveryTimelineEvent event={mockEvent} onClick={mockOnClick} />);
+
+			const timestamp = screen.getByText(/10:00/);
+			expect(timestamp).toHaveClass("whitespace-nowrap");
 		});
 	});
 

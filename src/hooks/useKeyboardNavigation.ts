@@ -1,32 +1,36 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import {
+	createEnterHandler,
+	createEscapeHandler,
 	createFocusTrapHandler,
 	createListNavigationHandler,
-	type ListNavigationOptions,
-	createEscapeHandler,
-	createEnterHandler,
-	createSpaceHandler,
 	createShortcutHandler,
+	createSpaceHandler,
 	type KeyboardKey,
+	type ListNavigationOptions,
 } from "@/utils/keyboardNavigation";
 
 /**
  * Hook for managing focus trap in modals/dialogs
  */
 export function useFocusTrap(isActive = true) {
-	const containerRef = useRef<HTMLDivElement>(null);
+	const containerRef = useRef<HTMLDivElement>(
+		null,
+	) as React.RefObject<HTMLElement>;
 
 	useEffect(() => {
 		if (!isActive || !containerRef.current) return;
 
 		const handleKeyDown = createFocusTrapHandler(containerRef);
 
-		containerRef.current.addEventListener(
-			"keydown",
-			handleKeyDown as EventListener,
-		);
+		// Bridge React's synthetic event handler to the native DOM EventListener
+		const nativeHandler = (event: Event) => {
+			handleKeyDown(event as unknown as React.KeyboardEvent<Element>);
+		};
+
+		containerRef.current.addEventListener("keydown", nativeHandler);
 
 		// Auto-focus first focusable element
 		const focusableElements = containerRef.current.querySelectorAll(
@@ -37,10 +41,7 @@ export function useFocusTrap(isActive = true) {
 		}
 
 		return () => {
-			containerRef.current?.removeEventListener(
-				"keydown",
-				handleKeyDown as EventListener,
-			);
+			containerRef.current?.removeEventListener("keydown", nativeHandler);
 		};
 	}, [isActive]);
 
@@ -54,14 +55,7 @@ export function useListNavigation(
 	items: HTMLElement[] = [],
 	options: ListNavigationOptions = {},
 ) {
-	const [currentIndex, setCurrentIndex] = useCallback(() => {
-		const initialIndex = useRef(0);
-		return [initialIndex.current, setCurrentIndex] as const;
-	}, []);
-
-	useCallback(() => {
-		// This will be set up properly in the return
-	}, []);
+	const [currentIndex, setCurrentIndex] = React.useState(0);
 
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent) => {
@@ -150,15 +144,7 @@ export function useKeyboardShortcut(
 		const handler = createShortcutHandler(key, callback, modifiers);
 
 		const onKeyDown = (event: globalThis.KeyboardEvent) => {
-			handler({
-				key: event.key as any,
-				ctrlKey: event.ctrlKey,
-				shiftKey: event.shiftKey,
-				altKey: event.altKey,
-				metaKey: event.metaKey,
-				preventDefault: () => event.preventDefault(),
-				stopPropagation: () => event.stopPropagation(),
-			});
+			handler(event as unknown as React.KeyboardEvent);
 		};
 
 		window.addEventListener("keydown", onKeyDown);
@@ -177,10 +163,7 @@ export function useArrowKeyNavigation(
 	cols: number,
 	onNavigate: (row: number, col: number) => void,
 ) {
-	const [position, setPosition] = useCallback(() => {
-		const posRef = useRef({ row: 0, col: 0 });
-		return [posRef.current, setPosition] as const;
-	}, []);
+	const [position, setPosition] = React.useState({ row: 0, col: 0 });
 
 	const handleKeyDown = useCallback(
 		(event: React.KeyboardEvent) => {

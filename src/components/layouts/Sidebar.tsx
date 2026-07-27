@@ -34,10 +34,10 @@ const navigation = [
 function isNavItemActive(pathname: string, itemHref: string): boolean {
 	// Exact match
 	if (pathname === itemHref) return true;
-	// For the Dashboard root item, only match exact
+	// For the Dashboard root item, only match exact to avoid matching all sub-routes
 	if (itemHref === "/dashboard") return false;
 	// For other items, match if the pathname starts with the item's href
-	// (handles nested routes like /demo/dashboard/settings/profile)
+	// (handles nested routes like /dashboard/settings/profile)
 	return pathname.startsWith(itemHref + "/") || pathname.startsWith(itemHref);
 }
 
@@ -98,7 +98,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 						<button
 							type="button"
 							onClick={onClose}
-							className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 lg:hidden"
+							aria-label="Close sidebar"
+							className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 						>
 							<span className="sr-only">Close sidebar</span>
 							<XMarkIcon className="h-6 w-6" aria-hidden="true" />
@@ -113,8 +114,10 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 								<Link
 									key={item.name}
 									href={item.href}
+									data-testid={`sidebar-nav-${item.name.toLowerCase().replace(/\s+/g, "-")}`}
+									aria-current={isActive ? "page" : undefined}
 									className={clsx(
-										"group flex items-center rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",
+										"group flex items-center rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
 										isActive
 											? "bg-blue-50 text-blue-700 border border-blue-200"
 											: "text-gray-700 hover:bg-gray-50 hover:text-gray-900",

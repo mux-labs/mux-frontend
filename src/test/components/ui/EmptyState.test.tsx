@@ -75,4 +75,55 @@ describe("EmptyState", () => {
 		);
 		expect(container.querySelector("svg")).toBeInTheDocument();
 	});
+
+	it("does not render the default icon when a custom icon is given", () => {
+		const { container } = render(
+			<EmptyState
+				title="No wallets"
+				description="Empty."
+				icon={<span data-testid="custom-icon">🪙</span>}
+			/>,
+		);
+		expect(container.querySelectorAll("svg")).toHaveLength(0);
+	});
+
+	it("renders long titles and descriptions without truncating the text content", () => {
+		const longTitle =
+			"No wallets match your current search and filter combination";
+		const longDescription =
+			"Try broadening your search terms, clearing the network filter, or removing the status filter to see more results.";
+		render(<EmptyState title={longTitle} description={longDescription} />);
+		expect(screen.getByText(longTitle)).toBeInTheDocument();
+		expect(screen.getByText(longDescription)).toBeInTheDocument();
+	});
+
+	it("only calls onClick once per click, not on every render", async () => {
+		const user = userEvent.setup();
+		const onClick = vi.fn();
+		const { rerender } = render(
+			<EmptyState
+				title="No wallets"
+				description="Empty."
+				action={{ label: "Add Wallet", onClick }}
+			/>,
+		);
+		rerender(
+			<EmptyState
+				title="No wallets"
+				description="Empty."
+				action={{ label: "Add Wallet", onClick }}
+			/>,
+		);
+		await user.click(screen.getByRole("button", { name: "Add Wallet" }));
+		expect(onClick).toHaveBeenCalledTimes(1);
+	});
+
+	it("renders inside a dark-mode wrapper without losing its content", () => {
+		render(
+			<div className="dark bg-zinc-950">
+				<EmptyState title="No wallets found" description="Empty." />
+			</div>,
+		);
+		expect(screen.getByText("No wallets found")).toBeInTheDocument();
+	});
 });

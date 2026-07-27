@@ -44,6 +44,7 @@ export const dummyWallets: Wallet[] = [
 		createdAt: new Date("2023-12-01T09:00:00Z"),
 		balance: "75.25 XLM",
 		lastActivity: new Date("2024-06-15T18:00:00Z"),
+		archived: true,
 	},
 	{
 		id: "wallet-006",
@@ -78,6 +79,7 @@ export const dummyWallets: Wallet[] = [
 		createdAt: new Date("2024-08-12T06:30:00Z"),
 		balance: "0.00 XLM",
 		lastActivity: new Date("2024-09-01T12:00:00Z"),
+		archived: true,
 	},
 	{
 		id: "wallet-010",

@@ -2,11 +2,8 @@
 	"name": "mux-frontend",
 	"version": "0.1.0",
 	"private": true,
-	"packageManager": "pnpm@9.15.4",
 	"engines": {
-		"pnpm": ">=9",
-		"npm": "please-use-pnpm",
-		"yarn": "please-use-pnpm"
+		"node": ">=22"
 	},
 	"scripts": {
 		"preinstall": "node ./scripts/verify-pnpm.js",
@@ -16,6 +13,9 @@
 		"test": "vitest run",
 		"test:watch": "vitest",
 		"test:coverage": "vitest run --coverage",
+		"test:e2e": "playwright test",
+		"test:e2e:ui": "playwright test --ui",
+		"typecheck": "tsc --noEmit",
 		"lint": "eslint",
 		"lint:fix": "biome format --staged --write && biome check --staged --write",
 		"prepare": "husky",
@@ -37,19 +37,14 @@
 		"tailwind-merge": "^3.4.0"
 	},
 	"devDependencies": {
-		"@storybook/addon-a11y": "^8.6.0",
-		"@storybook/addon-essentials": "^8.6.0",
-		"@storybook/addon-interactions": "^8.6.0",
-		"@storybook/nextjs": "^8.6.0",
-		"@storybook/react": "^8.6.0",
-		"@storybook/test": "^8.6.0",
-		"storybook": "^8.6.0",
-		"@biomejs/biome": "2.3.11",
 		"@storybook/addon-a11y": "^10.4.6",
 		"@storybook/addon-essentials": "^8.6.14",
 		"@storybook/addon-interactions": "^8.6.14",
 		"@storybook/nextjs": "^10.4.6",
+		"@storybook/react": "^8.6.0",
 		"@storybook/test": "^8.6.15",
+		"storybook": "^10.4.6",
+		"@biomejs/biome": "2.3.11",
 		"@tailwindcss/postcss": "^4",
 		"@testing-library/jest-dom": "^6.6.3",
 		"@testing-library/react": "^16.3.0",
@@ -64,7 +59,6 @@
 		"husky": "^9.1.7",
 		"jsdom": "^26.1.0",
 		"lint-staged": "^16.2.7",
-		"storybook": "^10.4.6",
 		"tailwindcss": "^4",
 		"tw-animate-css": "^1.4.0",
 		"typescript": "^5",

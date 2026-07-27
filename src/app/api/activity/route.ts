@@ -2,9 +2,6 @@ import { NextResponse } from "next/server";
 import { mockTransactions } from "@/mock-data/transactions";
 import type { Transaction } from "@/types/transaction";
 
-// Simple token validation similar to other API routes
-const VALID_ACCESS_TOKEN = "mock-access-token";
-
 /**
  * Transform mock transaction data into activity items expected by RecentActivityFeed.
  * This is a lightweight mapping; in a real implementation the backend would provide
@@ -22,6 +19,7 @@ function mapTransactionToActivity(tx: Transaction) {
 		type,
 		description: `${tx.from.slice(0, 4)} → ${tx.to.slice(0, 4)}: ${tx.amountXlm} XLM`,
 		timestamp: tx.createdAt,
+		network: tx.network,
 		status:
 			tx.status === "completed"
 				? "success"
@@ -31,19 +29,9 @@ function mapTransactionToActivity(tx: Transaction) {
 	};
 }
 
-export async function GET(request: Request) {
-	const authorization = request.headers.get("authorization");
-	if (!authorization?.startsWith("Bearer ")) {
-		return NextResponse.json({ error: "missing_auth" }, { status: 401 });
-	}
-
-	const token = authorization.slice("Bearer ".length).trim();
-	if (token !== VALID_ACCESS_TOKEN) {
-		return NextResponse.json({ error: "invalid_token" }, { status: 401 });
-	}
-
+export async function GET() {
 	// Map mock transactions to activity items
 	const activities = mockTransactions.map(mapTransactionToActivity);
 
-	return NextResponse.json(activities);
+	return NextResponse.json({ data: activities });
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { Check, Copy, Key, RefreshCw, Shield, ShieldOff } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { CardSkeleton } from "@/components/ui/Skeleton";
 import {
 	Table,
 	TableBody,
@@ -14,9 +15,10 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
+import { useApiKeys } from "@/hooks/useApiKeys";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { cn } from "@/lib/utils";
-import { type ApiKey, mockApiKeys } from "@/mock-data/api-keys";
+import type { ApiKey } from "@/mock-data/api-keys";
 
 // ---------------------------------------------------------------------------
 // Revoke confirmation — inline per-row
@@ -161,26 +163,44 @@ function CopyKeyButton({ apiKey }: { apiKey: ApiKey }) {
 // Main table
 // ---------------------------------------------------------------------------
 interface ApiKeysTableProps {
-	/** Override keys list (useful for testing / storybook). Defaults to mockApiKeys. */
+	/** Override keys list (useful for testing / storybook). Defaults to API data. */
 	initialKeys?: ApiKey[];
 }
 
-export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
-	const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
+export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
+	const { data, loading, error, refetch } = useApiKeys();
+	const [keys, setKeys] = useState<ApiKey[]>(initialKeys ?? []);
 	const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
 	const [pendingRotateId, setPendingRotateId] = useState<string | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Revoked">("all");
 
-	const filteredKeys =
-		statusFilter === "all" ? keys : keys.filter((k) => k.status === statusFilter);
+	useEffect(() => {
+		if (initialKeys) {
+			setKeys(initialKeys);
+			return;
+		}
 
-	const pendingKey = keys.find((k) => k.id === pendingRevokeId);
-	const pendingRotateKey = keys.find((k) => k.id === pendingRotateId);
+		if (!loading && !error) {
+			setKeys(data ?? []);
+		}
+	}, [data, error, initialKeys, loading]);
+
+	const displayedKeys =
+		keys.length > 0 || initialKeys !== undefined ? keys : (data ?? []);
+	const filteredKeys =
+		statusFilter === "all"
+			? displayedKeys
+			: displayedKeys.filter((k) => k.status === statusFilter);
+
+	const pendingKey = displayedKeys.find((k) => k.id === pendingRevokeId);
+	const pendingRotateKey = displayedKeys.find((k) => k.id === pendingRotateId);
 
 	const handleRevoke = (id: string) => {
-		setKeys((prev) =>
-			prev.map((k) => (k.id === id ? { ...k, status: "Revoked" as const } : k)),
+		setKeys(
+			displayedKeys.map((k) =>
+				k.id === id ? { ...k, status: "Revoked" as const } : k,
+			),
 		);
 		setPendingRevokeId(null);
 	};
@@ -192,8 +212,8 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 			{ length: 12 },
 			() => chars[Math.floor(Math.random() * chars.length)],
 		).join("");
-		setKeys((prev) =>
-			prev.map((k) =>
+		setKeys(
+			displayedKeys.map((k) =>
 				k.id === id ? { ...k, key: `sk_live_${suffix}...` } : k,
 			),
 		);
@@ -215,15 +235,34 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 			status: "Active",
 			createdAt: new Date().toISOString(),
 		};
-		setKeys((prev) => [newKey, ...prev]);
+		setKeys([newKey, ...displayedKeys]);
 	};
 
-	const getStatusClassName = (status: "Active" | "Revoked") =>
-		`gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-			status === "Active"
-				? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20"
-				: "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800"
-		}`;
+	const renderHeader = () => (
+		<div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+			<div className="flex items-center gap-3">
+				<div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900">
+					<Key className="size-5 text-zinc-600 dark:text-zinc-400" />
+				</div>
+				<div>
+					<h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+						API Keys
+					</h2>
+					<p className="text-sm text-zinc-500 dark:text-zinc-400">
+						Manage your application keys and secrets
+					</p>
+				</div>
+			</div>
+			<Button
+				size="sm"
+				className="rounded-full px-4"
+				onClick={() => setIsModalOpen(true)}
+				data-testid="create-key-btn"
+			>
+				Create new key
+			</Button>
+		</div>
+	);
 
 	return (
 		<>
@@ -254,155 +293,165 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 
 			<div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden">
 				{/* Header */}
-				<div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-					<div className="flex items-center gap-3">
-						<div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900">
-							<Key className="size-5 text-zinc-600 dark:text-zinc-400" />
-						</div>
-						<div>
-							<h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
-								API Keys
-							</h2>
-							<p className="text-sm text-zinc-500 dark:text-zinc-400">
-								Manage your application keys and secrets
-							</p>
-						</div>
+				{renderHeader()}
+
+				{loading && !initialKeys ? (
+					<div className="p-6" role="status" aria-label="Loading API keys">
+						<CardSkeleton />
 					</div>
-					<Button
-						size="sm"
-						className="rounded-full px-4"
-						onClick={() => setIsModalOpen(true)}
-						data-testid="create-key-btn"
+				) : error && !initialKeys ? (
+					<div
+						role="alert"
+						className="m-6 rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20"
 					>
-						Create new key
-					</Button>
-				</div>
-
-				{/* Status filter */}
-				<div
-					className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800 px-6 py-3"
-					role="group"
-					aria-label="Filter by status"
-				>
-					{(["all", "Active", "Revoked"] as const).map((f) => (
-						<button
-							key={f}
-							type="button"
-							onClick={() => setStatusFilter(f)}
-							aria-pressed={statusFilter === f}
-							className={cn(
-								"rounded-full px-3 py-1 text-xs font-medium transition-colors",
-								statusFilter === f
-									? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
-									: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
-							)}
+						<p className="text-sm text-red-800 dark:text-red-300">
+							Failed to load API keys. Please try again.
+						</p>
+						<Button
+							variant="outline"
+							size="sm"
+							className="mt-3"
+							onClick={refetch}
 						>
-							{f === "all" ? "All" : f}
-						</button>
-					))}
-				</div>
-
-				{/* Empty state */}
-				{keys.length === 0 ? (
-					<div className="p-6">
-						<EmptyState
-							icon={
-								<Key className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
-							}
-							title="No API keys yet"
-							description="Create your first API key to start integrating with the Mux Protocol."
-							action={{
-								label: "Create new key",
-								onClick: () => setIsModalOpen(true),
-							}}
-						/>
-					</div>
-				) : filteredKeys.length === 0 ? (
-					<div className="p-6">
-						<EmptyState
-							icon={
-								<Key className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
-							}
-							title={`No ${statusFilter} keys`}
-							description={`You have no ${statusFilter.toLowerCase()} API keys.`}
-						/>
+							Retry
+						</Button>
 					</div>
 				) : (
-					<Table aria-label="API keys">
-						<caption className="sr-only">List of API keys with status and creation date</caption>
-						<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
-							<TableRow>
-								<TableHead className="w-[200px] pl-6">Name</TableHead>
-								<TableHead>Secret Key</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>Created</TableHead>
-								<TableHead className="text-right pr-6">Action</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{filteredKeys.map((key) => (
-								<TableRow key={key.id} className="group transition-colors">
-									<TableCell className="font-medium pl-6 text-zinc-900 dark:text-zinc-100">
-										{key.name}
-									</TableCell>
-									<TableCell>
-										<CopyKeyButton apiKey={key} />
-									</TableCell>
-									<TableCell>
-										<Badge
-											variant={key.status === "Active" ? "default" : "outline"}
-											className={`
-												gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border
-												${
-													key.status === "Active"
-														? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20"
-														: "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800"
-												}
-											`}
-										>
-											{key.status === "Active" ? (
-												<Shield className="size-3" />
-											) : (
-												<ShieldOff className="size-3" />
-											)}
-											{key.status}
-										</Badge>
-									</TableCell>
-									<TableCell className="text-zinc-500 dark:text-zinc-400">
-										{new Date(key.createdAt).toLocaleDateString()}
-									</TableCell>
-									<TableCell className="text-right pr-6">
-										{key.status === "Active" ? (
-											<div className="flex items-center justify-end gap-1">
-												<Button
-													variant="ghost"
-													size="sm"
-													className="text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 h-8 px-3 rounded-lg"
-													onClick={() => setPendingRotateId(key.id)}
-													data-testid={`rotate-btn-${key.id}`}
-												>
-													Rotate
-												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400 h-8 px-3 rounded-lg"
-													onClick={() => setPendingRevokeId(key.id)}
-													data-testid={`revoke-btn-${key.id}`}
-												>
-													Revoke
-												</Button>
-											</div>
-										) : (
-											<span className="text-xs text-zinc-400 dark:text-zinc-600 pr-1">
-												Revoked
-											</span>
-										)}
-									</TableCell>
-								</TableRow>
+					<>
+						{/* Status filter */}
+						<div
+							className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800 px-6 py-3"
+							role="group"
+							aria-label="Filter by status"
+						>
+							{(["all", "Active", "Revoked"] as const).map((f) => (
+								<button
+									key={f}
+									type="button"
+									onClick={() => setStatusFilter(f)}
+									aria-pressed={statusFilter === f}
+									className={cn(
+										"rounded-full px-3 py-1 text-xs font-medium transition-colors",
+										statusFilter === f
+											? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
+											: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
+									)}
+								>
+									{f === "all" ? "All" : f}
+								</button>
 							))}
-						</TableBody>
-					</Table>
+						</div>
+
+						{/* Empty state */}
+						{displayedKeys.length === 0 ? (
+							<div className="p-6">
+								<EmptyState
+									icon={
+										<Key className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
+									}
+									title="No API keys yet"
+									description="Create your first API key to start integrating with the Mux Protocol."
+									action={{
+										label: "Create new key",
+										onClick: () => setIsModalOpen(true),
+									}}
+								/>
+							</div>
+						) : filteredKeys.length === 0 ? (
+							<div className="p-6">
+								<EmptyState
+									icon={
+										<Key className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
+									}
+									title={`No ${statusFilter} keys`}
+									description={`You have no ${statusFilter.toLowerCase()} API keys.`}
+								/>
+							</div>
+						) : (
+							<Table aria-label="API keys">
+								<caption className="sr-only">
+									List of API keys with status and creation date
+								</caption>
+								<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
+									<TableRow>
+										<TableHead className="w-[200px] pl-6">Name</TableHead>
+										<TableHead>Secret Key</TableHead>
+										<TableHead>Status</TableHead>
+										<TableHead>Created</TableHead>
+										<TableHead className="text-right pr-6">Action</TableHead>
+									</TableRow>
+								</TableHeader>
+								<TableBody>
+									{filteredKeys.map((key) => (
+										<TableRow
+											key={key.id}
+											className="group transition-colors"
+										>
+											<TableCell className="font-medium pl-6 text-zinc-900 dark:text-zinc-100">
+												{key.name}
+											</TableCell>
+											<TableCell>
+												<CopyKeyButton apiKey={key} />
+											</TableCell>
+											<TableCell>
+												<Badge
+													variant={
+														key.status === "Active" ? "default" : "outline"
+													}
+													className={`
+														gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border
+														${
+															key.status === "Active"
+																? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20"
+																: "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800"
+														}
+													`}
+												>
+													{key.status === "Active" ? (
+														<Shield className="size-3" />
+													) : (
+														<ShieldOff className="size-3" />
+													)}
+													{key.status}
+												</Badge>
+											</TableCell>
+											<TableCell className="text-zinc-500 dark:text-zinc-400">
+												{new Date(key.createdAt).toLocaleDateString()}
+											</TableCell>
+											<TableCell className="text-right pr-6">
+												{key.status === "Active" ? (
+													<div className="flex items-center justify-end gap-1">
+														<Button
+															variant="ghost"
+															size="sm"
+															className="text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 h-8 px-3 rounded-lg"
+															onClick={() => setPendingRotateId(key.id)}
+															data-testid={`rotate-btn-${key.id}`}
+														>
+															Rotate
+														</Button>
+														<Button
+															variant="ghost"
+															size="sm"
+															className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400 h-8 px-3 rounded-lg"
+															onClick={() => setPendingRevokeId(key.id)}
+															data-testid={`revoke-btn-${key.id}`}
+														>
+															Revoke
+														</Button>
+													</div>
+												) : (
+													<span className="text-xs text-zinc-400 dark:text-zinc-600 pr-1">
+														Revoked
+													</span>
+												)}
+											</TableCell>
+										</TableRow>
+									))}
+								</TableBody>
+							</Table>
+						)}
+					</>
 				)}
 			</div>
 		</>

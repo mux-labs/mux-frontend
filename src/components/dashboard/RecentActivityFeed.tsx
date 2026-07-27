@@ -1,23 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CardSkeleton } from "@/components/ui/Skeleton";
-import { Button } from "@/components/ui/button";
 import {
-	Clock,
-	Wallet,
-	ArrowUpRight,
-	ArrowDownRight,
 	AlertCircle,
+	ArrowUpRight,
+	Clock,
+	Key,
+	Wallet,
 } from "lucide-react";
-
-interface ActivityItem {
-	id: string;
-	type: "wallet_created" | "transaction" | "api_key_created" | "limit_reached";
-	description: string;
-	timestamp: Date;
-	status: "success" | "pending" | "error";
-}
+import { useEffect, useState } from "react";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CardSkeleton } from "@/components/ui/Skeleton";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { fetchRecentActivity, type ActivityItem } from "@/lib/api";
 
 export function RecentActivityFeed() {
 	const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -29,49 +24,7 @@ export function RecentActivityFeed() {
 			setIsLoading(true);
 			setError(null);
 
-			// Simulate API call
-			await new Promise((resolve) => setTimeout(resolve, 800));
-
-			// Mock data - in production, this would come from the API
-			const mockActivities: ActivityItem[] = [
-				{
-					id: "1",
-					type: "wallet_created",
-					description: "New wallet created on mainnet",
-					timestamp: new Date(Date.now() - 5 * 60 * 1000),
-					status: "success",
-				},
-				{
-					id: "2",
-					type: "transaction",
-					description: "Transaction of 150 XLM completed",
-					timestamp: new Date(Date.now() - 15 * 60 * 1000),
-					status: "success",
-				},
-				{
-					id: "3",
-					type: "api_key_created",
-					description: "New API key 'Production Key' created",
-					timestamp: new Date(Date.now() - 30 * 60 * 1000),
-					status: "success",
-				},
-				{
-					id: "4",
-					type: "transaction",
-					description: "Transaction of 50 XLM pending",
-					timestamp: new Date(Date.now() - 45 * 60 * 1000),
-					status: "pending",
-				},
-				{
-					id: "5",
-					type: "limit_reached",
-					description: "Daily spending limit 80% reached",
-					timestamp: new Date(Date.now() - 60 * 60 * 1000),
-					status: "error",
-				},
-			];
-
-			setActivities(mockActivities);
+			setActivities(await fetchRecentActivity());
 		} catch (err) {
 			setError("Failed to load recent activity. Please try again.");
 			console.error("Error fetching activities:", err);
@@ -84,7 +37,10 @@ export function RecentActivityFeed() {
 		fetchActivities();
 	}, []);
 
-	const formatTimeAgo = (date: Date) => {
+	const formatTimeAgo = (timestamp: string) => {
+		const date = new Date(timestamp);
+		if (Number.isNaN(date.getTime())) return "Unknown time";
+
 		const now = new Date();
 		const diffMs = now.getTime() - date.getTime();
 		const diffMins = Math.floor(diffMs / 60000);
@@ -104,7 +60,7 @@ export function RecentActivityFeed() {
 			case "transaction":
 				return <ArrowUpRight className="size-4" />;
 			case "api_key_created":
-				return <Clock className="size-4" />;
+				return <Key className="size-4" />;
 			case "limit_reached":
 				return <AlertCircle className="size-4" />;
 			default:
@@ -139,8 +95,19 @@ export function RecentActivityFeed() {
 
 	if (error) {
 		return (
-			<div className="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20">
+			<div
+				role="alert"
+				className="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20"
+			>
 				<p className="text-sm text-red-800 dark:text-red-300">{error}</p>
+				<Button
+					variant="outline"
+					size="sm"
+					className="mt-3"
+					onClick={fetchActivities}
+				>
+					Retry
+				</Button>
 			</div>
 		);
 	}
@@ -157,11 +124,14 @@ export function RecentActivityFeed() {
 			</div>
 			<div className="divide-y divide-zinc-200 dark:divide-zinc-800">
 				{activities.length === 0 ? (
-					<div className="p-12 text-center">
-						<Clock className="size-12 mx-auto text-zinc-300 dark:text-zinc-700 mb-4" />
-						<p className="text-sm text-zinc-500 dark:text-zinc-400">
-							No recent activity
-						</p>
+					<div className="p-6">
+						<EmptyState
+							icon={
+								<Clock className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />
+							}
+							title="No recent activity"
+							description="Wallet, transaction, API key, and spending-limit events will appear here."
+						/>
 					</div>
 				) : (
 					activities.map((activity) => (
@@ -185,6 +155,11 @@ export function RecentActivityFeed() {
 										{formatTimeAgo(activity.timestamp)}
 									</p>
 								</div>
+								{activity.network && (
+									<Badge variant="outline" className="capitalize">
+										{activity.network}
+									</Badge>
+								)}
 								{activity.status === "pending" && (
 									<span className="text-xs font-medium text-yellow-600 dark:text-yellow-400">
 										Pending

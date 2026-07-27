@@ -1,7 +1,7 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState } from "react";
-import { AnalyticsChart } from "@/components/analytics/AnalyticsChart";
 import { AnalyticsEmptyState } from "@/components/analytics/AnalyticsEmptyState";
 import { AnalyticsExportButton } from "@/components/analytics/AnalyticsExportButton";
 import {
@@ -17,6 +17,32 @@ import { ToastContainer, useToast } from "@/components/ui/toast";
 import { useAnalyticsExport } from "@/hooks/useAnalyticsExport";
 import { useAnalyticsMetrics } from "@/hooks/useAnalyticsMetrics";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
+
+// ---------------------------------------------------------------------------
+// Lazy-loaded chart components — reduces the initial JS bundle for the
+// analytics route.  `ssr: false` because the chart SVGs read `document` for
+// dark-mode detection and don't need server-side rendering.
+// ---------------------------------------------------------------------------
+
+const AnalyticsChart = dynamic(
+	() =>
+		import("@/components/analytics/AnalyticsChart").then(
+			(mod) => mod.AnalyticsChart,
+		),
+	{
+		ssr: false,
+		loading: () => (
+			<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900">
+				<div className="mb-6 h-6 w-32 animate-pulse rounded bg-zinc-200 dark:bg-zinc-700" />
+				<div className="h-[120px] animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-800" />
+			</div>
+		),
+	},
+);
+
+// ---------------------------------------------------------------------------
+// Analytics page
+// ---------------------------------------------------------------------------
 
 export default function AnalyticsPage() {
 	const [range, setRange] = useState<DateRange>(() => {
@@ -155,19 +181,19 @@ export default function AnalyticsPage() {
 
 				<MetricsCards metrics={data.metrics} />
 
-				<div className="grid gap-6 lg:grid-cols-2">
-					<AnalyticsChart
-						title="Volume"
-						description="Total transaction volume over the selected period"
-						data={data.volumeData}
-						formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
-					/>
-					<AnalyticsChart
-						title="Transactions"
-						description="Number of transactions over the selected period"
-						data={data.transactionsData}
-					/>
-				</div>
+			<div className="grid gap-6 lg:grid-cols-2">
+				<AnalyticsChart
+					title="Volume"
+					description="Total transaction volume over the selected period"
+					data={data.volumeData}
+					formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
+				/>
+				<AnalyticsChart
+					title="Transactions"
+					description="Number of transactions over the selected period"
+					data={data.transactionsData}
+				/>
+			</div>
 
 				<TopAssetsTable assets={data.topAssets} />
 			</div>

@@ -4,6 +4,8 @@ export interface Wallet {
 	id: string;
 	/** Full 56-character Stellar public key (G-address). */
 	address: string;
+	/** Optional display name for this wallet. */
+	name?: string;
 	label?: string;
 	network: "testnet" | "mainnet";
 	/** Lifecycle status of the wallet. `pending` until confirmed on-chain. */
@@ -14,6 +16,8 @@ export interface Wallet {
 	balance?: string;
 	/** Timestamp of the most recent on-chain activity, if known. */
 	lastActivity?: Date;
+	/** Whether the wallet has been archived. Archived wallets are hidden from the default list view. */
+	archived?: boolean;
 }
 
 export type WalletNetwork = Wallet["network"];

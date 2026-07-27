@@ -15,8 +15,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-test:
-    name: Build and test
+  typecheck:
+    name: Typecheck
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +33,69 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Runs `tsc --noEmit` against the same tsconfig.json used by `next
+      # build` (via the `next` compiler plugin), so a type error here is
+      # guaranteed to also fail the build step below. This job intentionally
+      # runs before build/test so type errors fail fast.
       - name: Typecheck
-        run: pnpm exec tsc --noEmit
+        run: pnpm run typecheck
+
+  unit-tests:
+    name: Unit tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run unit/component tests
+        run: pnpm test
+
+  build:
+    name: Build (${{ matrix.network }})
+    needs: [typecheck, unit-tests]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # `next build` type-checks and statically analyzes every route,
+        # including the API routes that branch on NEXT_PUBLIC_API_URL
+        # (see src/app/api/auth/login/route.ts and
+        # src/lib/api/config.ts::getApiBaseUrl()). Building once with a
+        # testnet-shaped URL and once with a mainnet-shaped URL catches
+        # env-specific breakage before it reaches either environment.
+        network: [testnet, mainnet]
+        include:
+          - network: testnet
+            api_url: https://testnet-api.example.com
+          - network: mainnet
+            api_url: https://api.example.com
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
       - name: Build
         run: pnpm run build
         env:
-          NEXT_PUBLIC_API_URL: https://api.example.com
+          NEXT_PUBLIC_API_URL: ${{ matrix.api_url }}

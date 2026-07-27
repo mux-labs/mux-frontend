@@ -80,7 +80,7 @@ describe("ApiKeysTable — revoke confirmation", () => {
 		const user = userEvent.setup();
 		render(<ApiKeysTable initialKeys={[activeKey]} />);
 		await user.click(screen.getByTestId("revoke-btn-test-1"));
-		await user.click(screen.getByTestId("confirm-revoke"));
+		await user.click(screen.getByRole("button", { name: /revoke key/i }));
 		expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
 		// Revoke button should be gone; "Revoked" text should appear
 		expect(screen.queryByTestId("revoke-btn-test-1")).not.toBeInTheDocument();
@@ -98,12 +98,14 @@ describe("ApiKeysTable — copy key feedback", () => {
 		const copyBtn = screen.getByTestId("copy-key-test-1");
 		await user.click(copyBtn);
 		expect(navigator.clipboard.writeText).toHaveBeenCalledWith(activeKey.key);
-		// aria-label changes to "Copied!"
+		// aria-label changes to copied feedback
 		await waitFor(() =>
-			expect(copyBtn).toHaveAttribute("aria-label", "Copied!"),
+			expect(copyBtn).toHaveAttribute(
+				"aria-label",
+				"API key copied to clipboard",
+			),
 		);
-		// sr-only live region announces the copy
-		expect(screen.getByRole("status")).toHaveTextContent("Copied to clipboard");
+		expect(screen.getByRole("status")).toHaveTextContent("API key copied");
 	});
 
 	it("resets copy feedback after timeout", async () => {
@@ -114,14 +116,14 @@ describe("ApiKeysTable — copy key feedback", () => {
 		await waitFor(() =>
 			expect(screen.getByTestId("copy-key-test-1")).toHaveAttribute(
 				"aria-label",
-				"Copied!",
+				"API key copied to clipboard",
 			),
 		);
 		vi.advanceTimersByTime(2100);
 		await waitFor(() =>
 			expect(screen.getByTestId("copy-key-test-1")).toHaveAttribute(
 				"aria-label",
-				`Copy key ${activeKey.name}`,
+				"Copy API key to clipboard",
 			),
 		);
 		vi.useRealTimers();

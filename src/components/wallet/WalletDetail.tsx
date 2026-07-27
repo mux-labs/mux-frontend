@@ -1,6 +1,14 @@
 "use client";
 
-import { AlertCircle, Check, Copy, Pencil, RefreshCw, X } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	Copy,
+	Link as LinkIcon,
+	Pencil,
+	RefreshCw,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import TransactionsTable from "@/components/TransactionsTable/TransactionsTable";
 import { Button } from "@/components/ui/button";
@@ -31,9 +39,16 @@ interface WalletDetailProps {
  * Displays live balance and metadata for a single wallet.
  */
 export function WalletDetail({ id }: WalletDetailProps) {
+	const trimmedId = id?.trim() ?? "";
+	const isValidId = trimmedId.length > 0;
 	const { wallet, balance, loading, error, lastUpdated, refresh } =
-		useWalletBalance(id);
+		useWalletBalance(isValidId ? trimmedId : null);
 	const { copy, copied, error: copyError } = useCopyToClipboard();
+	const {
+		copy: copyLink,
+		copied: linkCopied,
+		error: linkCopyError,
+	} = useCopyToClipboard();
 	const { track } = useAnalyticsTracking("wallet_detail");
 	const balanceHeadingId = useId();
 	const infoHeadingId = useId();
@@ -73,6 +88,24 @@ export function WalletDetail({ id }: WalletDetailProps) {
 		},
 		[id, track, copy],
 	);
+
+	const handleCopyLink = useCallback(() => {
+		const origin =
+			typeof window !== "undefined" ? window.location.origin : "";
+		const deepLink = `${origin}/dashboard/wallets/${encodeURIComponent(trimmedId)}`;
+		trackWalletEvent("wallet_detail_link_copied", { walletId: id });
+		track("wallet_detail_link_copied", { walletId: id });
+		copyLink(deepLink);
+	}, [id, trimmedId, track, copyLink]);
+
+	if (!isValidId) {
+		return (
+			<ErrorState
+				title="Invalid wallet link"
+				description="This wallet link is missing a valid identifier. Double-check the URL or return to your wallet list."
+			/>
+		);
+	}
 
 	async function saveNickname(event: React.FormEvent) {
 		event.preventDefault();
@@ -152,6 +185,32 @@ export function WalletDetail({ id }: WalletDetailProps) {
 								Updated {formatDate(lastUpdated)}
 							</span>
 						)}
+						<button
+							type="button"
+							onClick={handleCopyLink}
+							aria-label={
+								linkCopyError
+									? linkCopyError
+									: linkCopied
+										? "Wallet link copied"
+										: "Copy deep link to this wallet"
+							}
+							title={
+								linkCopyError
+									? linkCopyError
+									: linkCopied
+										? "Copied!"
+										: "Copy link to this wallet"
+							}
+							data-testid="copy-wallet-link-button"
+							className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+						>
+							{linkCopied ? (
+								<Check className="h-4 w-4 text-green-500" aria-hidden="true" />
+							) : (
+								<LinkIcon className="h-4 w-4" aria-hidden="true" />
+							)}
+						</button>
 						<button
 							type="button"
 							onClick={handleRefresh}

@@ -56,6 +56,44 @@ pnpm install
 pnpm run dev
 ```
 
+### Environment variables
+
+All variables are optional in local development — sensible mock/default
+behavior kicks in when they're unset (see `src/lib/env.ts` for the
+validation schema). Copy `.env.example` to `.env.local` and fill in real
+values for testnet/mainnet-connected work.
+
+| Variable | Required | Default | Description |
+| --- | --- | --- | --- |
+| `NEXT_PUBLIC_API_URL` | No | _(none)_ | Base URL for the Mux backend API used by client-side requests, e.g. `https://api.muxprotocol.com` for mainnet or a testnet-specific URL. When unset, API routes such as `/api/auth/login` fall back to an in-repo mock so `pnpm run dev` and CI work without a live backend. |
+| `NEXT_PUBLIC_MUX_API_URL` | No | `https://api.muxprotocol.com` | Legacy alias for the API base URL, checked after `NEXT_PUBLIC_API_URL` (see `src/lib/api/config.ts`). Kept for backward compatibility with older deploys. |
+| `NEXT_PUBLIC_API_BASE` | No | _(none)_ | Third fallback in the API base URL resolution chain, checked after the two vars above. |
+| `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Public-facing URL of this application, used for building absolute links (e.g. callback URLs). |
+| `NEXT_PUBLIC_MUX_API_KEY` | No | _(none)_ | Client-visible API key sent with requests to the Mux Protocol API. Do not put secrets here — anything prefixed `NEXT_PUBLIC_` is bundled into client JS. |
+| `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
+| `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key, used for requests made from Next.js API routes / server components. Never exposed to the browser. |
+| `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
+| `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
+
+**Testnet vs. mainnet:** this frontend does not hardcode a network — it
+is entirely driven by which backend `NEXT_PUBLIC_API_URL` (or its
+aliases above) points at. Point it at a testnet-configured Mux backend
+for staging/testnet work, and at the production backend for mainnet.
+The CI workflow (`.github/workflows/ci.yml`) sets a placeholder
+`NEXT_PUBLIC_API_URL` only so `next build` can run without secrets; it
+does not reflect a real environment.
+
+`NODE_ENV` (standard Next.js variable, not defined in `.env.example`)
+also gates some behavior: analytics/tracking hooks
+(`useAnalytics.ts`, `useAnalyticsMetrics.ts`, `useAnalyticsTracking.ts`,
+`recoveryAnalyticsTracking.ts`, `spendingLimitsTracking.ts`) log to the
+console outside of `production`, and `src/lib/env.ts` throws on missing
+*required* vars only when `NODE_ENV=production`.
+
+See [`docs/frontend-env-vars.md`](docs/frontend-env-vars.md) for the full
+reference, including which file reads each variable and a manual
+verification checklist.
+
 ### Auth and API client behavior
 
 This repo now includes a minimal auth flow and API client support for dev mode:

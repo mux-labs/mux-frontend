@@ -51,3 +51,37 @@ export const AllVariants: Story = {
 		</div>
 	),
 };
+
+/** Rendered in dark mode to verify the dark: contrast variants used on real pages. */
+export const DarkMode: Story = {
+	args: { network: "testnet" },
+	parameters: { backgrounds: { default: "dark" } },
+	decorators: [
+		(Story) => (
+			<div className="dark bg-zinc-950 p-6">
+				<Story />
+			</div>
+		),
+	],
+};
+
+/**
+ * How the badge looks inline with the other wallet metadata it's usually
+ * paired with — a quick visual regression check for the wallet table/detail
+ * layouts rather than the badge in isolation.
+ */
+export const InWalletRow: Story = {
+	render: () => (
+		<div className="flex items-center gap-3 rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+			<code className="font-mono text-sm text-zinc-700 dark:text-zinc-300">
+				GBZX...MADI
+			</code>
+			<NetworkBadge network="mainnet" />
+		</div>
+	),
+};
+
+/** Long custom className to confirm text/badge sizing doesn't overflow oddly. */
+export const CompactSize: Story = {
+	args: { network: "mainnet", className: "text-[10px] px-2 py-0" },
+};

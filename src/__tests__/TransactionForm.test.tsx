@@ -1,6 +1,5 @@
 import "@testing-library/jest-dom";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { vi } from "vitest";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { TransactionForm } from "@/components/transactions/TransactionForm";
 
 describe("TransactionForm", () => {
@@ -52,7 +51,7 @@ describe("TransactionForm", () => {
 		expect(screen.getAllByText(/Invalid address format/)).toHaveLength(2);
 	});
 
-	it("calls onSubmit with form data when validation passes", () => {
+	it("calls onSubmit with form data when validation passes", async () => {
 		render(<TransactionForm onSubmit={mockOnSubmit} />);
 		const amountInput = screen.getByLabelText("Amount");
 		const addressInput = screen.getByLabelText("Recipient Address");
@@ -63,14 +62,16 @@ describe("TransactionForm", () => {
 		fireEvent.change(memoInput, { target: { value: "Test payment" } });
 		fireEvent.click(screen.getByRole("button", { name: /send transaction/i }));
 
-		expect(mockOnSubmit).toHaveBeenCalledWith({
-			amount: "100",
-			address: "a".repeat(40),
-			memo: "Test payment",
-		});
+		await waitFor(() =>
+			expect(mockOnSubmit).toHaveBeenCalledWith({
+				amount: "100",
+				address: "a".repeat(40),
+				memo: "Test payment",
+			}),
+		);
 	});
 
-	it("calls onSubmit with empty memo when not provided", () => {
+	it("calls onSubmit with empty memo when not provided", async () => {
 		render(<TransactionForm onSubmit={mockOnSubmit} />);
 		const amountInput = screen.getByLabelText("Amount");
 		const addressInput = screen.getByLabelText("Recipient Address");
@@ -79,11 +80,34 @@ describe("TransactionForm", () => {
 		fireEvent.change(addressInput, { target: { value: "a".repeat(35) } });
 		fireEvent.click(screen.getByRole("button", { name: /send transaction/i }));
 
-		expect(mockOnSubmit).toHaveBeenCalledWith({
-			amount: "50",
-			address: "a".repeat(35),
-			memo: "",
+		await waitFor(() =>
+			expect(mockOnSubmit).toHaveBeenCalledWith({
+				amount: "50",
+				address: "a".repeat(35),
+				memo: "",
+			}),
+		);
+	});
+
+	it("prevents double submit while the submit handler is pending", () => {
+		const pendingSubmit = jest.fn(() => new Promise<void>(() => {}));
+		render(<TransactionForm onSubmit={pendingSubmit} />);
+		fireEvent.change(screen.getByLabelText("Amount"), {
+			target: { value: "100" },
 		});
+		fireEvent.change(screen.getByLabelText("Recipient Address"), {
+			target: { value: "a".repeat(40) },
+		});
+
+		const submitButton = screen.getByRole("button", {
+			name: /send transaction/i,
+		});
+		fireEvent.click(submitButton);
+		fireEvent.click(submitButton);
+
+		expect(pendingSubmit).toHaveBeenCalledTimes(1);
+		expect(submitButton).toBeDisabled();
+		expect(submitButton).toHaveAttribute("aria-busy", "true");
 	});
 
 	it("applies custom className", () => {

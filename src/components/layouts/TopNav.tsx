@@ -1,6 +1,7 @@
 "use client";
 
 import {
+	ArrowRightStartOnRectangleIcon,
 	Bars3Icon,
 	BellIcon,
 	ChevronDownIcon,
@@ -9,10 +10,11 @@ import {
 	SunIcon,
 } from "@heroicons/react/24/outline";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import type { WalletNetwork } from "@/types/wallet";
 
 interface TopNavProps {
 	onMenuClick: () => void;
@@ -27,10 +29,17 @@ const networkBadgeClass = {
 
 export function TopNav({ onMenuClick }: TopNavProps) {
 	const [searchOpen, setSearchOpen] = useState(false);
+	const [menuOpen, setMenuOpen] = useState(false);
 	const pathname = usePathname();
 	const { network, setNetwork } = useNetwork();
+	const [optimisticNetwork, setOptimisticNetwork] =
+		useState<WalletNetwork>(network);
+	const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
+	const switchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const { user, isLoading } = useAuth();
 	const { isDark, toggle: toggleDark } = useDarkMode();
+	const router = useRouter();
+	const menuRef = useRef<HTMLDivElement>(null);
 
 	// Get current page title from pathname
 	const pageTitle = (() => {
@@ -55,8 +64,151 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 	})();
 
 	useEffect(() => {
-		document.title = `${pageTitle} · ${networkLabel[network]} — Mux`;
-	}, [pageTitle, network]);
+		setOptimisticNetwork(network);
+	}, [network]);
+
+	useEffect(() => {
+		document.title = `${pageTitle} · ${networkLabel[optimisticNetwork]} — Mux`;
+	}, [pageTitle, optimisticNetwork]);
+
+	useEffect(() => {
+		return () => {
+			if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+		};
+	}, []);
+
+	function handleNetworkSwitch(nextNetwork: WalletNetwork) {
+		if (nextNetwork === optimisticNetwork) return;
+
+		setOptimisticNetwork(nextNetwork);
+		setIsSwitchingNetwork(true);
+		setNetwork(nextNetwork);
+
+		if (switchTimerRef.current) clearTimeout(switchTimerRef.current);
+		switchTimerRef.current = setTimeout(() => {
+			setIsSwitchingNetwork(false);
+		}, 300);
+	}
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event: MouseEvent) {
+			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
+
+	// Close dropdown on Escape key
+	useEffect(() => {
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, []);
+
+	function handleLogout() {
+		setMenuOpen(false);
+		signOut();
+		router.replace("/login");
+	}
+
+	const displayName = user?.name ?? "Developer";
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event: MouseEvent) {
+			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
+
+	// Close dropdown on Escape key
+	useEffect(() => {
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, []);
+
+	function handleLogout() {
+		setMenuOpen(false);
+		signOut();
+		router.replace("/login");
+	}
+
+	const displayName = user?.name ?? "Developer";
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event: MouseEvent) {
+			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
+
+	// Close dropdown on Escape key
+	useEffect(() => {
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, []);
+
+	function handleLogout() {
+		setMenuOpen(false);
+		signOut();
+		router.replace("/login");
+	}
+
+	const displayName = user?.name ?? "Developer";
+
+	// Close dropdown when clicking outside
+	useEffect(() => {
+		function handleClickOutside(event: MouseEvent) {
+			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("mousedown", handleClickOutside);
+		return () => document.removeEventListener("mousedown", handleClickOutside);
+	}, []);
+
+	// Close dropdown on Escape key
+	useEffect(() => {
+		function handleKeyDown(event: KeyboardEvent) {
+			if (event.key === "Escape") {
+				setMenuOpen(false);
+			}
+		}
+		document.addEventListener("keydown", handleKeyDown);
+		return () => document.removeEventListener("keydown", handleKeyDown);
+	}, []);
+
+	function handleLogout() {
+		setMenuOpen(false);
+		signOut();
+		router.replace("/login");
+	}
+
+	const displayName = user?.name ?? "Developer";
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white/95 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 backdrop-blur supports-backdrop-filter:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/95 dark:supports-backdrop-filter:bg-zinc-900/60">
@@ -64,7 +216,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 			<button
 				type="button"
 				onClick={onMenuClick}
-				className="-m-2.5 p-2.5 text-gray-700 lg:hidden"
+				aria-label="Open sidebar"
+				className="-m-2.5 rounded-md p-2.5 text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 			>
 				<span className="sr-only">Open sidebar</span>
 				<Bars3Icon className="h-6 w-6" aria-hidden="true" />
@@ -79,9 +232,9 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					<h1 className="flex items-center gap-2 text-lg font-semibold text-gray-900 sm:text-xl">
 						{pageTitle}
 						<span
-							className={`rounded-full px-2 py-0.5 text-xs font-medium ${networkBadgeClass[network]}`}
+							className={`rounded-full px-2 py-0.5 text-xs font-medium ${networkBadgeClass[optimisticNetwork]}`}
 						>
-							{networkLabel[network]}
+							{networkLabel[optimisticNetwork]}
 						</span>
 					</h1>
 
@@ -96,9 +249,9 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 							<li className="flex items-center gap-1.5 font-medium text-gray-900">
 								{pageTitle}
 								<span
-									className={`rounded-full px-2 py-0.5 text-xs font-medium ${networkBadgeClass[network]}`}
+									className={`rounded-full px-2 py-0.5 text-xs font-medium ${networkBadgeClass[optimisticNetwork]}`}
 								>
-									{networkLabel[network]}
+									{networkLabel[optimisticNetwork]}
 								</span>
 							</li>
 						</ol>
@@ -115,11 +268,11 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					>
 						<button
 							type="button"
-							onClick={() => setNetwork("testnet")}
-							aria-pressed={network === "testnet"}
+							onClick={() => handleNetworkSwitch("testnet")}
+							aria-pressed={optimisticNetwork === "testnet"}
 							aria-label="Switch to Testnet"
 							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
-								network === "testnet"
+								optimisticNetwork === "testnet"
 									? "bg-amber-100 text-amber-900"
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
@@ -128,11 +281,11 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 						</button>
 						<button
 							type="button"
-							onClick={() => setNetwork("mainnet")}
-							aria-pressed={network === "mainnet"}
+							onClick={() => handleNetworkSwitch("mainnet")}
+							aria-pressed={optimisticNetwork === "mainnet"}
 							aria-label="Switch to Mainnet"
 							className={`rounded-md px-2 py-1 transition-colors sm:px-3 ${
-								network === "mainnet"
+								optimisticNetwork === "mainnet"
 									? "bg-blue-100 text-blue-900"
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
@@ -140,6 +293,11 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 							Mainnet
 						</button>
 					</div>
+					<span className="sr-only" aria-live="polite">
+						{isSwitchingNetwork
+							? `Switching to ${networkLabel[optimisticNetwork]}`
+							: `Using ${networkLabel[optimisticNetwork]}`}
+					</span>
 
 					{/* Search - responsive */}
 					<div
@@ -165,7 +323,8 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					<button
 						type="button"
 						onClick={() => setSearchOpen(!searchOpen)}
-						className="p-2 text-gray-400 hover:text-gray-500 lg:hidden"
+						aria-label={searchOpen ? "Close search" : "Open search"}
+						className="rounded-md p-2 text-gray-400 hover:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 					>
 						<span className="sr-only">Search</span>
 						<MagnifyingGlassIcon className="h-5 w-5" aria-hidden="true" />
@@ -188,6 +347,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					{/* Notifications */}
 					<button
 						type="button"
+						aria-label="View notifications"
 						className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
 					>
 						<span className="sr-only">View notifications</span>
@@ -196,17 +356,25 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					</button>
 
 					{/* User dropdown */}
-					<div className="relative">
+					<div className="relative" ref={menuRef}>
 						<button
 							type="button"
+							aria-label="Open user menu"
 							className="flex items-center gap-x-3 rounded-lg p-1.5 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
 							id="user-menu-button"
 						>
 							{isLoading ? (
-								<div className="h-8 w-8 rounded-full bg-gray-200 animate-pulse" />
+								<div
+									data-testid="user-avatar-skeleton"
+									className="h-8 w-8 rounded-full bg-gray-200 animate-pulse"
+								/>
 							) : user ? (
 								<>
-									<div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-xs font-semibold text-white">
+									<div
+										data-testid="user-avatar"
+										aria-label={`${user.name} avatar`}
+										className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-linear-to-br from-blue-500 to-purple-600 text-xs font-semibold text-white select-none"
+									>
 										{user.name
 											.split(" ")
 											.map((n: string) => n[0])
@@ -221,13 +389,53 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 									</div>
 								</>
 							) : (
-								<div className="h-8 w-8 rounded-full bg-linear-to-br from-gray-300 to-gray-400" />
+								<div
+									data-testid="user-avatar-empty"
+									className="h-8 w-8 rounded-full bg-linear-to-br from-gray-300 to-gray-400"
+								/>
 							)}
 							<ChevronDownIcon
-								className="hidden h-5 w-5 text-gray-400 lg:block"
+								className={`hidden h-5 w-5 text-gray-400 lg:block transition-transform duration-150 ${menuOpen ? "rotate-180" : ""}`}
 								aria-hidden="true"
 							/>
 						</button>
+
+						{/* Dropdown menu */}
+						{menuOpen && (
+							<div
+								id="user-menu"
+								role="menu"
+								aria-labelledby="user-menu-button"
+								data-testid="user-menu"
+								className="absolute right-0 mt-2 w-48 origin-top-right rounded-lg bg-white py-1 shadow-lg ring-1 ring-black/5 focus:outline-none z-50"
+							>
+								{/* User info */}
+								<div className="border-b border-gray-100 px-4 py-2">
+									<p className="text-xs text-gray-500">Signed in as</p>
+									<p
+										className="truncate text-sm font-medium text-gray-900"
+										data-testid="user-menu-email"
+									>
+										{user?.email ?? ""}
+									</p>
+								</div>
+
+								{/* Logout action */}
+								<button
+									type="button"
+									role="menuitem"
+									onClick={handleLogout}
+									data-testid="logout-button"
+									className="flex w-full items-center gap-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-red-600 focus:outline-none focus:bg-gray-50"
+								>
+									<ArrowRightStartOnRectangleIcon
+										className="h-4 w-4 text-gray-400"
+										aria-hidden="true"
+									/>
+									Sign out
+								</button>
+							</div>
+						)}
 					</div>
 				</div>
 			</div>

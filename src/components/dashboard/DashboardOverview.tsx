@@ -1,20 +1,15 @@
 "use client";
 
-import { RefreshCw, Wallet, Activity, TrendingUp } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Activity, BarChart3, RefreshCw, TrendingUp, Wallet } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/EmptyState";
 import { CardSkeleton } from "@/components/ui/Skeleton";
-
-interface OverviewStats {
-	totalWallets: number;
-	activeWallets: number;
-	totalTransactions: number;
-	totalVolume: string;
-	lastUpdated: Date;
-}
+import { fetchOverview } from "@/lib/api";
+import type { OverviewData } from "@/mock-data/overview";
 
 export function DashboardOverview() {
-	const [stats, setStats] = useState<OverviewStats | null>(null);
+	const [stats, setStats] = useState<OverviewData | null>(null);
 	const [isLoading, setIsLoading] = useState(true);
 	const [isRefreshing, setIsRefreshing] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -28,19 +23,7 @@ export function DashboardOverview() {
 			}
 			setError(null);
 
-			// Simulate API call
-			await new Promise((resolve) => setTimeout(resolve, 1000));
-
-			// Mock data - in production, this would come from the API
-			const mockStats: OverviewStats = {
-				totalWallets: 156,
-				activeWallets: 142,
-				totalTransactions: 2847,
-				totalVolume: "$45,230.50",
-				lastUpdated: new Date(),
-			};
-
-			setStats(mockStats);
+			setStats(await fetchOverview());
 		} catch (err) {
 			setError("Failed to load overview stats. Please try again.");
 			console.error("Error fetching stats:", err);
@@ -60,7 +43,8 @@ export function DashboardOverview() {
 
 	if (isLoading) {
 		return (
-			<div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+			<div className="grid gap-6 md:grid-cols-2 xl:grid-cols-5">
+				<CardSkeleton />
 				<CardSkeleton />
 				<CardSkeleton />
 				<CardSkeleton />
@@ -71,7 +55,10 @@ export function DashboardOverview() {
 
 	if (error) {
 		return (
-			<div className="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20">
+			<div
+				role="alert"
+				className="rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20"
+			>
 				<p className="text-sm text-red-800 dark:text-red-300">{error}</p>
 				<Button
 					variant="outline"
@@ -85,17 +72,31 @@ export function DashboardOverview() {
 		);
 	}
 
-	if (!stats) return null;
+	if (!stats) {
+		return (
+			<EmptyState
+				icon={<BarChart3 className="h-10 w-10 text-zinc-400 dark:text-zinc-500" />}
+				title="No overview data yet"
+				description="Dashboard metrics will appear here after wallets, transactions, or API requests are recorded."
+				action={{ label: "Refresh overview", onClick: () => fetchStats(true) }}
+			/>
+		);
+	}
+
+	const lastUpdated = new Date(stats.lastUpdated);
 
 	return (
 		<div className="space-y-4">
-			<div className="flex items-center justify-between">
+			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 				<div>
 					<h2 className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
 						Overview
 					</h2>
 					<p className="text-sm text-zinc-500 dark:text-zinc-400">
-						Last updated: {stats.lastUpdated.toLocaleTimeString()}
+						Last updated:{" "}
+						{Number.isNaN(lastUpdated.getTime())
+							? "Unknown"
+							: lastUpdated.toLocaleTimeString()}
 					</p>
 				</div>
 				<Button
@@ -104,9 +105,10 @@ export function DashboardOverview() {
 					onClick={handleRefresh}
 					disabled={isRefreshing}
 					className="gap-2"
+					aria-label="Refresh dashboard overview"
 				>
 					<RefreshCw
-						className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+						className={`size-4 ${isRefreshing ? "animate-spin motion-reduce:animate-none" : ""}`}
 					/>
 					{isRefreshing ? "Refreshing..." : "Refresh"}
 				</Button>
@@ -136,9 +138,16 @@ export function DashboardOverview() {
 				/>
 				<StatCard
 					title="Total Volume"
-					value={stats.totalVolume}
+					value={`${Number(stats.totalVolumeXlm).toLocaleString()} XLM`}
 					icon={<TrendingUp className="size-5" />}
 					trend="+15%"
+					trendUp
+				/>
+				<StatCard
+					title="API Requests Today"
+					value={stats.apiRequestsToday.toLocaleString()}
+					icon={<BarChart3 className="size-5" />}
+					trend="Live"
 					trendUp
 				/>
 			</div>
@@ -149,7 +158,7 @@ export function DashboardOverview() {
 interface StatCardProps {
 	title: string;
 	value: number | string;
-	icon: React.ReactNode;
+	icon: ReactNode;
 	trend: string;
 	trendUp: boolean;
 }

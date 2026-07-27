@@ -258,8 +258,9 @@ describe("WalletTable", () => {
 		it("should apply header row styles", () => {
 			const { container } = render(<WalletTable wallets={mockWallets} />);
 			const headerRow = container.querySelector("thead tr");
-			expect(headerRow).toHaveClass("hover:bg-transparent");
-			expect(headerRow).toHaveClass("dark:hover:bg-transparent");
+			expect(headerRow).toHaveClass("bg-zinc-50/80");
+			expect(headerRow).toHaveClass("dark:bg-zinc-800/70");
+			expect(headerRow).toHaveClass("dark:border-zinc-700");
 		});
 	});
 });

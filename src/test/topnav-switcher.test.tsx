@@ -33,29 +33,39 @@ describe("TopNav — network switcher", () => {
 
 	it("renders Testnet and Mainnet switch buttons", () => {
 		renderTopNav();
-		expect(screen.getByRole("button", { name: "Testnet" })).toBeInTheDocument();
-		expect(screen.getByRole("button", { name: "Mainnet" })).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /switch to testnet/i }),
+		).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /switch to mainnet/i }),
+		).toBeInTheDocument();
 	});
 
 	it("defaults to Mainnet active state", () => {
 		renderTopNav();
-		const mainnetBtn = screen.getByRole("button", { name: "Mainnet" });
+		const mainnetBtn = screen.getByRole("button", {
+			name: /switch to mainnet/i,
+		});
 		// Active button has amber/blue highlight class
 		expect(mainnetBtn).toHaveClass("bg-blue-100");
 	});
 
 	it("switches to testnet when Testnet button is clicked", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
-		const testnetBtn = screen.getByRole("button", { name: "Testnet" });
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
+		const testnetBtn = screen.getByRole("button", {
+			name: /switch to testnet/i,
+		});
 		expect(testnetBtn).toHaveClass("bg-amber-100");
 	});
 
 	it("switches back to mainnet when Mainnet button is clicked", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
-		fireEvent.click(screen.getByRole("button", { name: "Mainnet" }));
-		const mainnetBtn = screen.getByRole("button", { name: "Mainnet" });
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
+		fireEvent.click(screen.getByRole("button", { name: /switch to mainnet/i }));
+		const mainnetBtn = screen.getByRole("button", {
+			name: /switch to mainnet/i,
+		});
 		expect(mainnetBtn).toHaveClass("bg-blue-100");
 	});
 
@@ -65,7 +75,7 @@ describe("TopNav — network switcher", () => {
 		const badges = screen.getAllByText("Mainnet");
 		expect(badges.length).toBeGreaterThanOrEqual(1);
 
-		fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
 		const testnetBadges = screen.getAllByText("Testnet");
 		expect(testnetBadges.length).toBeGreaterThanOrEqual(2); // switcher + h1 badge
 	});
@@ -75,11 +85,20 @@ describe("TopNav — network switcher", () => {
 		renderTopNav();
 		expect(document.title).toBe("Wallets · Mainnet — Mux");
 
-		fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
 		expect(document.title).toBe("Wallets · Testnet — Mux");
 
-		fireEvent.click(screen.getByRole("button", { name: "Mainnet" }));
+		fireEvent.click(screen.getByRole("button", { name: /switch to mainnet/i }));
 		expect(document.title).toBe("Wallets · Mainnet — Mux");
+	});
+
+	it("announces optimistic network switching immediately", () => {
+		renderTopNav();
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
+		expect(screen.getByText("Switching to Testnet")).toBeInTheDocument();
+		expect(
+			screen.getByRole("button", { name: /switch to testnet/i }),
+		).toHaveAttribute("aria-pressed", "true");
 	});
 });
 

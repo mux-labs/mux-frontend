@@ -14,13 +14,17 @@ export function useRevokeApiKey() {
 		try {
 			const updated = await revokeKey(id);
 			return updated as ApiKey | null;
-		} catch (err: any) {
-			setError(err);
+		} catch (err: unknown) {
+			setError(
+				err instanceof Error ? err : new Error("Failed to revoke API key"),
+			);
 			return null;
 		} finally {
 			setLoading(false);
 		}
 	}, []);
 
-	return { revoke, loading, error };
+	const reset = useCallback(() => setError(null), []);
+
+	return { revoke, loading, error, reset };
 }

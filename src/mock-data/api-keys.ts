@@ -7,6 +7,14 @@ export interface ApiKey {
 	createdAt: string;
 }
 
+export interface CreatedApiKey extends ApiKey {
+	/**
+	 * Full secret returned only by the create flow. Never persist this in table
+	 * state after the modal is closed.
+	 */
+	secret: string;
+}
+
 export const mockApiKeys: ApiKey[] = [
 	{
 		id: "1",
@@ -64,4 +72,34 @@ export function revokeApiKey(id: string): ApiKey | null {
 	store[idx] = { ...store[idx], status: "Revoked" };
 	saveStore(store);
 	return store[idx];
+}
+
+function generateSecret() {
+	const alphabet =
+		"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+	const randomPart = Array.from(
+		{ length: 32 },
+		() => alphabet[Math.floor(Math.random() * alphabet.length)],
+	).join("");
+	return `mux_sk_${randomPart}`;
+}
+
+export function maskApiKey(secret: string) {
+	if (secret.length <= 12) return "••••";
+	return `${secret.slice(0, 8)}••••${secret.slice(-4)}`;
+}
+
+export function createApiKey(name: string): CreatedApiKey {
+	const trimmedName = name.trim();
+	const secret = generateSecret();
+	const apiKey: ApiKey = {
+		id: `key-${Date.now()}`,
+		name: trimmedName,
+		key: maskApiKey(secret),
+		status: "Active",
+		createdAt: new Date().toISOString(),
+	};
+	const store = loadStore();
+	saveStore([apiKey, ...store]);
+	return { ...apiKey, secret };
 }

@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
+import { getApiBaseUrl } from "@/lib/api/config";
 
 /**
  * POST /api/auth/login
  *
  * Proxies login credentials to the configured backend API
- * (NEXT_PUBLIC_API_URL). If no backend URL is set, falls back to a mock
+ * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls back to a mock
  * response so local development works without a running API server.
  */
 export async function POST(request: Request) {
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
 		);
 	}
 
-	const backendUrl = process.env.NEXT_PUBLIC_API_URL;
+	const backendUrl = getApiBaseUrl();
 
 	if (backendUrl) {
 		// Proxy to the real backend

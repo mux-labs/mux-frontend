@@ -31,6 +31,16 @@ const publicEnvVars: EnvVar[] = [
 		defaultValue: "https://api.muxprotocol.com",
 		description: "Legacy alias for the API base URL",
 	},
+	{
+		name: "NEXT_PUBLIC_API_BASE",
+		required: false,
+		description: "Legacy alias for the API base URL",
+	},
+	{
+		name: "NEXT_PUBLIC_MUX_API_KEY",
+		required: false,
+		description: "Public API key used by browser-side API requests",
+	},
 ];
 
 const serverEnvVars: EnvVar[] = [

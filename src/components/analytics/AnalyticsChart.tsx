@@ -9,14 +9,24 @@ interface AnalyticsChartProps {
 	emptyMessage?: string;
 }
 
-function SparkBar({ height, label }: { height: number; label: string }) {
+function SparkBar({
+	height,
+	label,
+	value,
+}: {
+	height: number;
+	label: string;
+	value: string;
+}) {
 	return (
 		<div className="flex flex-1 flex-col items-center gap-1.5">
 			<div
-				className="flex w-full items-end justify-center"
+				className="flex w-full items-end justify-center rounded-t-md bg-gradient-to-t from-zinc-100 to-transparent dark:from-zinc-800/80 dark:to-transparent"
 				style={{ height: 120 }}
 			>
 				<div
+					role="img"
+					aria-label={`${label}: ${value}`}
 					className="w-full max-w-[32px] rounded-t-md bg-blue-500 transition-all duration-500 hover:bg-blue-600 dark:bg-blue-600 dark:hover:bg-blue-500"
 					style={{ height: `${height}%` }}
 				/>
@@ -36,7 +46,7 @@ export function AnalyticsChart({
 	const max = data.length > 0 ? Math.max(...data.map((d) => d.value)) : 0;
 
 	return (
-		<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+		<div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm dark:border-zinc-700 dark:bg-zinc-900 dark:shadow-zinc-950/20">
 			<div className="mb-6">
 				<h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
 					{title}
@@ -52,7 +62,6 @@ export function AnalyticsChart({
 				<div
 					className="flex items-center justify-center"
 					style={{ height: 120 }}
-					aria-label={emptyMessage}
 				>
 					<p className="text-sm text-zinc-400 dark:text-zinc-500">
 						{emptyMessage}
@@ -60,11 +69,12 @@ export function AnalyticsChart({
 				</div>
 			) : (
 				<>
-					<div className="flex items-end gap-1 sm:gap-2">
+					<div className="flex items-end gap-1 rounded-lg border border-zinc-100 bg-zinc-50/60 p-3 sm:gap-2 dark:border-zinc-800 dark:bg-zinc-950/30">
 						{data.map((point) => (
 							<SparkBar
 								key={point.date}
 								label={point.date}
+								value={formatValue(point.value)}
 								height={max > 0 ? (point.value / max) * 100 : 0}
 							/>
 						))}

@@ -169,6 +169,7 @@ export function TopAssetsTable({ assets }: TopAssetsTableProps) {
 			</div>
 			{toastMessage && (
 				<Toast
+					open={!!toastMessage}
 					message={toastMessage}
 					variant="success"
 					onClose={() => setToastMessage(null)}

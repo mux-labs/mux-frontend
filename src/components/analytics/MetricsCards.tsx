@@ -82,6 +82,7 @@ export function MetricsCards({ metrics }: MetricsCardsProps) {
 			</div>
 			{toastMessage && (
 				<Toast
+					open={!!toastMessage}
 					message={toastMessage}
 					variant="success"
 					onClose={() => setToastMessage(null)}

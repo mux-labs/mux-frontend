@@ -2,6 +2,7 @@
 
 import {
 	AlertCircle,
+	Archive,
 	Check,
 	Copy,
 	Link as LinkIcon,
@@ -17,6 +18,7 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton, WalletDetailSkeleton } from "@/components/ui/Skeleton";
 import { TestnetHint } from "@/components/ui/TestnetHint";
+import { ConfirmArchiveDialog } from "@/components/wallet/ConfirmArchiveDialog";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
@@ -60,6 +62,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	const [nicknameStatus, setNicknameStatus] = useState<
 		"idle" | "saving" | "error"
 	>("idle");
+	const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+	const [isArchiving, setIsArchiving] = useState(false);
+	const [archiveError, setArchiveError] = useState<string | null>(null);
+	const [isArchived, setIsArchived] = useState(false);
+
+	useEffect(() => {
+		setIsArchived(!!wallet?.archived);
+	}, [wallet?.archived]);
 
 	useEffect(() => {
 		const nextNickname = wallet?.label ?? "";
@@ -97,6 +107,29 @@ export function WalletDetail({ id }: WalletDetailProps) {
 		track("wallet_detail_link_copied", { walletId: id });
 		copyLink(deepLink);
 	}, [id, trimmedId, track, copyLink]);
+
+	const handleArchiveConfirm = useCallback(async () => {
+		setIsArchiving(true);
+		setArchiveError(null);
+		try {
+			const response = await fetch(`/api/wallets/${encodeURIComponent(id)}`, {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ archived: true }),
+			});
+			if (!response.ok) throw new Error("Unable to archive wallet");
+			trackWalletEvent("wallet_archived", { walletId: id });
+			track("wallet_archived", { walletId: id });
+			setIsArchived(true);
+			setIsArchiveDialogOpen(false);
+		} catch (err) {
+			setArchiveError(
+				err instanceof Error ? err.message : "Unable to archive wallet",
+			);
+		} finally {
+			setIsArchiving(false);
+		}
+	}, [id, track]);
 
 	if (!isValidId) {
 		return (
@@ -255,12 +288,36 @@ export function WalletDetail({ id }: WalletDetailProps) {
 					aria-labelledby={infoHeadingId}
 					className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900"
 				>
-					<h2
-						id={infoHeadingId}
-						className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
-					>
-						Wallet Info
-					</h2>
+					<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+						<h2
+							id={infoHeadingId}
+							className="text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+						>
+							Wallet Info
+							{isArchived && (
+								<span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium normal-case tracking-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+									Archived
+								</span>
+							)}
+						</h2>
+						{!isArchived && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setIsArchiveDialogOpen(true)}
+								aria-label="Archive this wallet"
+								data-testid="archive-wallet-button"
+							>
+								<Archive className="h-4 w-4" aria-hidden="true" />
+								Archive
+							</Button>
+						)}
+					</div>
+					{archiveError && (
+						<p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+							{archiveError}
+						</p>
+					)}
 					<dl className="space-y-4">
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
 							<dt className="pt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -494,6 +551,16 @@ export function WalletDetail({ id }: WalletDetailProps) {
 			isOpen={isSendOpen}
 			wallet={wallet}
 			onClose={() => setIsSendOpen(false)}
+		/>
+		<ConfirmArchiveDialog
+			open={isArchiveDialogOpen}
+			walletLabel={savedNickname || undefined}
+			isPending={isArchiving}
+			onConfirm={handleArchiveConfirm}
+			onCancel={() => {
+				setArchiveError(null);
+				setIsArchiveDialogOpen(false);
+			}}
 		/>
 		</>
 	);

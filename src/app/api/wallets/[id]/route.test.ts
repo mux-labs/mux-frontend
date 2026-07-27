@@ -59,4 +59,27 @@ describe("/api/wallets/[id]", () => {
 		);
 		expect(response.status).toBe(422);
 	});
+
+	it("archives a wallet", async () => {
+		const response = await PATCH(
+			new Request("http://localhost/api/wallets/wallet-002", {
+				method: "PATCH",
+				body: JSON.stringify({ archived: true }),
+			}),
+			{ params: { id: "wallet-002" } },
+		);
+		expect(response.status).toBe(200);
+		await expect(response.json()).resolves.toMatchObject({ archived: true });
+	});
+
+	it("rejects a non-boolean archived value", async () => {
+		const response = await PATCH(
+			new Request("http://localhost/api/wallets/wallet-002", {
+				method: "PATCH",
+				body: JSON.stringify({ archived: "yes" }),
+			}),
+			{ params: { id: "wallet-002" } },
+		);
+		expect(response.status).toBe(400);
+	});
 });

@@ -37,6 +37,16 @@ export async function PATCH(request: Request, { params }: RouteContext) {
 		return NextResponse.json({ error: "invalid_json" }, { status: 400 });
 	}
 
+	const hasArchived = typeof body === "object" && body !== null && "archived" in body;
+	if (hasArchived) {
+		const archived = (body as { archived: unknown }).archived;
+		if (typeof archived !== "boolean") {
+			return NextResponse.json({ error: "invalid_archived" }, { status: 400 });
+		}
+		wallet.archived = archived;
+		return NextResponse.json(wallet);
+	}
+
 	const label =
 		typeof body === "object" && body !== null && "label" in body
 			? (body as { label: unknown }).label

@@ -7,6 +7,16 @@ import { NextResponse } from "next/server";
  * the user to be authenticated (indicated by the presence of the
  * `mux_auth_session` cookie set during sign-in).
  *
+ * CSRF / Cookie Security:
+ *   The `mux_auth_session` cookie is set with `SameSite=Lax` so the
+ *   browser will not attach it to cross-site sub-requests (POST from
+ *   an external origin).  Combined with the path-only check below,
+ *   this provides a strong CSRF defence while still allowing top-level
+ *   navigations (e.g. a bookmarked dashboard link) to pass through.
+ *
+ *   In production this cookie should also carry the `Secure` flag
+ *   (set via a server-side `Set-Cookie` header in the login route).
+ *
  * See docs/auth-local-setup.md for the full auth flow documentation.
  */
 const PROTECTED_PREFIXES = ["/dashboard"];

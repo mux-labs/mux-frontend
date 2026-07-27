@@ -105,11 +105,29 @@ This repo now includes a minimal auth flow and API client support for dev mode:
 
 ### Smoke tests
 
-Run full smoke tests with:
+Run unit/component smoke tests with:
 
 ```bash
 npm test
 ```
+
+Run Playwright end-to-end smoke tests (login + wallet monitoring, desktop
+and mobile viewports) with:
+
+```bash
+pnpm exec playwright install --with-deps chromium
+pnpm run test:e2e
+```
+
+See [`tests/e2e/README.md`](tests/e2e/README.md) for what's covered and a
+manual verification checklist.
+
+### Documentation
+
+Root-level `.md` files are kept to just this `README.md`. Deeper
+reference docs (env vars, auth setup, analytics data sources, etc.) live
+under [`docs/`](docs/) so they stay easy to find and don't clutter the
+repo root as features evolve.
 
 ---
 

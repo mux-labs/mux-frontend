@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { TopNav } from "@/components/layouts/TopNav";
 import { AuthProvider } from "@/context/AuthContext";
 import { NetworkProvider } from "@/context/NetworkContext";
@@ -37,7 +37,7 @@ describe("TopNav network label in page title", () => {
 
 	it("shows Testnet badge in h1 after switching", () => {
 		renderTopNav();
-		fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+		fireEvent.click(screen.getByRole("button", { name: /switch to testnet/i }));
 		const badges = screen.getAllByText("Testnet");
 		// one in the switcher button, one in the h1/breadcrumb
 		expect(badges.length).toBeGreaterThanOrEqual(2);
@@ -46,7 +46,9 @@ describe("TopNav network label in page title", () => {
 	it("updates document.title to Testnet after switching", () => {
 		renderTopNav();
 		act(() => {
-			fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+			fireEvent.click(
+				screen.getByRole("button", { name: /switch to testnet/i }),
+			);
 		});
 		expect(document.title).toBe("Wallets · Testnet — Mux");
 	});
@@ -54,10 +56,14 @@ describe("TopNav network label in page title", () => {
 	it("updates document.title back to Mainnet when switching back", () => {
 		renderTopNav();
 		act(() => {
-			fireEvent.click(screen.getByRole("button", { name: "Testnet" }));
+			fireEvent.click(
+				screen.getByRole("button", { name: /switch to testnet/i }),
+			);
 		});
 		act(() => {
-			fireEvent.click(screen.getByRole("button", { name: "Mainnet" }));
+			fireEvent.click(
+				screen.getByRole("button", { name: /switch to mainnet/i }),
+			);
 		});
 		expect(document.title).toBe("Wallets · Mainnet — Mux");
 	});

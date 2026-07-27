@@ -65,6 +65,17 @@ describe("AnalyticsChart — with data", () => {
 		expect(screen.getByText("Total: $450")).toBeInTheDocument();
 		expect(screen.getByText("Avg: $150")).toBeInTheDocument();
 	});
+
+	it("applies dark-mode friendly chart surface and bar backdrop styles", () => {
+		const { container } = render(<AnalyticsChart title="Volume" data={DATA} />);
+
+		expect(container.firstChild).toHaveClass("dark:border-zinc-700");
+		expect(container.firstChild).toHaveClass("dark:bg-zinc-900");
+		expect(
+			container.querySelector(".dark\\:bg-zinc-950\\/30"),
+		).toBeInTheDocument();
+		expect(screen.getByLabelText("Tue: 200")).toBeInTheDocument();
+	});
 });
 
 // ---------------------------------------------------------------------------

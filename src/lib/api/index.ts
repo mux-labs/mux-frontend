@@ -1,5 +1,4 @@
-import type { ApiKey } from "@/mock-data/api-keys";
-import type { OverviewData } from "@/mock-data/overview";
+import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
 import ApiClient from "./client";
 import { getApiBaseUrl } from "./config";
 
@@ -44,12 +43,30 @@ export async function fetchRecentActivity(): Promise<ActivityItem[]> {
 }
 
 export async function revokeKey(id: string): Promise<ApiKey | null> {
-	const keys = await fetchApiKeys();
-	const key = keys.find((item) => item.id === id);
-	if (!key) {
-		return null;
+	const res = await fetch("/api/api-keys", {
+		method: "PATCH",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ id, action: "revoke" }),
+	});
+	if (res.status === 404) return null;
+	if (!res.ok) {
+		throw new Error(`Failed to revoke API key (${res.status})`);
 	}
-	return { ...key, status: "Revoked" };
+	const json = (await res.json()) as { data: ApiKey };
+	return json.data;
+}
+
+export async function createApiKey(name: string): Promise<CreatedApiKey> {
+	const res = await fetch("/api/api-keys", {
+		method: "POST",
+		headers: { "Content-Type": "application/json" },
+		body: JSON.stringify({ name }),
+	});
+	if (!res.ok) {
+		throw new Error(`Failed to create API key (${res.status})`);
+	}
+	const json = (await res.json()) as { data: CreatedApiKey };
+	return json.data;
 }
 
 export default createApiClient;

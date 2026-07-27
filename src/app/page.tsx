@@ -43,16 +43,18 @@ export default function Home() {
 				<div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
 					{/* Your API Key button - keep your functionality but use their styling */}
 					<button
+						type="button"
 						onClick={() => setIsModalOpen(true)}
-						className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-blue-600 px-5 text-white transition-colors hover:bg-blue-700 md:w-[158px] whitespace-nowrap"
+						className="flex h-12 w-full items-center justify-center gap-2 whitespace-nowrap rounded-full bg-blue-600 px-5 text-white transition-colors hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-black md:w-[158px]"
 					>
 						+ Create API Key
 					</button>
 
 					{/* Their Deploy Now button */}
 					<a
-						className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-39.5"
+						className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:bg-[#ccc] dark:focus-visible:ring-offset-black md:w-39.5"
 						href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
+						aria-label="Deploy this app with Vercel"
 						target="_blank"
 						rel="noopener noreferrer"
 					>
@@ -68,7 +70,7 @@ export default function Home() {
 
 					{/* Their Documentation link - keep their styling */}
 					<a
-						className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/8 px-5 transition-colors hover:border-transparent hover:bg-black/4 dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-39.5"
+						className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/8 px-5 transition-colors hover:border-transparent hover:bg-black/4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-white/[.145] dark:hover:bg-[#1a1a1a] dark:focus-visible:ring-offset-black md:w-39.5"
 						href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
 						target="_blank"
 						rel="noopener noreferrer"

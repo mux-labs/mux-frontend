@@ -1,12 +1,12 @@
 "use client";
 
-import { Check, Copy, Loader2, AlertCircle } from "lucide-react";
+import { AlertCircle, Check, Copy, Loader2 } from "lucide-react";
 import { useCallback } from "react";
 import { Button, type ButtonProps } from "@/components/ui/button";
 import { useCopyToClipboardUx } from "@/hooks/useCopyToClipboardUx";
-import { getCopyAriaLabel, generateCopyTitle } from "@/utils/copyToClipboardUx";
+import { generateCopyTitle, getCopyAriaLabel } from "@/utils/copyToClipboardUx";
 
-interface CopyButtonProps extends Omit<ButtonProps, "onClick"> {
+interface CopyButtonProps extends Omit<ButtonProps, "onClick" | "type"> {
 	/** Text to copy to clipboard */
 	text: string;
 	/** Full address if text is truncated (for validation) */
@@ -51,9 +51,8 @@ export function CopyButton({
 	size = "icon-sm",
 	...props
 }: CopyButtonProps) {
-	const { copy, copied, error, loading, reset } = useCopyToClipboardUx(
-		successDuration,
-	);
+	const { copy, copied, error, loading } =
+		useCopyToClipboardUx(successDuration);
 
 	const handleClick = useCallback(async () => {
 		const success = await copy(text, fullAddress, {
@@ -65,7 +64,15 @@ export function CopyButton({
 		} else {
 			onCopyError?.(error || "Copy failed");
 		}
-	}, [copy, text, fullAddress, successMessage, onCopySuccess, onCopyError, error]);
+	}, [
+		copy,
+		text,
+		fullAddress,
+		successMessage,
+		onCopySuccess,
+		onCopyError,
+		error,
+	]);
 
 	// Determine button state
 	const isDisabled = disabled || loading || !!error;
@@ -93,7 +100,8 @@ export function CopyButton({
 		if (error) {
 			classes += " hover:bg-red-50 dark:hover:bg-red-900/20";
 		} else if (copied) {
-			classes += " bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40";
+			classes +=
+				" bg-green-50 hover:bg-green-100 dark:bg-green-900/20 dark:hover:bg-green-900/40";
 		}
 
 		return classes;

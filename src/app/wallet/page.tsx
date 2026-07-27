@@ -26,6 +26,7 @@ function WalletPageContent() {
 	const router = useRouter();
 	const searchParams = useSearchParams();
 	const [isReceiveOpen, setIsReceiveOpen] = useState(false);
+	const [isSendOpen, setIsSendOpen] = useState(false);
 	const { copy, copied, error: copyError } = useCopyToClipboard();
 
 	const wallet = wallets?.[0] ?? null;

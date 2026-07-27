@@ -30,6 +30,13 @@ jobs:
           node-version: "22"
           cache: "pnpm"
 
+      - name: Verify pnpm lockfile is the only lockfile
+        run: |
+          if [ -f package-lock.json ] || [ -f yarn.lock ] || [ -f npm-shrinkwrap.json ]; then
+            echo "::error::Found a non-pnpm lockfile. This repo only tracks pnpm-lock.yaml."
+            exit 1
+          fi
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getApiBaseUrl } from "@/lib/api/config";
+import {
+	getWalletsPrefetchEntry,
+	prefetchWallets,
+} from "@/lib/walletsPrefetchCache";
 import type { Wallet } from "@/types/wallet";
-import { normalizeWallets } from "@/utils/walletSerialization";
 
 interface UseWalletsResult {
 	wallets: Wallet[];
@@ -27,16 +29,15 @@ export function useWallets(): UseWalletsResult {
 		setError(null);
 		setWallets([]);
 
-		const base = getApiBaseUrl();
-		const url = base ? `${base}/wallets` : "/api/wallets";
+		// On the initial mount, reuse an in-flight/recent prefetch (e.g. one
+		// kicked off by hovering the sidebar Wallets link) instead of firing a
+		// duplicate request. Manual refetches always hit the network.
+		const existingPrefetch = tick === 0 ? getWalletsPrefetchEntry() : null;
+		const request = existingPrefetch ?? prefetchWallets();
 
-		fetch(url)
-			.then((res) => {
-				if (!res.ok) throw new Error(`Request failed: ${res.status}`);
-				return res.json() as Promise<Wallet[]>;
-			})
+		request
 			.then((data) => {
-				if (!cancelled) setWallets(normalizeWallets(data));
+				if (!cancelled) setWallets(data);
 			})
 			.catch((err: unknown) => {
 				if (!cancelled)

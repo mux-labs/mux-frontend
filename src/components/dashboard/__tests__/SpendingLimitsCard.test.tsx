@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SpendingLimitsCard } from "../SpendingLimitsCard";
@@ -240,6 +240,138 @@ describe("SpendingLimitsCard", () => {
 			expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
 		});
 		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("shows a validation error when the daily limit exceeds the maximum", async () => {
+		const user = userEvent.setup();
+		render(<SpendingLimitsCard />);
+
+		await waitFor(() => {
+			expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
+		});
+
+		await user.clear(screen.getByLabelText(/daily spending limit/i));
+		await user.type(screen.getByLabelText(/daily spending limit/i), "5000000");
+		await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+		expect(screen.getByText(/maximum is \$1,000,000/i)).toBeInTheDocument();
+	});
+
+	it("shows a validation error when the transaction limit is below the minimum", async () => {
+		const user = userEvent.setup();
+		render(<SpendingLimitsCard />);
+
+		await waitFor(() => {
+			expect(screen.getByDisplayValue("1000")).toBeInTheDocument();
+		});
+
+		const txInput = screen.getByLabelText(/per-transaction limit/i);
+		await user.clear(txInput);
+		fireEvent.change(txInput, { target: { value: "0" } });
+		await user.click(screen.getByRole("button", { name: /save settings/i }));
+
+		expect(screen.getByText(/minimum is \$1\./i)).toBeInTheDocument();
+	});
+
+	it("blurs the input on Escape without saving", async () => {
+		const fetchMock = mockFetch();
+		const user = userEvent.setup();
+		render(<SpendingLimitsCard />);
+
+		await waitFor(() => {
+			expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
+		});
+
+		const dailyInput = screen.getByLabelText(/daily spending limit/i);
+		await user.click(dailyInput);
+		expect(dailyInput).toHaveFocus();
+
+		fetchMock.mockClear();
+		await user.keyboard("{Escape}");
+
+		expect(dailyInput).not.toHaveFocus();
+		expect(fetchMock).not.toHaveBeenCalledWith(
+			"/api/spending-limits",
+			expect.objectContaining({ method: "PUT" }),
+		);
+	});
+
+	it("disables the save button while a save is in flight", async () => {
+		mockFetch({ putDelay: true });
+		const user = userEvent.setup();
+		render(<SpendingLimitsCard />);
+
+		await waitFor(() => {
+			expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
+		});
+
+		const saveButton = screen.getByRole("button", { name: /save settings/i });
+		await user.click(saveButton);
+
+		expect(screen.getByRole("button", { name: /saving/i })).toBeDisabled();
+
+		await waitFor(() => {
+			expect(
+				screen.getByRole("button", { name: /save settings/i }),
+			).not.toBeDisabled();
+		});
+	});
+
+	describe("CopyLimitButton", () => {
+		it("copies the daily limit value to the clipboard", async () => {
+			const writeTextSpy = vi
+				.spyOn(navigator.clipboard, "writeText")
+				.mockResolvedValue(undefined);
+			const user = userEvent.setup();
+			render(<SpendingLimitsCard />);
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
+			});
+
+			await user.click(screen.getByRole("button", { name: /copy daily limit/i }));
+
+			expect(writeTextSpy).toHaveBeenCalledWith("5000");
+			await waitFor(() => {
+				expect(screen.getByTitle("Copied!")).toBeInTheDocument();
+			});
+		});
+
+		it("copies the per-transaction limit value to the clipboard", async () => {
+			const writeTextSpy = vi
+				.spyOn(navigator.clipboard, "writeText")
+				.mockResolvedValue(undefined);
+			const user = userEvent.setup();
+			render(<SpendingLimitsCard />);
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue("1000")).toBeInTheDocument();
+			});
+
+			await user.click(
+				screen.getByRole("button", { name: /copy transaction limit/i }),
+			);
+
+			expect(writeTextSpy).toHaveBeenCalledWith("1000");
+		});
+
+		it("shows an error state when the clipboard write fails", async () => {
+			vi.spyOn(navigator.clipboard, "writeText").mockRejectedValueOnce(
+				new Error("Clipboard denied"),
+			);
+			const user = userEvent.setup();
+			render(<SpendingLimitsCard />);
+
+			await waitFor(() => {
+				expect(screen.getByDisplayValue("5000")).toBeInTheDocument();
+			});
+
+			await user.click(screen.getByRole("button", { name: /copy daily limit/i }));
+
+			await waitFor(() => {
+				expect(screen.getByTitle("Clipboard denied")).toBeInTheDocument();
+			});
+		});
 	});
 
 	it("saves when Enter is pressed in an input", async () => {

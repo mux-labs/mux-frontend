@@ -1,5 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
 import {
 	mockRecoveryEvents,
 	mockRecoveryTimelineCompleted,
@@ -9,7 +10,7 @@ import {
 import { RecoveryTimelineList } from "../RecoveryTimelineList";
 
 describe("RecoveryTimelineList", () => {
-	const mockOnEventClick = jest.fn();
+	const mockOnEventClick = vi.fn();
 
 	beforeEach(() => {
 		mockOnEventClick.mockClear();
@@ -397,6 +398,45 @@ describe("RecoveryTimelineList", () => {
 			);
 
 			expect(screen.getByText("Recovery Progress")).toBeInTheDocument();
+		});
+	});
+
+	describe("Responsive layout (narrow mobile viewport)", () => {
+		it("stacks the progress header on mobile and rows it out from sm breakpoint up", () => {
+			const { container } = render(
+				<RecoveryTimelineList
+					events={mockRecoveryEvents}
+					onEventClick={mockOnEventClick}
+				/>,
+			);
+
+			const header = container.querySelector(".flex.flex-col.sm\\:flex-row");
+			expect(header).toBeInTheDocument();
+			expect(header).toHaveClass("sm:items-center");
+			expect(header).toHaveClass("sm:justify-between");
+		});
+
+		it("stacks the statistics grid into a single column on mobile and three columns from sm up", () => {
+			const { container } = render(
+				<RecoveryTimelineList
+					events={mockRecoveryTimelineCompleted.events}
+					onEventClick={mockOnEventClick}
+				/>,
+			);
+
+			const statsGrid = container.querySelector(".grid.grid-cols-1");
+			expect(statsGrid).toBeInTheDocument();
+			expect(statsGrid).toHaveClass("sm:grid-cols-3");
+		});
+
+		it("renders the empty state at reduced padding suitable for a narrow viewport", () => {
+			const { container } = render(
+				<RecoveryTimelineList events={[]} onEventClick={mockOnEventClick} />,
+			);
+
+			const emptyState = container.querySelector('[role="status"]');
+			expect(emptyState).toHaveClass("p-4");
+			expect(emptyState).toHaveClass("sm:p-8");
 		});
 	});
 

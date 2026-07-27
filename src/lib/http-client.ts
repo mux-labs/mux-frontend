@@ -7,7 +7,7 @@ export interface ApiResult<T> {
 
 export async function fetchJson<T>(url: string): Promise<ApiResult<T>> {
 	try {
-		const res = await fetch(url, { cache: "no-store" });
+		const res = await fetchWithAuth(url, { cache: "no-store" });
 		if (!res.ok) {
 			const text = await res.text();
 			return { error: `HTTP ${res.status}: ${text}` };

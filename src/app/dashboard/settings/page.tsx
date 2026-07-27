@@ -76,7 +76,10 @@ export default function SettingsPage() {
 	if (isLoading) {
 		return (
 			<div role="status" className="flex min-h-64 items-center justify-center gap-2 text-zinc-500">
-				<Loader2 className="h-5 w-5 animate-spin" aria-hidden="true" />
+				<Loader2
+					className="h-5 w-5 animate-spin motion-reduce:animate-none"
+					aria-hidden="true"
+				/>
 				Loading profile preferences…
 			</div>
 		);

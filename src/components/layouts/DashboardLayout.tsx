@@ -92,6 +92,7 @@ function DashboardLayoutShell({ children }: DashboardLayoutProps) {
 				{/* Mobile Overlay */}
 				{sidebarOpen && (
 					<div
+						data-testid="mobile-overlay"
 						className="fixed inset-0 z-40 bg-black/50 lg:hidden"
 						onClick={closeSidebar}
 						aria-hidden="true"
@@ -99,7 +100,7 @@ function DashboardLayoutShell({ children }: DashboardLayoutProps) {
 				)}
 
 				{/* Sidebar */}
-				<div ref={sidebarRef}>
+				<div ref={sidebarRef} data-testid="sidebar-container">
 					<Sidebar isOpen={sidebarOpen} onClose={closeSidebar} />
 				</div>
 

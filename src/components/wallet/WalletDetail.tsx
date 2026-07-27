@@ -1,6 +1,15 @@
 "use client";
 
-import { AlertCircle, Check, Copy, Pencil, RefreshCw, X } from "lucide-react";
+import {
+	AlertCircle,
+	Archive,
+	Check,
+	Copy,
+	Link as LinkIcon,
+	Pencil,
+	RefreshCw,
+	X,
+} from "lucide-react";
 import { useCallback, useEffect, useId, useState } from "react";
 import TransactionsTable from "@/components/TransactionsTable/TransactionsTable";
 import { Button } from "@/components/ui/button";
@@ -9,11 +18,13 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { ExplorerLink } from "@/components/ui/ExplorerLink";
 import { Skeleton, WalletDetailSkeleton } from "@/components/ui/Skeleton";
 import { TestnetHint } from "@/components/ui/TestnetHint";
+import { ConfirmArchiveDialog } from "@/components/wallet/ConfirmArchiveDialog";
 import { NetworkBadge } from "@/components/wallet/NetworkBadge";
 import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
 import { WalletActivityFeed } from "@/components/wallet/WalletActivityFeed";
+import { WalletNotFound } from "@/components/wallet/WalletNotFound";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
@@ -31,9 +42,16 @@ interface WalletDetailProps {
  * Displays live balance and metadata for a single wallet.
  */
 export function WalletDetail({ id }: WalletDetailProps) {
+	const trimmedId = id?.trim() ?? "";
+	const isValidId = trimmedId.length > 0;
 	const { wallet, balance, loading, error, lastUpdated, refresh } =
-		useWalletBalance(id);
+		useWalletBalance(isValidId ? trimmedId : null);
 	const { copy, copied, error: copyError } = useCopyToClipboard();
+	const {
+		copy: copyLink,
+		copied: linkCopied,
+		error: linkCopyError,
+	} = useCopyToClipboard();
 	const { track } = useAnalyticsTracking("wallet_detail");
 	const balanceHeadingId = useId();
 	const infoHeadingId = useId();
@@ -45,6 +63,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	const [nicknameStatus, setNicknameStatus] = useState<
 		"idle" | "saving" | "error"
 	>("idle");
+	const [isArchiveDialogOpen, setIsArchiveDialogOpen] = useState(false);
+	const [isArchiving, setIsArchiving] = useState(false);
+	const [archiveError, setArchiveError] = useState<string | null>(null);
+	const [isArchived, setIsArchived] = useState(false);
+
+	useEffect(() => {
+		setIsArchived(!!wallet?.archived);
+	}, [wallet?.archived]);
 
 	useEffect(() => {
 		const nextNickname = wallet?.label ?? "";
@@ -74,6 +100,47 @@ export function WalletDetail({ id }: WalletDetailProps) {
 		[id, track, copy],
 	);
 
+	const handleCopyLink = useCallback(() => {
+		const origin =
+			typeof window !== "undefined" ? window.location.origin : "";
+		const deepLink = `${origin}/dashboard/wallets/${encodeURIComponent(trimmedId)}`;
+		trackWalletEvent("wallet_detail_link_copied", { walletId: id });
+		track("wallet_detail_link_copied", { walletId: id });
+		copyLink(deepLink);
+	}, [id, trimmedId, track, copyLink]);
+
+	const handleArchiveConfirm = useCallback(async () => {
+		setIsArchiving(true);
+		setArchiveError(null);
+		try {
+			const response = await fetch(`/api/wallets/${encodeURIComponent(id)}`, {
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ archived: true }),
+			});
+			if (!response.ok) throw new Error("Unable to archive wallet");
+			trackWalletEvent("wallet_archived", { walletId: id });
+			track("wallet_archived", { walletId: id });
+			setIsArchived(true);
+			setIsArchiveDialogOpen(false);
+		} catch (err) {
+			setArchiveError(
+				err instanceof Error ? err.message : "Unable to archive wallet",
+			);
+		} finally {
+			setIsArchiving(false);
+		}
+	}, [id, track]);
+
+	if (!isValidId) {
+		return (
+			<ErrorState
+				title="Invalid wallet link"
+				description="This wallet link is missing a valid identifier. Double-check the URL or return to your wallet list."
+			/>
+		);
+	}
+
 	async function saveNickname(event: React.FormEvent) {
 		event.preventDefault();
 		const normalized = nickname.trim();
@@ -99,17 +166,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	}
 
 	if (error && !wallet) {
+		if (isNotFound) {
+			return <WalletNotFound walletId={id} />;
+		}
 		return (
 			<ErrorState
-				title={isNotFound ? "Wallet not found" : "Failed to load wallet"}
-				description={
-					isNotFound
-						? "No wallet exists for this ID. It may have been removed or the link is invalid."
-						: `${error}. Check your connection and try again.`
-				}
-				retry={
-					isNotFound ? undefined : { label: "Try Again", onRetry: refresh }
-				}
+				title="Failed to load wallet"
+				description={`${error}. Check your connection and try again.`}
+				retry={{ label: "Try Again", onRetry: refresh }}
 			/>
 		);
 	}
@@ -154,6 +218,32 @@ export function WalletDetail({ id }: WalletDetailProps) {
 						)}
 						<button
 							type="button"
+							onClick={handleCopyLink}
+							aria-label={
+								linkCopyError
+									? linkCopyError
+									: linkCopied
+										? "Wallet link copied"
+										: "Copy deep link to this wallet"
+							}
+							title={
+								linkCopyError
+									? linkCopyError
+									: linkCopied
+										? "Copied!"
+										: "Copy link to this wallet"
+							}
+							data-testid="copy-wallet-link-button"
+							className="rounded-md p-1.5 text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-600 disabled:opacity-50 dark:hover:bg-zinc-800 dark:hover:text-zinc-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+						>
+							{linkCopied ? (
+								<Check className="h-4 w-4 text-green-500" aria-hidden="true" />
+							) : (
+								<LinkIcon className="h-4 w-4" aria-hidden="true" />
+							)}
+						</button>
+						<button
+							type="button"
 							onClick={handleRefresh}
 							disabled={loading}
 							aria-label="Refresh balance"
@@ -196,12 +286,36 @@ export function WalletDetail({ id }: WalletDetailProps) {
 					aria-labelledby={infoHeadingId}
 					className="rounded-xl border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900"
 				>
-					<h2
-						id={infoHeadingId}
-						className="mb-4 text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
-					>
-						Wallet Info
-					</h2>
+					<div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+						<h2
+							id={infoHeadingId}
+							className="text-sm font-medium uppercase tracking-wider text-zinc-500 dark:text-zinc-400"
+						>
+							Wallet Info
+							{isArchived && (
+								<span className="ml-2 rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium normal-case tracking-normal text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+									Archived
+								</span>
+							)}
+						</h2>
+						{!isArchived && (
+							<Button
+								variant="ghost"
+								size="sm"
+								onClick={() => setIsArchiveDialogOpen(true)}
+								aria-label="Archive this wallet"
+								data-testid="archive-wallet-button"
+							>
+								<Archive className="h-4 w-4" aria-hidden="true" />
+								Archive
+							</Button>
+						)}
+					</div>
+					{archiveError && (
+						<p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+							{archiveError}
+						</p>
+					)}
 					<dl className="space-y-4">
 						<div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
 							<dt className="pt-2 text-sm text-zinc-500 dark:text-zinc-400">
@@ -435,6 +549,16 @@ export function WalletDetail({ id }: WalletDetailProps) {
 			isOpen={isSendOpen}
 			wallet={wallet}
 			onClose={() => setIsSendOpen(false)}
+		/>
+		<ConfirmArchiveDialog
+			open={isArchiveDialogOpen}
+			walletLabel={savedNickname || undefined}
+			isPending={isArchiving}
+			onConfirm={handleArchiveConfirm}
+			onCancel={() => {
+				setArchiveError(null);
+				setIsArchiveDialogOpen(false);
+			}}
 		/>
 		</>
 	);

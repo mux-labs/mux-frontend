@@ -39,6 +39,10 @@
 		"**/__tests__/**",
 		"**/*.stories.ts",
 		"**/*.stories.tsx",
-		".storybook"
+		".storybook",
+		"tests/e2e/**",
+		"playwright.config.ts",
+		"playwright-report",
+		"test-results"
 	]
 }

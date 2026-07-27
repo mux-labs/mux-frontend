@@ -125,9 +125,9 @@ manual verification checklist.
 ### Documentation
 
 Root-level `.md` files are kept to just this `README.md`. Deeper
-reference docs (env vars, auth setup, analytics data sources, etc.) live
-under [`docs/`](docs/) so they stay easy to find and don't clutter the
-repo root as features evolve.
+reference docs (env vars, auth setup, analytics data sources, CI
+typecheck/build verification, etc.) live under [`docs/`](docs/) so they
+stay easy to find and don't clutter the repo root as features evolve.
 
 ---
 

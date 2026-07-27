@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, type FormEvent } from "react";
+import { useState, useCallback, useRef, type FormEvent } from "react";
 import {
 	validateTransactionForm,
 	type FieldError,
@@ -12,7 +12,9 @@ export interface TransactionFormData {
 	memo: string;
 }
 
-export type OnSubmitTransaction = (data: TransactionFormData) => void;
+export type OnSubmitTransaction = (
+	data: TransactionFormData,
+) => void | Promise<void>;
 
 export interface TransactionFormProps {
 	onSubmit: OnSubmitTransaction;
@@ -31,6 +33,9 @@ export function TransactionForm({
 	const [memo, setMemo] = useState("");
 	const [errors, setErrors] = useState<FieldError[]>([]);
 	const [touched, setTouched] = useState<Set<TransactionFormField>>(new Set());
+	const [internalSubmitting, setInternalSubmitting] = useState(false);
+	const submitLockedRef = useRef(false);
+	const submitDisabled = isSubmitting || internalSubmitting;
 
 	const getFieldError = useCallback(
 		(field: TransactionFormField): string | undefined => {
@@ -54,8 +59,12 @@ export function TransactionForm({
 	);
 
 	const handleSubmit = useCallback(
-		(e: FormEvent<HTMLFormElement>) => {
+		async (e: FormEvent<HTMLFormElement>) => {
 			e.preventDefault();
+			if (submitLockedRef.current || isSubmitting) {
+				return;
+			}
+
 			setTouched(new Set(["amount", "address", "memo"]));
 			const validation = validateTransactionForm({ amount, address, memo });
 			if (!validation.isValid) {
@@ -63,9 +72,16 @@ export function TransactionForm({
 				return;
 			}
 			setErrors([]);
-			onSubmit({ amount, address, memo });
+			submitLockedRef.current = true;
+			setInternalSubmitting(true);
+			try {
+				await onSubmit({ amount, address, memo });
+			} finally {
+				submitLockedRef.current = false;
+				setInternalSubmitting(false);
+			}
 		},
-		[amount, address, memo, onSubmit],
+		[amount, address, memo, isSubmitting, onSubmit],
 	);
 
 	const amountError = getFieldError("amount");
@@ -94,7 +110,7 @@ export function TransactionForm({
 						value={amount}
 						onChange={(e) => setAmount(e.target.value)}
 						onBlur={() => handleBlur("amount")}
-						disabled={isSubmitting}
+						disabled={submitDisabled}
 						aria-invalid={touched.has("amount") && !!amountError}
 						aria-describedby={
 							amountError && touched.has("amount")
@@ -136,7 +152,7 @@ export function TransactionForm({
 						value={address}
 						onChange={(e) => setAddress(e.target.value)}
 						onBlur={() => handleBlur("address")}
-						disabled={isSubmitting}
+						disabled={submitDisabled}
 						aria-invalid={touched.has("address") && !!addressError}
 						aria-describedby={
 							addressError && touched.has("address")
@@ -178,7 +194,7 @@ export function TransactionForm({
 						value={memo}
 						onChange={(e) => setMemo(e.target.value)}
 						onBlur={() => handleBlur("memo")}
-						disabled={isSubmitting}
+						disabled={submitDisabled}
 						aria-invalid={touched.has("memo") && !!memoError}
 						aria-describedby={
 							memoError && touched.has("memo")
@@ -223,19 +239,20 @@ export function TransactionForm({
 			)}
 			<button
 				type="submit"
-				disabled={isSubmitting}
+				disabled={submitDisabled}
+				aria-busy={submitDisabled}
 				className={[
-					"w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all",
+					"w-full rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition-all motion-reduce:transition-none",
 					"focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2",
-					isSubmitting
+					submitDisabled
 						? "cursor-not-allowed bg-blue-400"
 						: "bg-blue-600 hover:bg-blue-700 active:bg-blue-800",
 				].join(" ")}
 			>
-				{isSubmitting ? (
+				{submitDisabled ? (
 					<span className="flex items-center justify-center gap-2">
 						<svg
-							className="h-4 w-4 animate-spin"
+							className="h-4 w-4 animate-spin motion-reduce:animate-none"
 							viewBox="0 0 24 24"
 							fill="none"
 							aria-hidden="true"

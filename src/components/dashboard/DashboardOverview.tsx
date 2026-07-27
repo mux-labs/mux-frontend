@@ -106,7 +106,7 @@ export function DashboardOverview() {
 					className="gap-2"
 				>
 					<RefreshCw
-						className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+						className={`size-4 ${isRefreshing ? "animate-spin motion-reduce:animate-none" : ""}`}
 					/>
 					{isRefreshing ? "Refreshing..." : "Refresh"}
 				</Button>

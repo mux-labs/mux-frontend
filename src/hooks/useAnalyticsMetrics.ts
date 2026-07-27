@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getApiBaseUrl } from "@/lib/api/config";
 import { createApiClient } from "@/lib/api/index";
 import type { AssetData, ChartDataPoint, Metric } from "@/mock-data/analytics";
 import type { DateRangeParams } from "@/services/analyticsService";
@@ -84,7 +85,7 @@ export function useAnalyticsMetrics(
 			setError(null);
 
 			const currentRange = rangeRef.current;
-			const baseUrl = process.env.NEXT_PUBLIC_MUX_API_URL ?? "";
+			const baseUrl = getApiBaseUrl();
 
 			try {
 				let loaded: AnalyticsMetricsData;

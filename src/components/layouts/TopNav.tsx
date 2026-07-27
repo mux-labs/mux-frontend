@@ -10,9 +10,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { usePathname } from "next/navigation";
 import { useEffect, useState } from "react";
+import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { useNotifications } from "@/hooks/useNotifications";
 
 interface TopNavProps {
 	onMenuClick: () => void;
@@ -27,10 +29,12 @@ const networkBadgeClass = {
 
 export function TopNav({ onMenuClick }: TopNavProps) {
 	const [searchOpen, setSearchOpen] = useState(false);
+	const [notificationsOpen, setNotificationsOpen] = useState(false);
 	const pathname = usePathname();
 	const { network, setNetwork } = useNetwork();
 	const { user, isLoading } = useAuth();
 	const { isDark, toggle: toggleDark } = useDarkMode();
+	const { unreadCount } = useNotifications();
 
 	// Get current page title from pathname
 	const pageTitle = (() => {
@@ -186,14 +190,28 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					</button>
 
 					{/* Notifications */}
-					<button
-						type="button"
-						className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-					>
-						<span className="sr-only">View notifications</span>
-						<BellIcon className="h-6 w-6" aria-hidden="true" />
-						<span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-white" />
-					</button>
+					<div className="relative">
+						<button
+							type="button"
+							onClick={() => setNotificationsOpen((prev) => !prev)}
+							aria-expanded={notificationsOpen}
+							aria-haspopup="dialog"
+							data-testid="notifications-bell"
+							className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+						>
+							<span className="sr-only">
+								View notifications{unreadCount > 0 ? ` (${unreadCount} unread)` : ""}
+							</span>
+							<BellIcon className="h-6 w-6" aria-hidden="true" />
+							{unreadCount > 0 && (
+								<span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-white dark:border-zinc-900" />
+							)}
+						</button>
+						<NotificationsPanel
+							open={notificationsOpen}
+							onClose={() => setNotificationsOpen(false)}
+						/>
+					</div>
 
 					{/* User dropdown */}
 					<div className="relative">

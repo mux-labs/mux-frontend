@@ -380,7 +380,7 @@ export function SpendingLimitsCard({
 						</div>
 						<div className="h-2 w-full overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
 							<div
-								className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out dark:bg-blue-500"
+								className="h-full rounded-full bg-blue-600 transition-all duration-500 ease-out motion-reduce:transition-none dark:bg-blue-500"
 								style={{ width: `${usagePercentage}%` }}
 							/>
 						</div>
@@ -535,7 +535,7 @@ export function SpendingLimitsCard({
 								className="px-0 text-xs font-medium text-zinc-700 hover:bg-transparent hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-50"
 							>
 								<RefreshCw
-									className={`size-4 ${isRefreshing ? "animate-spin" : ""}`}
+									className={`size-4 ${isRefreshing ? "animate-spin motion-reduce:animate-none" : ""}`}
 									aria-hidden="true"
 								/>
 								{isRefreshing ? "Retrying..." : "Retry"}

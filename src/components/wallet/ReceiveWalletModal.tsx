@@ -1,11 +1,12 @@
 "use client";
 
 import { AlertCircle, Check, Copy, QrCode, X } from "lucide-react";
-import { useEffect, useId } from "react";
+import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import type { Wallet } from "@/types/wallet";
 import { isValidStellarAddress } from "@/utils/addressValidation";
+import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
 
 interface ReceiveWalletModalProps {
 	isOpen: boolean;
@@ -84,6 +85,7 @@ export default function ReceiveWalletModal({
 }: ReceiveWalletModalProps) {
 	const titleId = useId();
 	const descriptionId = useId();
+	const dialogRef = useRef<HTMLDivElement>(null);
 	const { copy, copied, error } = useCopyToClipboard();
 
 	const address = wallet?.address.trim() ?? "";
@@ -110,6 +112,10 @@ export default function ReceiveWalletModal({
 			aria-modal="true"
 			aria-labelledby={titleId}
 			aria-describedby={descriptionId}
+			ref={dialogRef}
+			onKeyDown={(event) => {
+				createFocusTrapHandler(dialogRef)(event);
+			}}
 			className="fixed inset-0 z-50 flex items-center justify-center p-4"
 		>
 			<div

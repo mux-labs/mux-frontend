@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { getApiBaseUrl } from "@/lib/api/config";
 import type { Wallet } from "@/types/wallet";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallet } from "@/utils/walletSerialization";
 
 interface UseWalletResult {

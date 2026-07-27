@@ -72,7 +72,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 						<button
 							type="button"
 							onClick={onClose}
-							className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 lg:hidden"
+							aria-label="Close sidebar"
+							className="rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 lg:hidden"
 						>
 							<span className="sr-only">Close sidebar</span>
 							<XMarkIcon className="h-6 w-6" aria-hidden="true" />
@@ -88,7 +89,7 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 									key={item.name}
 									href={item.href}
 									className={clsx(
-										"group flex items-center rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200",
+										"group flex items-center rounded-lg px-4 py-3 text-sm font-medium transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2",
 										isActive
 											? "bg-blue-50 text-blue-700 border border-blue-200"
 											: "text-gray-700 hover:bg-gray-50 hover:text-gray-900",

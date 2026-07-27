@@ -97,7 +97,7 @@ export function getArrowDirection(
  * Keeps focus within specified elements
  */
 export function createFocusTrapHandler(
-	containerRef: React.RefObject<HTMLElement>,
+	containerRef: React.RefObject<HTMLElement | null>,
 ): (event: React.KeyboardEvent) => void {
 	return (event: React.KeyboardEvent) => {
 		if (!isKey(parseKeyboardEvent(event), "Tab")) return;
@@ -105,10 +105,7 @@ export function createFocusTrapHandler(
 		const container = containerRef.current;
 		if (!container) return;
 
-		// Get all focusable elements
-		const focusableElements = container.querySelectorAll(
-			'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-		) as NodeListOf<HTMLElement>;
+		const focusableElements = getFocusableElements(container);
 
 		if (focusableElements.length === 0) return;
 

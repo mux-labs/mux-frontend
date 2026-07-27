@@ -15,9 +15,8 @@ import {
 } from "react";
 import { cn } from "@/lib/utils";
 
-// ---------------------------------------------------------------------------
-// Types
-// ---------------------------------------------------------------------------
+/** Visual variant for the standalone `Toast` component. */
+export type ToastVariant = "success" | "error" | "info";
 
 export type ToastVariant = "success" | "error" | "info" | "warning";
 
@@ -84,153 +83,108 @@ export function Toast({
 	const displayTitle = title ?? defaultTitle;
 
 	return (
-		<div
-			role="alert"
-			aria-live="assertive"
-			className={cn(
-				"flex w-full max-w-sm items-start gap-3 rounded-xl border bg-white px-4 py-3 shadow-lg dark:bg-zinc-900",
-				variant === "success" && "border-green-200 dark:border-green-800",
-				variant === "error" && "border-red-200 dark:border-red-800",
-				variant === "info" && "border-blue-200 dark:border-blue-800",
-				variant === "warning" && "border-yellow-200 dark:border-yellow-800",
-			)}
-		>
-			<Icon
-				className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`}
-				aria-hidden="true"
-			/>
-			<div className="flex-1 space-y-1">
-				<p className="text-sm font-semibold">{displayTitle}</p>
-				<p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
+		<div className="fixed right-4 bottom-4 z-50 max-w-xs rounded-2xl bg-zinc-950/95 p-4 text-white shadow-2xl ring-1 ring-white/10 backdrop-blur-md">
+			<div role="status" aria-live="polite" className="flex items-start gap-3">
+				<Icon
+					className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`}
+					aria-hidden="true"
+				/>
+				<div className="flex-1 space-y-1">
+					<p className="text-sm font-semibold">{displayTitle}</p>
+					<p className="text-sm text-zinc-200">{message}</p>
+				</div>
+				{onClose && (
+					<button
+						onClick={onClose}
+						className="-mr-1 -mt-1 ml-auto rounded p-1 text-zinc-400 transition-colors hover:text-zinc-200"
+						aria-label="Dismiss notification"
+					>
+						<X className="h-3.5 w-3.5" aria-hidden="true" />
+					</button>
+				)}
 			</div>
-			{onClose && (
-				<button
-					type="button"
-					onClick={onClose}
-					aria-label="Dismiss notification"
-					className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:hover:text-zinc-200"
-				>
-					<X className="h-4 w-4" aria-hidden="true" />
-				</button>
-			)}
 		</div>
 	);
 }
 
-// ---------------------------------------------------------------------------
-// ToastMessage — data model for the queue-based toast system
-// ---------------------------------------------------------------------------
+// ─── Toast Container ─────────────────────────────────────────────────────────
 
-export type ToastType = ToastVariant;
+export type ToastMessageType = "success" | "error" | "info" | "warning";
 
 export interface ToastMessage {
 	id: string;
-	type: ToastType;
+	type: ToastMessageType;
 	message: string;
 	description?: string;
-	/** Duration in ms before auto-dismiss. 0 = no auto-dismiss. Default: 5000 */
+	/** Auto-dismiss delay in ms. `0` disables auto-dismiss. Defaults to 5000. */
 	duration?: number;
 }
 
-// ---------------------------------------------------------------------------
-// ToastItem — single notification
-// ---------------------------------------------------------------------------
+export type ToastPosition =
+	| "top-right"
+	| "top-left"
+	| "bottom-right"
+	| "bottom-left";
+
+export interface ToastContainerProps {
+	toasts: ToastMessage[];
+	onDismiss: (id: string) => void;
+	position?: ToastPosition;
+}
+
+const positionClasses: Record<ToastPosition, string> = {
+	"top-right": "top-4 right-4",
+	"top-left": "top-4 left-4",
+	"bottom-right": "bottom-4 right-4",
+	"bottom-left": "bottom-4 left-4",
+};
+
+const TOAST_ITEM_ICON: Record<
+	ToastMessageType,
+	{ icon: React.ElementType; iconClass: string }
+> = {
+	success: { icon: CheckCircle2, iconClass: "text-green-500" },
+	error: { icon: AlertCircle, iconClass: "text-red-500" },
+	info: { icon: Info, iconClass: "text-blue-500" },
+	warning: { icon: AlertTriangle, iconClass: "text-amber-500" },
+};
+
+const DEFAULT_TOAST_DURATION = 5000;
 
 interface ToastItemProps {
 	toast: ToastMessage;
 	onDismiss: (id: string) => void;
 }
 
-const ICONS: Record<ToastType, React.ReactNode> = {
-	success: (
-		<svg
-			className="h-5 w-5 text-green-500"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			strokeWidth={2}
-			aria-hidden="true"
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-		</svg>
-	),
-	error: (
-		<svg
-			className="h-5 w-5 text-red-500"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			strokeWidth={2}
-			aria-hidden="true"
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-		</svg>
-	),
-	info: (
-		<svg
-			className="h-5 w-5 text-blue-500"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			strokeWidth={2}
-			aria-hidden="true"
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M12 2a10 10 0 100 20A10 10 0 0012 2z" />
-		</svg>
-	),
-	warning: (
-		<svg
-			className="h-5 w-5 text-yellow-500"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			strokeWidth={2}
-			aria-hidden="true"
-		>
-			<path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
-		</svg>
-	),
-};
-
-const LABELS: Record<ToastType, string> = {
-	success: "Success",
-	error: "Error",
-	info: "Info",
-	warning: "Warning",
-};
-
+/** A single dismissible, optionally auto-expiring toast notification. */
 export function ToastItem({ toast, onDismiss }: ToastItemProps) {
-	const { id, type, message, description, duration = 5000 } = toast;
-	const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const { id, type, message, description, duration } = toast;
 
+	// biome-ignore lint/correctness/useExhaustiveDependencies: only re-arm the timer when the toast identity/duration changes
 	useEffect(() => {
-		if (duration === 0) return;
-		timerRef.current = setTimeout(() => {
+		const effectiveDuration = duration ?? DEFAULT_TOAST_DURATION;
+		if (effectiveDuration === 0) return;
+
+		const timer = window.setTimeout(() => {
 			onDismiss(id);
-		}, duration);
-		return () => {
-			if (timerRef.current) clearTimeout(timerRef.current);
-		};
+		}, effectiveDuration);
+
+		return () => window.clearTimeout(timer);
 	}, [id, duration, onDismiss]);
+
+	const { icon: Icon, iconClass } = TOAST_ITEM_ICON[type];
 
 	return (
 		<div
 			role="alert"
-			aria-live="assertive"
-			className={cn(
-				"flex w-full max-w-sm items-start gap-3 rounded-xl border bg-white px-4 py-3 shadow-lg dark:bg-zinc-900",
-				type === "success" && "border-green-200 dark:border-green-800",
-				type === "error" && "border-red-200 dark:border-red-800",
-				type === "info" && "border-blue-200 dark:border-blue-800",
-				type === "warning" && "border-yellow-200 dark:border-yellow-800",
-			)}
+			className="flex items-start gap-3 rounded-xl bg-white p-4 text-zinc-900 shadow-lg ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-800"
 		>
 			<span className="mt-0.5 shrink-0">{ICONS[type]}</span>
 			<div className="flex-1 space-y-1">
 				<p className="text-sm font-semibold">{LABELS[type]}</p>
 				<p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
 				{description && (
-					<p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">
+					<p className="text-sm text-zinc-500 dark:text-zinc-400">
 						{description}
 					</p>
 				)}
@@ -238,42 +192,20 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
 			<button
 				type="button"
 				onClick={() => onDismiss(id)}
-				aria-label="Dismiss notification"
-				className="ml-auto rounded p-0.5 text-zinc-400 hover:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-zinc-400 dark:hover:text-zinc-200"
+				className="ml-2 shrink-0 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+				aria-label={`Dismiss ${type} notification`}
 			>
-				<X className="h-4 w-4" aria-hidden="true" />
+				<span aria-hidden="true">&times;</span>
 			</button>
 		</div>
 	);
 }
 
-// ---------------------------------------------------------------------------
-// ToastContainer — renders the queue of active toasts
-// ---------------------------------------------------------------------------
-
-export type ToastPosition =
-	| "top-right"
-	| "top-left"
-	| "top-center"
-	| "bottom-right"
-	| "bottom-left"
-	| "bottom-center";
-
-interface ToastContainerProps {
-	toasts: ToastMessage[];
-	onDismiss: (id: string) => void;
-	position?: ToastPosition;
-}
-
-const POSITION_CLASSES: Record<ToastPosition, string> = {
-	"top-right": "top-4 right-4",
-	"top-left": "top-4 left-4",
-	"top-center": "top-4 left-1/2 -translate-x-1/2",
-	"bottom-right": "bottom-4 right-4",
-	"bottom-left": "bottom-4 left-4",
-	"bottom-center": "bottom-4 left-1/2 -translate-x-1/2",
-};
-
+/**
+ * Container that renders a stack of toast notifications.
+ * Positions the toasts based on the `position` prop.
+ * Returns null when there are no toasts to display (empty state).
+ */
 export function ToastContainer({
 	toasts,
 	onDismiss,

@@ -19,6 +19,7 @@ import {
 	validateStellarAddress,
 } from "@/utils/addressFormatting";
 import { hasValidStellarChecksum } from "@/utils/addressValidation";
+import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -93,6 +94,7 @@ export function AddWalletModal({
 
 	const addressInputRef = useRef<HTMLInputElement>(null);
 	const closeButtonRef = useRef<HTMLButtonElement>(null);
+	const dialogRef = useRef<HTMLDivElement>(null);
 
 	// Focus address input when modal opens
 	useEffect(() => {
@@ -218,6 +220,10 @@ export function AddWalletModal({
 			role="dialog"
 			aria-modal="true"
 			aria-labelledby="add-wallet-title"
+			ref={dialogRef}
+			onKeyDown={(event) => {
+				createFocusTrapHandler(dialogRef)(event);
+			}}
 			className="fixed inset-0 z-50 flex items-center justify-center p-4"
 		>
 			{/* Backdrop */}

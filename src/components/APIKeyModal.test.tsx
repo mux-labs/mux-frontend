@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import APIKeyModal from "./APIKeyModal";
 
@@ -10,76 +11,70 @@ describe("APIKeyModal", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("renders when open", () => {
+	it("validates the key name before creating", async () => {
+		const user = userEvent.setup();
 		render(<APIKeyModal isOpen={true} onClose={vi.fn()} />);
-		expect(screen.getByText("Create API Key")).toBeInTheDocument();
+
+		await user.click(screen.getByTestId("generate-key-btn"));
+
+		expect(screen.getByRole("alert")).toHaveTextContent(
+			/key name is required/i,
+		);
 	});
 
-	it("shows warning message initially", () => {
-		render(<APIKeyModal isOpen={true} onClose={vi.fn()} />);
-		expect(screen.getByText(/save your api key/i)).toBeInTheDocument();
-	});
-
-	it("has key name input field", () => {
-		render(<APIKeyModal isOpen={true} onClose={vi.fn()} />);
-		expect(screen.getByLabelText(/key name/i)).toBeInTheDocument();
-	});
-
-	it("calls onKeyCreated when key is generated", async () => {
+	it("creates a key and shows the one-time secret", async () => {
+		const user = userEvent.setup();
 		const onKeyCreated = vi.fn();
+		const onCreateKey = vi.fn().mockResolvedValue({
+			id: "new-key",
+			name: "Production Key",
+			key: "mux_sk_a••••1234",
+			secret: "mux_sk_actual-secret-1234",
+			status: "Active",
+			createdAt: "2026-07-26T00:00:00.000Z",
+		});
+
 		render(
 			<APIKeyModal
 				isOpen={true}
 				onClose={vi.fn()}
+				onCreateKey={onCreateKey}
 				onKeyCreated={onKeyCreated}
 			/>,
 		);
 
-		const input = screen.getByLabelText(/key name/i);
-		fireEvent.change(input, { target: { value: "Test Key" } });
+		await user.type(screen.getByLabelText(/key name/i), "Production Key");
+		await user.click(screen.getByTestId("generate-key-btn"));
 
-		const generateButton = screen.getByText(/generate key/i);
-		fireEvent.click(generateButton);
-
-		await waitFor(() => {
-			expect(onKeyCreated).toHaveBeenCalledWith({
-				name: "Test Key",
-				value: expect.any(String),
-				key: expect.any(String),
-			});
-		});
+		await waitFor(() =>
+			expect(screen.getByTestId("generated-key")).toHaveTextContent(
+				"mux_sk_actual-secret-1234",
+			),
+		);
+		expect(onCreateKey).toHaveBeenCalledWith("Production Key");
+		expect(onKeyCreated).toHaveBeenCalledWith(
+			expect.objectContaining({
+				name: "Production Key",
+				key: "mux_sk_a••••1234",
+			}),
+		);
 	});
 
-	it("shows error when name is empty", async () => {
-		render(<APIKeyModal isOpen={true} onClose={vi.fn()} />);
-
-		const generateButton = screen.getByText(/generate key/i);
-		fireEvent.click(generateButton);
-
-		await waitFor(() => {
-			expect(screen.getByText(/key name is required/i)).toBeInTheDocument();
-		});
-	});
-
-	it("disables generate button while submitting", async () => {
-		render(<APIKeyModal isOpen={true} onClose={vi.fn()} />);
-
-		const input = screen.getByLabelText(/key name/i);
-		fireEvent.change(input, { target: { value: "Test Key" } });
-
-		const generateButton = screen.getByText(/generate key/i);
-		fireEvent.click(generateButton);
-
-		expect(generateButton).toBeDisabled();
-	});
-
-	it("calls onClose when close button is clicked", () => {
+	it("requires acknowledgement before closing the reveal step", async () => {
+		const user = userEvent.setup();
 		const onClose = vi.fn();
 		render(<APIKeyModal isOpen={true} onClose={onClose} />);
 
-		const closeButton = screen.getByText("Close");
-		fireEvent.click(closeButton);
+		await user.type(screen.getByLabelText(/key name/i), "Test Key");
+		await user.click(screen.getByTestId("generate-key-btn"));
 
+		const doneButton = await screen.findByTestId("done-btn");
+		expect(doneButton).toBeDisabled();
+
+		await user.click(screen.getByTestId("acknowledge-checkbox"));
+		expect(doneButton).not.toBeDisabled();
+
+		await user.click(doneButton);
 		expect(onClose).toHaveBeenCalled();
 	});
 

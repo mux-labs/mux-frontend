@@ -1,11 +1,14 @@
 "use client";
 
-import { Check, Copy, Key, RefreshCw, Shield, ShieldOff } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Key, Shield, ShieldOff } from "lucide-react";
+import { useEffect, useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ConfirmRevokeDialog } from "@/components/ui/ConfirmRevokeDialog";
+import { CopyButton } from "@/components/ui/CopyButton";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { ErrorState } from "@/components/ui/ErrorState";
 import {
 	Table,
 	TableBody,
@@ -14,286 +17,196 @@ import {
 	TableHeader,
 	TableRow,
 } from "@/components/ui/table";
-import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { useApiKeys } from "@/hooks/useApiKeys";
+import { useRevokeApiKey } from "@/hooks/useRevokeApiKey";
+import { createApiKey } from "@/lib/api/index";
 import { cn } from "@/lib/utils";
-import { type ApiKey, mockApiKeys } from "@/mock-data/api-keys";
-import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
+import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
 
-// ---------------------------------------------------------------------------
-// Revoke confirmation — inline per-row
-// ---------------------------------------------------------------------------
-interface RevokeConfirmProps {
-	keyName: string;
-	onConfirm: () => void;
-	onCancel: () => void;
-}
-
-function RevokeConfirm({ keyName, onConfirm, onCancel }: RevokeConfirmProps) {
-	const dialogRef = useRef<HTMLDivElement>(null);
-	const confirmRef = useRef<HTMLButtonElement>(null);
-
-	useEffect(() => {
-		confirmRef.current?.focus();
-	}, []);
-
-	return (
-		<div
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="revoke-title"
-			aria-describedby="revoke-desc"
-			ref={dialogRef}
-			onKeyDown={(event) => {
-				createFocusTrapHandler(dialogRef)(event);
-				if (event.key === "Escape") {
-					event.preventDefault();
-					onCancel();
-				}
-			}}
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-		>
-			<div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-				<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
-					<ShieldOff className="size-6 text-red-600 dark:text-red-400" />
-				</div>
-				<h3
-					id="revoke-title"
-					className="mb-1 text-base font-semibold text-zinc-900 dark:text-zinc-50"
-				>
-					Revoke API key?
-				</h3>
-				<p
-					id="revoke-desc"
-					className="mb-6 text-sm text-zinc-500 dark:text-zinc-400"
-				>
-					<span className="font-medium text-zinc-700 dark:text-zinc-300">
-						{keyName}
-					</span>{" "}
-					will be permanently revoked. Any applications using this key will lose
-					access immediately. This action cannot be undone.
-				</p>
-				<div className="flex justify-end gap-3">
-					<Button variant="outline" size="sm" onClick={onCancel}>
-						Cancel
-					</Button>
-					<Button
-						ref={confirmRef}
-						variant="destructive"
-						size="sm"
-						onClick={onConfirm}
-						data-testid="confirm-revoke"
-					>
-						Revoke key
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Rotate confirmation — inline per-row
-// ---------------------------------------------------------------------------
-interface RotateConfirmProps {
-	keyName: string;
-	onConfirm: () => void;
-	onCancel: () => void;
-}
-
-function RotateConfirm({ keyName, onConfirm, onCancel }: RotateConfirmProps) {
-	const dialogRef = useRef<HTMLDivElement>(null);
-	const confirmRef = useRef<HTMLButtonElement>(null);
-
-	useEffect(() => {
-		confirmRef.current?.focus();
-	}, []);
-
-	return (
-		<div
-			role="alertdialog"
-			aria-modal="true"
-			aria-labelledby="rotate-title"
-			aria-describedby="rotate-desc"
-			ref={dialogRef}
-			onKeyDown={(event) => {
-				createFocusTrapHandler(dialogRef)(event);
-				if (event.key === "Escape") {
-					event.preventDefault();
-					onCancel();
-				}
-			}}
-			className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-		>
-			<div className="w-full max-w-sm rounded-xl border border-zinc-200 bg-white p-6 shadow-xl dark:border-zinc-800 dark:bg-zinc-950">
-				<div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-100 dark:bg-amber-900/30">
-					<RefreshCw className="size-6 text-amber-600 dark:text-amber-400" />
-				</div>
-				<h3
-					id="rotate-title"
-					className="mb-1 text-base font-semibold text-zinc-900 dark:text-zinc-50"
-				>
-					Rotate API key?
-				</h3>
-				<p
-					id="rotate-desc"
-					className="mb-6 text-sm text-zinc-500 dark:text-zinc-400"
-				>
-					<span className="font-medium text-zinc-700 dark:text-zinc-300">
-						{keyName}
-					</span>{" "}
-					will be replaced with a new key. The old key will stop working
-					immediately. This action cannot be undone.
-				</p>
-				<div className="flex justify-end gap-3">
-					<Button variant="outline" size="sm" onClick={onCancel}>
-						Cancel
-					</Button>
-					<Button
-						ref={confirmRef}
-						size="sm"
-						onClick={onConfirm}
-						data-testid="confirm-rotate"
-					>
-						Rotate key
-					</Button>
-				</div>
-			</div>
-		</div>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Copy button with feedback — uses useCopyToClipboard hook
-// ---------------------------------------------------------------------------
-function CopyKeyButton({ apiKey }: { apiKey: ApiKey }) {
-	const { copy, copied } = useCopyToClipboard();
-
-	return (
-		<div className="flex items-center gap-2 font-mono text-xs text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-900/50 px-2 py-1 rounded w-fit">
-			<span>{apiKey.key}</span>
-			<button
-				type="button"
-				onClick={() => copy(apiKey.key)}
-				className="rounded p-1 transition-colors hover:text-zinc-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:hover:text-zinc-100 dark:focus-visible:ring-offset-zinc-950"
-				title={copied ? "Copied!" : "Copy to clipboard"}
-				aria-label={copied ? "Copied!" : `Copy key ${apiKey.name}`}
-				data-testid={`copy-key-${apiKey.id}`}
-			>
-				{copied ? (
-					<Check className="size-3 text-green-500" aria-hidden="true" />
-				) : (
-					<Copy className="size-3" aria-hidden="true" />
-				)}
-			</button>
-			{copied && (
-				<span role="status" aria-live="polite" className="sr-only">
-					Copied to clipboard
-				</span>
-			)}
-		</div>
-	);
-}
-
-// ---------------------------------------------------------------------------
-// Main table
-// ---------------------------------------------------------------------------
 interface ApiKeysTableProps {
-	/** Override keys list (useful for testing / storybook). Defaults to mockApiKeys. */
+	/** Override keys list for focused component tests and storybook. */
 	initialKeys?: ApiKey[];
 }
 
-export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
-	const [keys, setKeys] = useState<ApiKey[]>(initialKeys);
+function toTableApiKey({ secret: _secret, ...apiKey }: CreatedApiKey): ApiKey {
+	return apiKey;
+}
+
+export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
+	const usesFetchedData = initialKeys === undefined;
+	const fetchedKeys = useApiKeys(usesFetchedData);
+	const revokeApiKey = useRevokeApiKey();
+	const [keys, setKeys] = useState<ApiKey[]>(initialKeys ?? []);
 	const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
-	const [pendingRotateId, setPendingRotateId] = useState<string | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [statusFilter, setStatusFilter] = useState<"all" | "Active" | "Revoked">("all");
+	const [statusFilter, setStatusFilter] = useState<
+		"all" | "Active" | "Revoked"
+	>("all");
 
+	useEffect(() => {
+		if (usesFetchedData && fetchedKeys.data) {
+			setKeys(fetchedKeys.data);
+		}
+	}, [fetchedKeys.data, usesFetchedData]);
+
+	const pendingKey = keys.find((key) => key.id === pendingRevokeId);
 	const filteredKeys =
-		statusFilter === "all" ? keys : keys.filter((k) => k.status === statusFilter);
+		statusFilter === "all"
+			? keys
+			: keys.filter((key) => key.status === statusFilter);
 
-	const pendingKey = keys.find((k) => k.id === pendingRevokeId);
-	const pendingRotateKey = keys.find((k) => k.id === pendingRotateId);
+	const handleCreateKey = async (name: string) => {
+		if (!usesFetchedData) {
+			const secret = `mux_sk_${Date.now()}`;
+			const newKey: CreatedApiKey = {
+				id: `key-${Date.now()}`,
+				name,
+				key: `${secret.slice(0, 8)}••••${secret.slice(-4)}`,
+				secret,
+				status: "Active",
+				createdAt: new Date().toISOString(),
+			};
+			setKeys((currentKeys) => [toTableApiKey(newKey), ...currentKeys]);
+			return newKey;
+		}
 
-	const handleRevoke = (id: string) => {
-		setKeys((prev) =>
-			prev.map((k) => (k.id === id ? { ...k, status: "Revoked" as const } : k)),
+		const newKey = await createApiKey(name);
+		setKeys((currentKeys) => [toTableApiKey(newKey), ...currentKeys]);
+		return newKey;
+	};
+
+	const handleKeyCreated = (newKey: CreatedApiKey) => {
+		const tableKey = toTableApiKey(newKey);
+		setKeys((currentKeys) =>
+			currentKeys.some((key) => key.id === tableKey.id)
+				? currentKeys
+				: [tableKey, ...currentKeys],
 		);
-		setPendingRevokeId(null);
 	};
 
-	const handleRotate = (id: string) => {
-		const chars =
-			"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
-		const suffix = Array.from(
-			{ length: 12 },
-			() => chars[Math.floor(Math.random() * chars.length)],
-		).join("");
-		setKeys((prev) =>
-			prev.map((k) =>
-				k.id === id ? { ...k, key: `sk_live_${suffix}...` } : k,
-			),
-		);
-		setPendingRotateId(null);
+	const handleConfirmRevoke = async () => {
+		if (!pendingRevokeId) return;
+
+		if (!usesFetchedData) {
+			setKeys((currentKeys) =>
+				currentKeys.map((key) =>
+					key.id === pendingRevokeId
+						? { ...key, status: "Revoked" as const }
+						: key,
+				),
+			);
+			setPendingRevokeId(null);
+			return;
+		}
+
+		const revoked = await revokeApiKey.revoke(pendingRevokeId);
+		if (revoked) {
+			setKeys((currentKeys) =>
+				currentKeys.map((key) => (key.id === revoked.id ? revoked : key)),
+			);
+			setPendingRevokeId(null);
+		}
 	};
 
-	const handleKeyCreated = ({
-		name,
-		value,
-	}: {
-		name: string;
-		value: string;
-	}) => {
-		const newKey: ApiKey = {
-			id: `key-${Date.now()}`,
-			name,
-			// Show only a masked preview in the table; the full key was shown once in the modal
-			key: `${value.slice(0, 16)}...`,
-			status: "Active",
-			createdAt: new Date().toISOString(),
-		};
-		setKeys((prev) => [newKey, ...prev]);
-	};
-
-	const getStatusClassName = (status: "Active" | "Revoked") =>
-		`gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${
-			status === "Active"
-				? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20"
-				: "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800"
-		}`;
+	const renderKeyRows = () => (
+		<Table aria-label="API keys">
+			<caption className="sr-only">
+				List of API keys with masked secret values, status, and creation date
+			</caption>
+			<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
+				<TableRow>
+					<TableHead className="w-[200px] pl-6">Name</TableHead>
+					<TableHead>Secret Key</TableHead>
+					<TableHead>Status</TableHead>
+					<TableHead>Created</TableHead>
+					<TableHead className="text-right pr-6">Action</TableHead>
+				</TableRow>
+			</TableHeader>
+			<TableBody>
+				{filteredKeys.map((apiKey) => (
+					<TableRow key={apiKey.id} className="group transition-colors">
+						<TableCell className="pl-6 font-medium text-zinc-900 dark:text-zinc-100">
+							{apiKey.name}
+						</TableCell>
+						<TableCell>
+							<div className="flex w-fit items-center gap-2 rounded bg-zinc-100 px-2 py-1 font-mono text-xs text-zinc-500 dark:bg-zinc-900/50 dark:text-zinc-400">
+								<span>{apiKey.key}</span>
+								<CopyButton
+									text={apiKey.key}
+									type="key"
+									iconOnly
+									size="sm"
+									className="h-6 w-6 p-0"
+									successMessage="API key copied"
+									data-testid={`copy-key-${apiKey.id}`}
+								/>
+							</div>
+						</TableCell>
+						<TableCell>
+							<Badge
+								variant={apiKey.status === "Active" ? "default" : "outline"}
+								className={cn(
+									"gap-1.5 rounded-full border px-2.5 py-0.5 text-[11px] font-semibold",
+									apiKey.status === "Active"
+										? "border-green-200 bg-green-50 text-green-700 dark:border-green-500/20 dark:bg-green-500/10 dark:text-green-400"
+										: "border-zinc-200 bg-zinc-50 text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-500",
+								)}
+							>
+								{apiKey.status === "Active" ? (
+									<Shield className="size-3" />
+								) : (
+									<ShieldOff className="size-3" />
+								)}
+								{apiKey.status}
+							</Badge>
+						</TableCell>
+						<TableCell className="text-zinc-500 dark:text-zinc-400">
+							{new Date(apiKey.createdAt).toLocaleDateString()}
+						</TableCell>
+						<TableCell className="pr-6 text-right">
+							{apiKey.status === "Active" ? (
+								<Button
+									variant="ghost"
+									size="sm"
+									className="h-8 rounded-lg px-3 text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
+									onClick={() => setPendingRevokeId(apiKey.id)}
+									data-testid={`revoke-btn-${apiKey.id}`}
+								>
+									Revoke
+								</Button>
+							) : (
+								<span className="pr-1 text-xs text-zinc-400 dark:text-zinc-600">
+									Revoked
+								</span>
+							)}
+						</TableCell>
+					</TableRow>
+				))}
+			</TableBody>
+		</Table>
+	);
 
 	return (
 		<>
-			{/* Revoke confirmation modal */}
-			{pendingRevokeId && pendingKey && (
-				<RevokeConfirm
-					keyName={pendingKey.name}
-					onConfirm={() => handleRevoke(pendingRevokeId)}
-					onCancel={() => setPendingRevokeId(null)}
-				/>
-			)}
+			<ConfirmRevokeDialog
+				open={Boolean(pendingRevokeId && pendingKey)}
+				keyLabel={pendingKey?.name}
+				isPending={revokeApiKey.loading}
+				onConfirm={handleConfirmRevoke}
+				onCancel={() => setPendingRevokeId(null)}
+			/>
 
-			{/* Rotate confirmation modal */}
-			{pendingRotateId && pendingRotateKey && (
-				<RotateConfirm
-					keyName={pendingRotateKey.name}
-					onConfirm={() => handleRotate(pendingRotateId)}
-					onCancel={() => setPendingRotateId(null)}
-				/>
-			)}
-
-			{/* Create key modal */}
 			<APIKeyModal
 				isOpen={isModalOpen}
 				onClose={() => setIsModalOpen(false)}
+				onCreateKey={handleCreateKey}
 				onKeyCreated={handleKeyCreated}
 			/>
 
-			<div className="rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 overflow-hidden">
-				{/* Header */}
-				<div className="p-6 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+			<div className="overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+				<div className="flex flex-col gap-4 border-b border-zinc-200 p-6 dark:border-zinc-800 sm:flex-row sm:items-center sm:justify-between">
 					<div className="flex items-center gap-3">
-						<div className="p-2 rounded-lg bg-zinc-100 dark:bg-zinc-900">
+						<div className="rounded-lg bg-zinc-100 p-2 dark:bg-zinc-900">
 							<Key className="size-5 text-zinc-600 dark:text-zinc-400" />
 						</div>
 						<div>
@@ -301,7 +214,7 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 								API Keys
 							</h2>
 							<p className="text-sm text-zinc-500 dark:text-zinc-400">
-								Manage your application keys and secrets
+								Manage your application keys and masked secrets
 							</p>
 						</div>
 					</div>
@@ -315,32 +228,65 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 					</Button>
 				</div>
 
-				{/* Status filter */}
 				<div
-					className="flex items-center gap-1 border-b border-zinc-200 dark:border-zinc-800 px-6 py-3"
+					className="flex items-center gap-1 overflow-x-auto border-b border-zinc-200 px-6 py-3 dark:border-zinc-800"
 					role="group"
 					aria-label="Filter by status"
 				>
-					{(["all", "Active", "Revoked"] as const).map((f) => (
+					{(["all", "Active", "Revoked"] as const).map((filter) => (
 						<button
-							key={f}
+							key={filter}
 							type="button"
-							onClick={() => setStatusFilter(f)}
-							aria-pressed={statusFilter === f}
+							onClick={() => setStatusFilter(filter)}
+							aria-pressed={statusFilter === filter}
 							className={cn(
-								"rounded-full px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:focus-visible:ring-offset-zinc-950",
-								statusFilter === f
+								"rounded-full px-3 py-1 text-xs font-medium transition-colors",
+								statusFilter === filter
 									? "bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900"
 									: "text-zinc-500 hover:bg-zinc-100 hover:text-zinc-700 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-200",
 							)}
 						>
-							{f === "all" ? "All" : f}
+							{filter === "all" ? "All" : filter}
 						</button>
 					))}
 				</div>
 
-				{/* Empty state */}
-				{keys.length === 0 ? (
+				{usesFetchedData && fetchedKeys.loading ? (
+					<div
+						className="space-y-3 p-6"
+						role="status"
+						aria-label="Loading API keys"
+					>
+						{[0, 1, 2].map((row) => (
+							<div
+								key={row}
+								className="h-12 animate-pulse rounded-lg bg-zinc-100 dark:bg-zinc-900"
+							/>
+						))}
+					</div>
+				) : usesFetchedData && fetchedKeys.error ? (
+					<div className="p-6">
+						<ErrorState
+							title="Unable to load API keys"
+							description={fetchedKeys.error.message}
+							retry={{ label: "Retry", onRetry: fetchedKeys.refetch }}
+						/>
+					</div>
+				) : revokeApiKey.error ? (
+					<div className="p-6">
+						<ErrorState
+							title="Unable to revoke API key"
+							description={revokeApiKey.error.message}
+							retry={{
+								label: "Dismiss",
+								onRetry: () => {
+									revokeApiKey.reset();
+									setPendingRevokeId(null);
+								},
+							}}
+						/>
+					</div>
+				) : keys.length === 0 ? (
 					<div className="p-6">
 						<EmptyState
 							icon={
@@ -365,81 +311,7 @@ export function ApiKeysTable({ initialKeys = mockApiKeys }: ApiKeysTableProps) {
 						/>
 					</div>
 				) : (
-					<Table aria-label="API keys">
-						<caption className="sr-only">List of API keys with status and creation date</caption>
-						<TableHeader className="bg-zinc-50/50 dark:bg-zinc-900/50">
-							<TableRow>
-								<TableHead className="w-[200px] pl-6">Name</TableHead>
-								<TableHead>Secret Key</TableHead>
-								<TableHead>Status</TableHead>
-								<TableHead>Created</TableHead>
-								<TableHead className="text-right pr-6">Action</TableHead>
-							</TableRow>
-						</TableHeader>
-						<TableBody>
-							{filteredKeys.map((key) => (
-								<TableRow key={key.id} className="group transition-colors">
-									<TableCell className="font-medium pl-6 text-zinc-900 dark:text-zinc-100">
-										{key.name}
-									</TableCell>
-									<TableCell>
-										<CopyKeyButton apiKey={key} />
-									</TableCell>
-									<TableCell>
-										<Badge
-											variant={key.status === "Active" ? "default" : "outline"}
-											className={`
-												gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold border
-												${
-													key.status === "Active"
-														? "bg-green-50 text-green-700 border-green-200 dark:bg-green-500/10 dark:text-green-400 dark:border-green-500/20"
-														: "bg-zinc-50 text-zinc-600 border-zinc-200 dark:bg-zinc-900 dark:text-zinc-500 dark:border-zinc-800"
-												}
-											`}
-										>
-											{key.status === "Active" ? (
-												<Shield className="size-3" />
-											) : (
-												<ShieldOff className="size-3" />
-											)}
-											{key.status}
-										</Badge>
-									</TableCell>
-									<TableCell className="text-zinc-500 dark:text-zinc-400">
-										{new Date(key.createdAt).toLocaleDateString()}
-									</TableCell>
-									<TableCell className="text-right pr-6">
-										{key.status === "Active" ? (
-											<div className="flex items-center justify-end gap-1">
-												<Button
-													variant="ghost"
-													size="sm"
-													className="text-zinc-500 hover:text-amber-600 dark:hover:text-amber-400 h-8 px-3 rounded-lg"
-													onClick={() => setPendingRotateId(key.id)}
-													data-testid={`rotate-btn-${key.id}`}
-												>
-													Rotate
-												</Button>
-												<Button
-													variant="ghost"
-													size="sm"
-													className="text-zinc-500 hover:text-red-600 dark:hover:text-red-400 h-8 px-3 rounded-lg"
-													onClick={() => setPendingRevokeId(key.id)}
-													data-testid={`revoke-btn-${key.id}`}
-												>
-													Revoke
-												</Button>
-											</div>
-										) : (
-											<span className="text-xs text-zinc-400 dark:text-zinc-600 pr-1">
-												Revoked
-											</span>
-										)}
-									</TableCell>
-								</TableRow>
-							))}
-						</TableBody>
-					</Table>
+					renderKeyRows()
 				)}
 			</div>
 		</>

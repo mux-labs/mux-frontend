@@ -82,6 +82,9 @@ describe("SpendingLimitsCard", () => {
 		expect(container.querySelectorAll(".animate-pulse").length).toBeGreaterThan(
 			0,
 		);
+		expect(
+			container.querySelectorAll(".motion-reduce\\:animate-none").length,
+		).toBeGreaterThan(0);
 	});
 
 	it("fetches limits from the spending-limits API on mount", async () => {

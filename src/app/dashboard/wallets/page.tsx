@@ -7,32 +7,33 @@ import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { WalletTableSkeleton } from "@/components/ui/Skeleton";
 import { WalletTable } from "@/components/wallet/WalletTable";
+import { useNetwork } from "@/context/NetworkContext";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
-import { useWallets } from "@/hooks/useWallets";
+import { invalidateWalletsCache, useWallets } from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
 
 export default function WalletsPage() {
-	const { wallets: fetchedWallets, loading, error, refetch } = useWallets();
+	const { network } = useNetwork();
+	const { wallets: fetchedWallets, loading, error, refetch } = useWallets({
+		network,
+	});
 	const [addedWallets, setAddedWallets] = useState<Wallet[]>([]);
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [showArchived, setShowArchived] = useState(false);
 	useAnalyticsTracking("wallets");
 
-	const wallets = [...addedWallets, ...fetchedWallets];
-	const archivedCount = useMemo(
-		() => wallets.filter((wallet) => wallet.archived).length,
-		[wallets],
-	);
-	const visibleWallets = useMemo(
-		() =>
-			showArchived ? wallets : wallets.filter((wallet) => !wallet.archived),
-		[wallets, showArchived],
-	);
+	const wallets = [
+		...addedWallets.filter((wallet) => wallet.network === network),
+		...fetchedWallets,
+	];
 
 	const openAddWallet = () => setIsAddOpen(true);
+	const isRateLimited = error?.includes("too quickly") ?? false;
 
 	const handleAdd = (wallet: Wallet) => {
 		setAddedWallets((prev) => [wallet, ...prev]);
+		invalidateWalletsCache(wallet.network);
+		refetch({ force: true });
 		setIsAddOpen(false);
 	};
 
@@ -61,8 +62,16 @@ export default function WalletsPage() {
 				<WalletTableSkeleton />
 			) : error && wallets.length === 0 ? (
 				<ErrorState
-					title="Failed to load wallets"
-					description={`${error} Check your connection and try again.`}
+					title={
+						isRateLimited
+							? "Wallets are temporarily rate limited"
+							: "Failed to load wallets"
+					}
+					description={
+						isRateLimited
+							? error
+							: `${error} Check your connection and try again.`
+					}
 					retry={{ label: "Retry", onRetry: refetch }}
 				/>
 			) : visibleWallets.length > 0 ? (
@@ -87,6 +96,7 @@ export default function WalletsPage() {
 				isOpen={isAddOpen}
 				onClose={() => setIsAddOpen(false)}
 				onAdd={handleAdd}
+				existingAddresses={wallets.map((wallet) => wallet.address)}
 			/>
 		</div>
 	);

@@ -1,7 +1,11 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useWallet } from "@/hooks/useWallet";
-import { useWallets } from "@/hooks/useWallets";
+import {
+	clearWalletsCacheForTests,
+	useWallets,
+	WALLETS_RATE_LIMIT_MESSAGE,
+} from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
 
 const mockWallet: Wallet = {
@@ -14,10 +18,12 @@ const mockWallet: Wallet = {
 };
 
 beforeEach(() => {
+	clearWalletsCacheForTests();
 	vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
 });
 
 afterEach(() => {
+	clearWalletsCacheForTests();
 	vi.unstubAllEnvs();
 	vi.restoreAllMocks();
 });
@@ -78,6 +84,18 @@ describe("useWallets", () => {
 		expect(result.current.wallets).toEqual([]);
 	});
 
+	it("returns a friendly rate-limit error on 429 responses", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn().mockResolvedValue({ ok: false, status: 429 }),
+		);
+
+		const { result } = renderHook(() => useWallets());
+		await waitFor(() => expect(result.current.loading).toBe(false));
+		expect(result.current.error).toBe(WALLETS_RATE_LIMIT_MESSAGE);
+		expect(result.current.wallets).toEqual([]);
+	});
+
 	it("falls back to the local Next.js wallets route when NEXT_PUBLIC_API_URL is missing", async () => {
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -93,6 +111,41 @@ describe("useWallets", () => {
 		expect(result.current.wallets).toEqual([mockWallet]);
 	});
 
+	it("scopes wallet requests by network", async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useWallets({ network: "mainnet" }));
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.example.com/wallets?network=mainnet",
+		);
+		expect(result.current.wallets).toEqual([mockWallet]);
+	});
+
+	it("returns fresh cached wallets without another request", async () => {
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const first = renderHook(() => useWallets({ network: "mainnet" }));
+		await waitFor(() => expect(first.result.current.loading).toBe(false));
+		first.unmount();
+
+		const second = renderHook(() => useWallets({ network: "mainnet" }));
+		await waitFor(() => expect(second.result.current.loading).toBe(false));
+
+		expect(second.result.current.wallets).toEqual([mockWallet]);
+		expect(second.result.current.isCached).toBe(true);
+		expect(fetchMock).toHaveBeenCalledTimes(1);
+	});
+
 	it("refetch triggers a new request", async () => {
 		const fetchMock = vi.fn().mockResolvedValue({
 			ok: true,
@@ -105,8 +158,8 @@ describe("useWallets", () => {
 		expect(fetchMock).toHaveBeenCalledTimes(1);
 
 		act(() => result.current.refetch());
+		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 		await waitFor(() => expect(result.current.loading).toBe(false));
-		expect(fetchMock).toHaveBeenCalledTimes(2);
 	});
 });
 

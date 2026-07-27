@@ -27,8 +27,7 @@ const stubStorage = (() => {
 	};
 })();
 
-global.window = { localStorage: stubStorage };
-global.localStorage = stubStorage;
+global.window = { sessionStorage: stubStorage };
 
 let authRefreshCalled = false;
 

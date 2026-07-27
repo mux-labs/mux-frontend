@@ -1,7 +1,7 @@
 /**
  * Tests for copy-to-clipboard UX utilities
  */
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
 	copyToClipboardWithFallback,
 	formatCopyFeedback,
@@ -227,6 +227,21 @@ describe("Copy-to-Clipboard UX Utilities", () => {
 	});
 
 	describe("announceToScreenReader", () => {
+		// `announceToScreenReader` reuses a singleton #copy-announcer element and
+		// schedules a real 1000ms timeout to clear it. Left unmanaged, that timer
+		// fires asynchronously between tests and the stale element leaks into the
+		// next test's jsdom document — a classic source of order-dependent
+		// flakiness. Fake timers + explicit cleanup make each test deterministic.
+		beforeEach(() => {
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.runOnlyPendingTimers();
+			vi.useRealTimers();
+			document.getElementById("copy-announcer")?.remove();
+		});
+
 		it("should create announcer element if not exists", () => {
 			announceToScreenReader("Test message");
 			const announcer = document.getElementById("copy-announcer");
@@ -244,6 +259,27 @@ describe("Copy-to-Clipboard UX Utilities", () => {
 			announceToScreenReader("Test announcement");
 			const announcer = document.getElementById("copy-announcer");
 			expect(announcer?.textContent).toBe("Test announcement");
+		});
+
+		it("should clear the message after the announcement timeout elapses", () => {
+			announceToScreenReader("Temporary announcement");
+			const announcer = document.getElementById("copy-announcer");
+			expect(announcer?.textContent).toBe("Temporary announcement");
+
+			vi.advanceTimersByTime(1000);
+
+			expect(announcer?.textContent).toBe("");
+		});
+
+		it("should reuse the existing announcer element on subsequent calls", () => {
+			announceToScreenReader("First message");
+			const firstAnnouncer = document.getElementById("copy-announcer");
+
+			announceToScreenReader("Second message");
+			const secondAnnouncer = document.getElementById("copy-announcer");
+
+			expect(secondAnnouncer).toBe(firstAnnouncer);
+			expect(secondAnnouncer?.textContent).toBe("Second message");
 		});
 	});
 

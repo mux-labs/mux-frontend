@@ -1,11 +1,12 @@
 import { render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import type { Wallet } from "@/types/wallet";
 import { WalletTable } from "../WalletTable";
 
 // Mock the useCopyToClipboard hook (include error: null to match real hook signature)
-jest.mock("@/hooks/useCopyToClipboard", () => ({
+vi.mock("@/hooks/useCopyToClipboard", () => ({
 	useCopyToClipboard: () => ({
-		copy: jest.fn(),
+		copy: vi.fn(),
 		copied: false,
 		error: null,
 	}),

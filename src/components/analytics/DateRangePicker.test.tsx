@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { vi } from "vitest";
 import { DateRangePicker } from "./DateRangePicker";
 
 describe("DateRangePicker", () => {
@@ -12,11 +13,11 @@ describe("DateRangePicker", () => {
 
 	const defaultProps = {
 		value: { from: lastWeek, to: today },
-		onChange: jest.fn(),
+		onChange: vi.fn(),
 	};
 
 	beforeEach(() => {
-		jest.clearAllMocks();
+		vi.clearAllMocks();
 	});
 
 	describe("rendering", () => {
@@ -64,7 +65,7 @@ describe("DateRangePicker", () => {
 	describe("preset selection", () => {
 		it("should call onChange when preset is selected", async () => {
 			const user = userEvent.setup();
-			const onChange = jest.fn();
+			const onChange = vi.fn();
 			render(<DateRangePicker {...defaultProps} onChange={onChange} />);
 
 			await user.click(screen.getByRole("button", { name: /→/ }));
@@ -92,7 +93,7 @@ describe("DateRangePicker", () => {
 
 		it("should calculate correct date range for presets", async () => {
 			const user = userEvent.setup();
-			const onChange = jest.fn();
+			const onChange = vi.fn();
 			render(<DateRangePicker {...defaultProps} onChange={onChange} />);
 
 			await user.click(screen.getByRole("button", { name: /→/ }));
@@ -138,7 +139,7 @@ describe("DateRangePicker", () => {
 
 		it("should apply custom date range when valid", async () => {
 			const user = userEvent.setup();
-			const onChange = jest.fn();
+			const onChange = vi.fn();
 			render(<DateRangePicker {...defaultProps} onChange={onChange} />);
 
 			await user.click(screen.getByRole("button", { name: /→/ }));
@@ -306,7 +307,7 @@ describe("DateRangePicker", () => {
 
 		it("should call onValidationChange when validation state changes", async () => {
 			const user = userEvent.setup();
-			const onValidationChange = jest.fn();
+			const onValidationChange = vi.fn();
 			render(
 				<DateRangePicker
 					{...defaultProps}
@@ -440,7 +441,7 @@ describe("DateRangePicker", () => {
 
 		it("should reset touched state after successful apply", async () => {
 			const user = userEvent.setup();
-			const onChange = jest.fn();
+			const onChange = vi.fn();
 			render(
 				<DateRangePicker
 					{...defaultProps}

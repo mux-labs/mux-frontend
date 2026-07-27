@@ -1,4 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
+import { vi } from "vitest";
 import {
 	mockRecoveryTimelineCompleted,
 	mockRecoveryTimelineInProgress,
@@ -7,16 +8,16 @@ import * as recoveryApi from "@/services/recoveryApi";
 import { useRecoveryStatus } from "../useRecoveryStatus";
 
 // Mock the API service
-jest.mock("@/services/recoveryApi");
+vi.mock("@/services/recoveryApi");
 
 describe("useRecoveryStatus", () => {
 	beforeEach(() => {
-		jest.clearAllMocks();
-		jest.useFakeTimers();
+		vi.clearAllMocks();
+		vi.useFakeTimers();
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	describe("Initial state", () => {
@@ -30,7 +31,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should initialize with loading state when autoFetch is true", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -59,7 +60,7 @@ describe("useRecoveryStatus", () => {
 
 	describe("Fetching recovery status", () => {
 		it("should fetch recovery status successfully", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -78,7 +79,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should handle fetch errors", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: false,
 				error: "Failed to fetch",
 				timestamp: Date.now(),
@@ -109,7 +110,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should refetch on demand", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValue({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -133,14 +134,14 @@ describe("useRecoveryStatus", () => {
 
 	describe("Polling", () => {
 		it("should start polling for in-progress recovery", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineInProgress,
 				timestamp: Date.now(),
 			});
 
-			(recoveryApi.pollRecoveryStatus as jest.Mock).mockReturnValueOnce(
-				jest.fn(),
+			(recoveryApi.pollRecoveryStatus as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+				vi.fn(),
 			);
 
 			const { result } = renderHook(() =>
@@ -155,7 +156,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should not poll for completed recovery", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -173,14 +174,14 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should stop polling on demand", async () => {
-			const mockStop = jest.fn();
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			const mockStop = vi.fn();
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineInProgress,
 				timestamp: Date.now(),
 			});
 
-			(recoveryApi.pollRecoveryStatus as jest.Mock).mockReturnValueOnce(
+			(recoveryApi.pollRecoveryStatus as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 				mockStop,
 			);
 
@@ -200,14 +201,14 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should use custom poll interval", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineInProgress,
 				timestamp: Date.now(),
 			});
 
-			(recoveryApi.pollRecoveryStatus as jest.Mock).mockReturnValueOnce(
-				jest.fn(),
+			(recoveryApi.pollRecoveryStatus as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+				vi.fn(),
 			);
 
 			renderHook(() =>
@@ -230,9 +231,9 @@ describe("useRecoveryStatus", () => {
 
 	describe("Callbacks", () => {
 		it("should call onStatusChange when status updates", async () => {
-			const onStatusChange = jest.fn();
+			const onStatusChange = vi.fn();
 
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -253,9 +254,9 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should call onError when fetch fails", async () => {
-			const onError = jest.fn();
+			const onError = vi.fn();
 
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: false,
 				error: "Fetch failed",
 				timestamp: Date.now(),
@@ -276,7 +277,7 @@ describe("useRecoveryStatus", () => {
 
 	describe("Stale state detection", () => {
 		it("should mark data as stale", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -300,7 +301,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should detect stale data after timeout", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -315,7 +316,7 @@ describe("useRecoveryStatus", () => {
 			});
 
 			// Advance time by 61 seconds (stale threshold is 60 seconds)
-			jest.advanceTimersByTime(61000);
+			vi.advanceTimersByTime(61000);
 
 			await waitFor(() => {
 				expect(result.current.isStale).toBe(true);
@@ -325,7 +326,7 @@ describe("useRecoveryStatus", () => {
 
 	describe("Error handling", () => {
 		it("should clear error state", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: false,
 				error: "Error occurred",
 				timestamp: Date.now(),
@@ -361,7 +362,7 @@ describe("useRecoveryStatus", () => {
 
 	describe("Loading states", () => {
 		it("should have correct loading state flags", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -387,14 +388,14 @@ describe("useRecoveryStatus", () => {
 
 	describe("Cleanup", () => {
 		it("should stop polling on unmount", async () => {
-			const mockStop = jest.fn();
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			const mockStop = vi.fn();
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineInProgress,
 				timestamp: Date.now(),
 			});
 
-			(recoveryApi.pollRecoveryStatus as jest.Mock).mockReturnValueOnce(
+			(recoveryApi.pollRecoveryStatus as ReturnType<typeof vi.fn>).mockReturnValueOnce(
 				mockStop,
 			);
 
@@ -412,7 +413,7 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should handle wallet ID changes", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValue({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -441,7 +442,7 @@ describe("useRecoveryStatus", () => {
 
 	describe("Edge cases", () => {
 		it("should handle rapid refetch calls", async () => {
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValue({
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValue({
 				success: true,
 				data: mockRecoveryTimelineCompleted,
 				timestamp: Date.now(),
@@ -463,14 +464,14 @@ describe("useRecoveryStatus", () => {
 		});
 
 		it("should handle polling with errors", async () => {
-			const mockStop = jest.fn();
-			(recoveryApi.fetchRecoveryStatus as jest.Mock).mockResolvedValueOnce({
+			const mockStop = vi.fn();
+			(recoveryApi.fetchRecoveryStatus as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				success: true,
 				data: mockRecoveryTimelineInProgress,
 				timestamp: Date.now(),
 			});
 
-			(recoveryApi.pollRecoveryStatus as jest.Mock).mockImplementationOnce(
+			(recoveryApi.pollRecoveryStatus as ReturnType<typeof vi.fn>).mockImplementationOnce(
 				(walletId, interval, maxDuration, onUpdate) => {
 					onUpdate({
 						success: false,

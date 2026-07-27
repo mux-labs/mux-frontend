@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import { vi } from "vitest";
 import { NetworkFilter } from "../NetworkFilter";
 
 describe("NetworkFilter", () => {
-	const mockOnNetworkChange = jest.fn();
+	const mockOnNetworkChange = vi.fn();
 
 	beforeEach(() => {
 		mockOnNetworkChange.mockClear();

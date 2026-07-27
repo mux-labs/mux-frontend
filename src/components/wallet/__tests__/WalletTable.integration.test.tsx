@@ -1,10 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import React from "react";
+import { vi } from "vitest";
 import type { Wallet } from "@/types/wallet";
 import { WalletTable } from "../WalletTable";
 
 // Mock the TestnetHint component
-jest.mock("@/components/ui/TestnetHint", () => ({
+vi.mock("@/components/ui/TestnetHint", () => ({
 	TestnetHint: ({ variant }: { variant: string }) => (
 		<div data-testid="testnet-hint" data-variant={variant}>
 			Testnet Hint
@@ -13,7 +14,7 @@ jest.mock("@/components/ui/TestnetHint", () => ({
 }));
 
 // Mock the ExplorerLink component
-jest.mock("@/components/ui/ExplorerLink", () => ({
+vi.mock("@/components/ui/ExplorerLink", () => ({
 	ExplorerLink: ({
 		address,
 		network,
@@ -31,9 +32,9 @@ jest.mock("@/components/ui/ExplorerLink", () => ({
 }));
 
 // Mock the useCopyToClipboard hook (include error: null to match real hook signature)
-jest.mock("@/hooks/useCopyToClipboard", () => ({
+vi.mock("@/hooks/useCopyToClipboard", () => ({
 	useCopyToClipboard: () => ({
-		copy: jest.fn(),
+		copy: vi.fn(),
 		copied: false,
 		error: null,
 	}),

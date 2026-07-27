@@ -1,3 +1,4 @@
+import { vi } from "vitest";
 import { mockRecoveryTimelineCompleted } from "@/mock-data/recovery";
 import {
 	fetchRecoveryEvents,
@@ -7,16 +8,16 @@ import {
 } from "../recoveryApi";
 
 // Mock fetch
-global.fetch = jest.fn();
+global.fetch = vi.fn();
 
 describe("Recovery API Service", () => {
 	beforeEach(() => {
-		jest.clearAllMocks();
-		jest.useFakeTimers();
+		vi.clearAllMocks();
+		vi.useFakeTimers();
 	});
 
 	afterEach(() => {
-		jest.useRealTimers();
+		vi.useRealTimers();
 	});
 
 	describe("fetchRecoveryStatus", () => {
@@ -31,7 +32,7 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
 			});
@@ -51,10 +52,10 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle network errors with retry", async () => {
-			(global.fetch as jest.Mock).mockRejectedValueOnce(
+			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
 				new Error("Network error"),
 			);
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({
 					...mockRecoveryTimelineCompleted,
@@ -76,7 +77,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle HTTP errors", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: false,
 				status: 404,
 				json: async () => ({ message: "Not found" }),
@@ -89,8 +90,8 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle timeout errors", async () => {
-			(global.fetch as jest.Mock).mockRejectedValueOnce(new Error("timeout"));
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("timeout"));
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({
 					...mockRecoveryTimelineCompleted,
@@ -111,7 +112,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should validate response data", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({ invalid: "data" }),
 			});
@@ -133,7 +134,7 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockResponse,
 			});
@@ -146,7 +147,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should include timestamp in response", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({
 					...mockRecoveryTimelineCompleted,
@@ -172,7 +173,7 @@ describe("Recovery API Service", () => {
 				timestamp: e.timestamp.toISOString(),
 			}));
 
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockEvents,
 			});
@@ -191,7 +192,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle HTTP errors", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: false,
 				status: 500,
 				json: async () => ({ message: "Server error" }),
@@ -204,7 +205,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should validate events array", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({ invalid: "data" }),
 			});
@@ -227,7 +228,7 @@ describe("Recovery API Service", () => {
 				},
 			];
 
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => mockEvents,
 			});
@@ -250,24 +251,24 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 				ok: true,
 				json: async () => mockResponse,
 			});
 
-			const onUpdate = jest.fn();
+			const onUpdate = vi.fn();
 			const stop = pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
 			// Initial call
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
 			// Advance time
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2);
 
 			// Stop polling
 			stop();
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2); // No additional calls
 		});
 
@@ -282,17 +283,17 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 				ok: true,
 				json: async () => completedResponse,
 			});
 
-			const onUpdate = jest.fn();
+			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			// Should not poll again since status is completed
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 		});
@@ -308,17 +309,17 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 				ok: true,
 				json: async () => failedResponse,
 			});
 
-			const onUpdate = jest.fn();
+			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			// Should not poll again since status is failed
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 		});
@@ -334,38 +335,38 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 				ok: true,
 				json: async () => inProgressResponse,
 			});
 
-			const onUpdate = jest.fn();
+			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 3000, onUpdate);
 
 			// Initial call
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
 			// Advance to 1 second
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2);
 
 			// Advance to 2 seconds
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(3);
 
 			// Advance to 3 seconds (max duration reached)
-			jest.advanceTimersByTime(1000);
+			vi.advanceTimersByTime(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(3); // No additional calls
 		});
 
 		it("should handle polling errors", async () => {
-			(global.fetch as jest.Mock).mockResolvedValue({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
 				ok: false,
 				status: 500,
 				json: async () => ({ message: "Server error" }),
 			});
 
-			const onUpdate = jest.fn();
+			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
 			expect(onUpdate).toHaveBeenCalledTimes(1);
@@ -379,7 +380,7 @@ describe("Recovery API Service", () => {
 
 	describe("Error handling", () => {
 		it("should handle fetch errors gracefully", async () => {
-			(global.fetch as jest.Mock).mockRejectedValue(new Error("Network error"));
+			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Network error"));
 
 			const result = await fetchRecoveryStatus("wallet-123", {
 				retryAttempts: 1,
@@ -390,7 +391,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle malformed JSON responses", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => {
 					throw new Error("Invalid JSON");
@@ -403,7 +404,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle missing required fields", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({
 					id: "recovery-123",
@@ -420,7 +421,7 @@ describe("Recovery API Service", () => {
 
 	describe("Configuration", () => {
 		it("should use custom base URL", async () => {
-			(global.fetch as jest.Mock).mockResolvedValueOnce({
+			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
 				ok: true,
 				json: async () => ({
 					...mockRecoveryTimelineCompleted,
@@ -443,7 +444,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should use custom timeout", async () => {
-			(global.fetch as jest.Mock).mockImplementationOnce(
+			(global.fetch as ReturnType<typeof vi.fn>).mockImplementationOnce(
 				() =>
 					new Promise((resolve) => {
 						setTimeout(
@@ -473,7 +474,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should use custom retry attempts", async () => {
-			(global.fetch as jest.Mock)
+			(global.fetch as ReturnType<typeof vi.fn>)
 				.mockRejectedValueOnce(new Error("Error 1"))
 				.mockRejectedValueOnce(new Error("Error 2"))
 				.mockResolvedValueOnce({

@@ -14,6 +14,7 @@ import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
 import { WalletActivityFeed } from "@/components/wallet/WalletActivityFeed";
+import { WalletNotFound } from "@/components/wallet/WalletNotFound";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
@@ -99,17 +100,14 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	}
 
 	if (error && !wallet) {
+		if (isNotFound) {
+			return <WalletNotFound walletId={id} />;
+		}
 		return (
 			<ErrorState
-				title={isNotFound ? "Wallet not found" : "Failed to load wallet"}
-				description={
-					isNotFound
-						? "No wallet exists for this ID. It may have been removed or the link is invalid."
-						: `${error}. Check your connection and try again.`
-				}
-				retry={
-					isNotFound ? undefined : { label: "Try Again", onRetry: refresh }
-				}
+				title="Failed to load wallet"
+				description={`${error}. Check your connection and try again.`}
+				retry={{ label: "Try Again", onRetry: refresh }}
 			/>
 		);
 	}

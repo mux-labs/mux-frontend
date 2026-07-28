@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AddWalletModal } from "@/components/wallet/AddWalletModal";
+import { NetworkFilter } from "@/components/wallet/NetworkFilter";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,6 +10,7 @@ import { WalletTableSkeleton } from "@/components/ui/Skeleton";
 import { WalletTable } from "@/components/wallet/WalletTable";
 import { useNetwork } from "@/context/NetworkContext";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
+import { useNetworkFilter } from "@/hooks/useNetworkFilter";
 import { invalidateWalletsCache, useWallets } from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
 
@@ -20,12 +22,37 @@ export default function WalletsPage() {
 	const [addedWallets, setAddedWallets] = useState<Wallet[]>([]);
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [showArchived, setShowArchived] = useState(false);
+	const { selectedNetwork, setSelectedNetwork, filterByNetwork } =
+		useNetworkFilter();
 	useAnalyticsTracking("wallets");
 
-	const wallets = [
-		...addedWallets.filter((wallet) => wallet.network === network),
-		...fetchedWallets,
-	];
+	// Combine optimistically-added wallets (scoped to current network) with fetched ones
+	const wallets = useMemo(
+		() => [
+			...addedWallets.filter((wallet) => wallet.network === network),
+			...fetchedWallets,
+		],
+		[addedWallets, fetchedWallets, network],
+	);
+
+	// Apply network filter then archived filter
+	const networkFilteredWallets = useMemo(
+		() => filterByNetwork(wallets),
+		[filterByNetwork, wallets],
+	);
+
+	const archivedCount = useMemo(
+		() => networkFilteredWallets.filter((w) => w.archived).length,
+		[networkFilteredWallets],
+	);
+
+	const visibleWallets = useMemo(
+		() =>
+			showArchived
+				? networkFilteredWallets
+				: networkFilteredWallets.filter((w) => !w.archived),
+		[networkFilteredWallets, showArchived],
+	);
 
 	const openAddWallet = () => setIsAddOpen(true);
 	const isRateLimited = error?.includes("too quickly") ?? false;
@@ -58,6 +85,15 @@ export default function WalletsPage() {
 				)}
 			</div>
 
+			{/* #423: Network filter — client-side filter on top of the network-scoped fetch */}
+			{!loading && (
+				<NetworkFilter
+					selectedNetwork={selectedNetwork}
+					onNetworkChange={setSelectedNetwork}
+					disabled={!!error && wallets.length === 0}
+				/>
+			)}
+
 			{loading ? (
 				<WalletTableSkeleton />
 			) : error && wallets.length === 0 ? (
@@ -76,10 +112,19 @@ export default function WalletsPage() {
 				/>
 			) : visibleWallets.length > 0 ? (
 				<WalletTable wallets={visibleWallets} onAddWallet={openAddWallet} />
+			) : wallets.length > 0 && networkFilteredWallets.length === 0 ? (
+				<EmptyState
+					title="No wallets on this network"
+					description={`No wallets found for the selected network filter. Try selecting "All Networks".`}
+					action={{
+						label: "Show all networks",
+						onClick: () => setSelectedNetwork("all"),
+					}}
+				/>
 			) : wallets.length > 0 ? (
 				<EmptyState
 					title="No wallets to show"
-					description="All of your wallets are archived. Toggle “Show archived” to see them."
+					description={`All of your wallets are archived. Toggle "Show archived" to see them.`}
 				/>
 			) : (
 				<EmptyState

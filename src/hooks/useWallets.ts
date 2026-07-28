@@ -2,9 +2,22 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiBaseUrl } from "@/lib/api/config";
-import type { Wallet } from "@/types/wallet";
+import type { Wallet, WalletNetwork } from "@/types/wallet";
 import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallets } from "@/utils/walletSerialization";
+
+/** Reads the stored session token from localStorage (client-side only). */
+function getStoredAccessToken(): string | null {
+	if (typeof window === "undefined") return null;
+	try {
+		const raw = localStorage.getItem("mux-auth-session");
+		if (!raw) return null;
+		const session = JSON.parse(raw) as { accessToken?: string };
+		return session?.accessToken ?? null;
+	} catch {
+		return null;
+	}
+}
 
 export const WALLETS_RATE_LIMIT_MESSAGE =
 	"You're making wallet requests too quickly. Please wait a moment, then try again.";
@@ -46,7 +59,17 @@ function buildWalletsUrl(network: WalletNetwork | "all") {
 
 async function fetchWallets(network: WalletNetwork | "all") {
 	const url = buildWalletsUrl(network);
-	const res = await fetch(url);
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+
+	const token = getStoredAccessToken();
+	if (token) {
+		headers["Authorization"] = `Bearer ${token}`;
+	}
+
+	const res = await fetchWithAuth(url, { headers });
 	if (!res.ok) {
 		if (res.status === 429) {
 			throw new Error(WALLETS_RATE_LIMIT_MESSAGE);

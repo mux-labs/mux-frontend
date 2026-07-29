@@ -6,6 +6,7 @@
 		"node": ">=22"
 	},
 	"scripts": {
+		"preinstall": "node ./scripts/verify-pnpm.js",
 		"dev": "next dev",
 		"build": "next build",
 		"start": "next start",

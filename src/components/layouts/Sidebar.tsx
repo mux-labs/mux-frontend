@@ -12,8 +12,10 @@ import {
 } from "@heroicons/react/24/outline";
 import clsx from "clsx";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { prefetchWallets } from "@/lib/walletsPrefetchCache";
 
 const navigation = [
 	{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
@@ -46,7 +48,31 @@ interface SidebarProps {
 
 export function Sidebar({ isOpen, onClose }: SidebarProps) {
 	const pathname = usePathname();
+	const router = useRouter();
 	const { user, isLoading } = useAuth();
+	const prefetchedHrefs = useRef(new Set<string>());
+
+	const handleNavItemHover = useCallback(
+		(href: string) => {
+			// Warm the route's code-split chunk once per mount so navigation
+			// feels instant after a hover/focus, regardless of network.
+			if (!prefetchedHrefs.current.has(href)) {
+				prefetchedHrefs.current.add(href);
+				router.prefetch(href);
+			}
+
+			// The Wallets page also needs live API data (testnet + mainnet).
+			// Kick that fetch off in parallel so it's warm by the time the
+			// user actually navigates there.
+			if (href === "/dashboard/wallets") {
+				prefetchWallets().catch(() => {
+					// Swallow errors here - the wallets page itself surfaces
+					// the error state once the user actually navigates in.
+				});
+			}
+		},
+		[router],
+	);
 
 	return (
 		<>
@@ -96,6 +122,8 @@ export function Sidebar({ isOpen, onClose }: SidebarProps) {
 											? "bg-blue-50 text-blue-700 border border-blue-200"
 											: "text-gray-700 hover:bg-gray-50 hover:text-gray-900",
 									)}
+									onMouseEnter={() => handleNavItemHover(item.href)}
+									onFocus={() => handleNavItemHover(item.href)}
 									onClick={() => {
 										if (window.innerWidth < 1024) {
 											onClose();

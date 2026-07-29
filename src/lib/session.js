@@ -1,4 +1,46 @@
+/**
+ * Session storage utility.
+ *
+ * Stores session tokens in `sessionStorage` rather than `localStorage` for
+ * improved security.  `sessionStorage` is scoped to the current tab and is
+ * automatically cleared when the tab closes, reducing the exposure window
+ * for XSS-based token theft compared to `localStorage` which persists
+ * across sessions.
+ *
+ * @see https://cheatsheetseries.owasp.org/cheatsheets/Session_Management_Cheat_Sheet.html
+ */
+
 const STORAGE_KEY = "mux-auth-session";
+
+/**
+ * In-memory fallback store for SSR and Node.js test environments.
+ * Must be a module-level singleton so save/load calls share the same store.
+ */
+const _memStore = {};
+
+/**
+ * Returns the session storage backend (sessionStorage for browsers,
+ * in-memory fallback for SSR / test environments).
+ */
+function getStorage() {
+	if (typeof window !== "undefined" && window.sessionStorage) {
+		return window.sessionStorage;
+	}
+	// In-memory fallback for SSR and Node.js test environments
+	return {
+		getItem(key) {
+			return Object.prototype.hasOwnProperty.call(_memStore, key)
+				? _memStore[key]
+				: null;
+		},
+		setItem(key, value) {
+			_memStore[key] = value;
+		},
+		removeItem(key) {
+			delete _memStore[key];
+		},
+	};
+}
 
 function parseSession(raw) {
 	try {
@@ -11,22 +53,24 @@ function parseSession(raw) {
 function saveSession(session) {
 	if (typeof window === "undefined") return;
 
+	const storage = getStorage();
 	if (session) {
-		localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+		storage.setItem(STORAGE_KEY, JSON.stringify(session));
 	} else {
-		localStorage.removeItem(STORAGE_KEY);
+		storage.removeItem(STORAGE_KEY);
 	}
 }
 
 function loadSession() {
 	if (typeof window === "undefined") return null;
 
-	const raw = localStorage.getItem(STORAGE_KEY);
+	const storage = getStorage();
+	const raw = storage.getItem(STORAGE_KEY);
 	if (!raw) return null;
 
 	const session = parseSession(raw);
 	if (!session || typeof session !== "object") {
-		localStorage.removeItem(STORAGE_KEY);
+		storage.removeItem(STORAGE_KEY);
 		return null;
 	}
 

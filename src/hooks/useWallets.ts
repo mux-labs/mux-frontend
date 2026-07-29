@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { getApiBaseUrl } from "@/lib/api/config";
-import type { Wallet, WalletNetwork } from "@/types/wallet";
+import {
+	getWalletsPrefetchEntry,
+	prefetchWallets,
+} from "@/lib/walletsPrefetchCache";
+import type { Wallet } from "@/types/wallet";
 import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallets } from "@/utils/walletSerialization";
 

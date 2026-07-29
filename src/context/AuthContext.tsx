@@ -58,12 +58,41 @@ const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Cookie helpers (client-side only)
+//
+// CSRF / SameSite Notes:
+//
+// The `mux_auth_session` cookie is a lightweight marker cookie (value "1")
+// used solely by the Next.js middleware for server-side route protection.
+// It does NOT contain sensitive data — tokens live in `sessionStorage`.
+//
+// SameSite=Lax:
+//   Protects against CSRF on unsafe methods (POST/PUT/DELETE) by not
+//   sending the cookie on cross-site requests.  Top-level navigations
+//   (e.g. clicking a link) still include the cookie so the middleware
+//   can recognise authenticated users without breaking deep-links.
+//
+// Secure flag:
+//   Omitted here so localhost development works without HTTPS.  The
+//   production deployment MUST set "; Secure" on the cookie (e.g. via
+//   a server-set Set-Cookie header from the login API route) so the
+//   cookie is only transmitted over TLS.
+//
+// HttpOnly:
+//   This cookie is set client-side via `document.cookie` so it cannot
+//   be HttpOnly (HttpOnly cookies can only be set by the server).
+//   If stronger protection is needed, the login API route should set
+//   an HttpOnly session cookie via `Set-Cookie` response header.
+//
+// Path=/ restricts the cookie to all paths; no Domain attribute means
+// it is host-only (not sent to subdomains), which is the most restrictive
+// and safest default.
 // ---------------------------------------------------------------------------
 
 function setSessionCookie(ttlMs: number): void {
 	const maxAge = Math.floor(ttlMs / 1000);
 	// SameSite=Lax is safe for same-origin navigation; Secure is omitted here
-	// so it works on localhost — add "; Secure" in production via a server-set cookie.
+	// so it works on localhost — add "; Secure" in production via a server-set
+	// Set-Cookie header.  See the CSRF / SameSite notes above for full details.
 	document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; max-age=${maxAge}; SameSite=Lax`;
 }
 

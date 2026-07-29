@@ -57,6 +57,14 @@
 	"javascript": { "formatter": { "quoteStyle": "double" }, "globals": [] },
 	"overrides": [
 		{
+			"includes": ["src/lib/session.js", "src/lib/api.js", "tests/*.js"],
+			"linter": {
+				"rules": {
+					"style": { "noCommonJs": "off" }
+				}
+			}
+		},
+		{
 			"includes": ["**/*.{js,jsx,mjs,ts,tsx,mts,cts}"],
 			"javascript": {
 				"globals": [

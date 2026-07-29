@@ -3,6 +3,8 @@
 # dependencies
 /node_modules
 /package-lock.json
+/npm-shrinkwrap.json
+/yarn.lock
 /.pnp
 .pnp.*
 .yarn/*
@@ -10,6 +12,8 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
+
+# pnpm-lock.yaml is the only package lockfile this repo tracks.
 
 # testing
 /coverage

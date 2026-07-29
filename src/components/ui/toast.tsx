@@ -16,22 +16,6 @@ import {
 import { cn } from "@/lib/utils";
 
 /** Visual variant for the standalone `Toast` component. */
-export type ToastVariant = "success" | "error" | "info";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
-export type ToastVariant = "success" | "error" | "info" | "warning";
-
 export type ToastVariant = "success" | "error" | "info" | "warning";
 
 /** Props for the `Toast` notification component. */
@@ -163,6 +147,13 @@ const TOAST_ITEM_ICON: Record<
 	warning: { icon: AlertTriangle, iconClass: "text-amber-500" },
 };
 
+const TOAST_ITEM_LABEL: Record<ToastMessageType, string> = {
+	success: "Success",
+	error: "Error",
+	info: "Info",
+	warning: "Warning",
+};
+
 const DEFAULT_TOAST_DURATION = 5000;
 
 interface ToastItemProps {
@@ -193,9 +184,9 @@ export function ToastItem({ toast, onDismiss }: ToastItemProps) {
 			role="alert"
 			className="flex items-start gap-3 rounded-xl bg-white p-4 text-zinc-900 shadow-lg ring-1 ring-zinc-200 dark:bg-zinc-900 dark:text-zinc-50 dark:ring-zinc-800"
 		>
-			<span className="mt-0.5 shrink-0">{ICONS[type]}</span>
+			<Icon className={`mt-0.5 h-4 w-4 shrink-0 ${iconClass}`} aria-hidden="true" />
 			<div className="flex-1 space-y-1">
-				<p className="text-sm font-semibold">{LABELS[type]}</p>
+				<p className="text-sm font-semibold">{TOAST_ITEM_LABEL[type]}</p>
 				<p className="text-sm text-zinc-600 dark:text-zinc-300">{message}</p>
 				{description && (
 					<p className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -230,7 +221,7 @@ export function ToastContainer({
 	return (
 		<div
 			aria-label="Notifications"
-			className={`fixed z-50 flex flex-col gap-2 w-full max-w-sm ${POSITION_CLASSES[position]}`}
+			className={`fixed z-50 flex flex-col gap-2 w-full max-w-sm ${positionClasses[position]}`}
 		>
 			{toasts.map((toast) => (
 				<ToastItem key={toast.id} toast={toast} onDismiss={onDismiss} />

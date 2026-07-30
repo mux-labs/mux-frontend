@@ -12,7 +12,9 @@
 
 import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import * as useWalletsModule from "@/hooks/useWallets";
+import * as walletsPrefetchCache from "@/lib/walletsPrefetchCache";
 import {
 	AuthProvider,
 	SESSION_COOKIE_NAME,
@@ -168,9 +170,7 @@ describe("AuthContext — session lifecycle (issue #46)", () => {
 	it("useAuth throws when called outside of AuthProvider", () => {
 		// In React 19 + RTL 14, a hook that throws during render propagates the
 		// error directly from renderHook rather than landing in result.error.
-		expect(() => renderHook(() => useAuth())).toThrow(
-			/AuthProvider/,
-		);
+		expect(() => renderHook(() => useAuth())).toThrow(/AuthProvider/);
 	});
 
 	it("signOut clears the mux_auth_session cookie", async () => {
@@ -189,6 +189,33 @@ describe("AuthContext — session lifecycle (issue #46)", () => {
 
 		// Cookie max-age=0 removes it; jsdom represents it as an empty value
 		expect(document.cookie).not.toMatch(new RegExp(`${SESSION_COOKIE_NAME}=1`));
+	});
+
+	it("signOut clears cached wallet data so no stale data leaks into the next session", async () => {
+		const invalidateSpy = vi.spyOn(useWalletsModule, "invalidateWalletsCache");
+		const resetPrefetchSpy = vi.spyOn(
+			walletsPrefetchCache,
+			"resetWalletsPrefetchCache",
+		);
+
+		const record = {
+			user: { name: "Jane", email: "jane@example.com", role: "admin" },
+			expiresAt: Date.now() + 60_000,
+		};
+		sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(record));
+
+		const { result } = renderHook(() => useAuth(), { wrapper });
+		await waitFor(() => expect(result.current.isAuthenticated).toBe(true));
+
+		act(() => {
+			result.current.signOut();
+		});
+
+		expect(invalidateSpy).toHaveBeenCalled();
+		expect(resetPrefetchSpy).toHaveBeenCalled();
+
+		invalidateSpy.mockRestore();
+		resetPrefetchSpy.mockRestore();
 	});
 
 	it("isAuthenticated reflects signIn/signOut transitions", async () => {

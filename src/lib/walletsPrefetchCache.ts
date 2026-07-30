@@ -62,7 +62,12 @@ export function getWalletsPrefetchEntry(): Promise<Wallet[]> | null {
 	return cacheEntry.promise;
 }
 
+/** Clears the in-memory prefetch cache, e.g. on logout so no stale wallet data survives into the next session. */
+export function resetWalletsPrefetchCache(): void {
+	cacheEntry = null;
+}
+
 /** Test-only helper to reset module-level cache state between tests. */
 export function __resetWalletsPrefetchCacheForTests(): void {
-	cacheEntry = null;
+	resetWalletsPrefetchCache();
 }

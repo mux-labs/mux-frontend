@@ -7,9 +7,11 @@ import {
 	useEffect,
 	useState,
 } from "react";
-import { 
-	trackAuthEvent, 
-	trackSessionExpired 
+import { invalidateWalletsCache } from "@/hooks/useWallets";
+import { resetWalletsPrefetchCache } from "@/lib/walletsPrefetchCache";
+import {
+	trackAuthEvent,
+	trackSessionExpired,
 } from "@/services/authAnalyticsTracking";
 
 export interface AuthUser {
@@ -133,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					// Re-sync cookie in case it was cleared (e.g. browser restart)
 					const remainingMs = record.expiresAt - Date.now();
 					setSessionCookie(remainingMs);
-					trackAuthEvent("session_rehydrated", { 
+					trackAuthEvent("session_rehydrated", {
 						email: record.user.email,
 						remainingMs,
 					});
@@ -167,8 +169,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const currentUser = user;
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		clearSessionCookie();
+		// Drop cached wallet data so the next session (or a different user on
+		// the same device) never sees a stale, pre-logout list before refetching.
+		invalidateWalletsCache();
+		resetWalletsPrefetchCache();
 		setUser(null);
-		trackAuthEvent("logout", { 
+		trackAuthEvent("logout", {
 			email: currentUser?.email,
 		});
 	}, [user]);

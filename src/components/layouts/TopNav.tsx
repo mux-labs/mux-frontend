@@ -9,7 +9,7 @@ import {
 	MoonIcon,
 	SunIcon,
 } from "@heroicons/react/24/outline";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
@@ -36,7 +36,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 		useState<WalletNetwork>(network);
 	const [isSwitchingNetwork, setIsSwitchingNetwork] = useState(false);
 	const switchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-	const { user, isLoading } = useAuth();
+	const { user, isLoading, signOut } = useAuth();
 	const { isDark, toggle: toggleDark } = useDarkMode();
 	const router = useRouter();
 	const menuRef = useRef<HTMLDivElement>(null);
@@ -117,98 +117,6 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 		signOut();
 		router.replace("/login");
 	}
-
-	const displayName = user?.name ?? "Developer";
-
-	// Close dropdown when clicking outside
-	useEffect(() => {
-		function handleClickOutside(event: MouseEvent) {
-			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
-
-	// Close dropdown on Escape key
-	useEffect(() => {
-		function handleKeyDown(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, []);
-
-	function handleLogout() {
-		setMenuOpen(false);
-		signOut();
-		router.replace("/login");
-	}
-
-	const displayName = user?.name ?? "Developer";
-
-	// Close dropdown when clicking outside
-	useEffect(() => {
-		function handleClickOutside(event: MouseEvent) {
-			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
-
-	// Close dropdown on Escape key
-	useEffect(() => {
-		function handleKeyDown(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, []);
-
-	function handleLogout() {
-		setMenuOpen(false);
-		signOut();
-		router.replace("/login");
-	}
-
-	const displayName = user?.name ?? "Developer";
-
-	// Close dropdown when clicking outside
-	useEffect(() => {
-		function handleClickOutside(event: MouseEvent) {
-			if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, []);
-
-	// Close dropdown on Escape key
-	useEffect(() => {
-		function handleKeyDown(event: KeyboardEvent) {
-			if (event.key === "Escape") {
-				setMenuOpen(false);
-			}
-		}
-		document.addEventListener("keydown", handleKeyDown);
-		return () => document.removeEventListener("keydown", handleKeyDown);
-	}, []);
-
-	function handleLogout() {
-		setMenuOpen(false);
-		signOut();
-		router.replace("/login");
-	}
-
-	const displayName = user?.name ?? "Developer";
 
 	return (
 		<header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-gray-200 bg-white/95 px-4 shadow-sm sm:gap-x-6 sm:px-6 lg:px-8 backdrop-blur supports-backdrop-filter:bg-white/60 dark:border-zinc-800 dark:bg-zinc-900/95 dark:supports-backdrop-filter:bg-zinc-900/60">
@@ -359,7 +267,10 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					<div className="relative" ref={menuRef}>
 						<button
 							type="button"
+							onClick={() => setMenuOpen((open) => !open)}
 							aria-label="Open user menu"
+							aria-haspopup="true"
+							aria-expanded={menuOpen}
 							className="flex items-center gap-x-3 rounded-lg p-1.5 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
 							id="user-menu-button"
 						>

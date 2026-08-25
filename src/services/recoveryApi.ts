@@ -368,6 +368,90 @@ export async function fetchRecoveryEvents(
 }
 
 /**
+ * Response shape for a recovery initiation request.
+ */
+export interface InitiateRecoveryResponse {
+	success: boolean;
+	data?: { recoveryId: string };
+	error?: string;
+	timestamp: number;
+}
+
+/**
+ * Initiates a wallet recovery request against the backend.
+ *
+ * Never send custody secrets (private keys, seed phrases, signing keys) as
+ * part of this request — only the wallet identifier is required to kick off
+ * the recovery flow server-side.
+ *
+ * @param walletId - The wallet ID to initiate recovery for
+ * @param config - Optional API configuration
+ * @returns Promise resolving to the created recovery record or an error
+ *
+ * @example
+ * const result = await initiateRecovery("wallet-123");
+ * if (result.success) {
+ *   console.log(result.data?.recoveryId);
+ * } else {
+ *   console.error(result.error);
+ * }
+ */
+export async function initiateRecovery(
+	walletId: string,
+	config: Partial<ApiConfig> = {},
+): Promise<InitiateRecoveryResponse> {
+	const finalConfig = { ...DEFAULT_CONFIG, ...config };
+
+	if (!walletId || typeof walletId !== "string") {
+		return {
+			success: false,
+			error: "Invalid wallet ID provided",
+			timestamp: Date.now(),
+		};
+	}
+
+	try {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), finalConfig.timeout);
+
+		const response = await fetch(`${finalConfig.baseUrl}/recovery/initiate`, {
+			method: "POST",
+			headers: {
+				"Content-Type": "application/json",
+			},
+			body: JSON.stringify({ walletId }),
+			signal: controller.signal,
+		});
+
+		clearTimeout(timeoutId);
+
+		if (!response.ok) {
+			const errorData = await response.json().catch(() => ({}));
+			return {
+				success: false,
+				error: errorData.message || `HTTP ${response.status}`,
+				timestamp: Date.now(),
+			};
+		}
+
+		const data = await response.json().catch(() => ({}));
+
+		return {
+			success: true,
+			data: { recoveryId: data.recoveryId },
+			timestamp: Date.now(),
+		};
+	} catch (error) {
+		const apiError = handleApiError(error);
+		return {
+			success: false,
+			error: apiError.message,
+			timestamp: Date.now(),
+		};
+	}
+}
+
+/**
  * Polls recovery status at regular intervals
  *
  * @param walletId - The wallet ID to poll

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRecoveryStatus } from "@/hooks/useRecoveryStatus";
+import { initiateRecovery as initiateRecoveryApi } from "@/services/recoveryApi";
 
 export type RecoveryState =
 	| "loading"
@@ -122,14 +123,26 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 	/**
 	 * #457 – submits the recovery request after the user confirms the step.
 	 * Transitions: confirming → pending → success | error.
+	 *
+	 * Real API path (`walletId !== null`) calls `recoveryApi.initiateRecovery`.
+	 * Demo/stub path (`walletId === null`, same gate used for the bootstrap
+	 * fetch above) keeps a short simulated delay so the demo dashboards don't
+	 * depend on a live backend. Only the wallet identifier is ever sent —
+	 * never a private key, seed phrase, or other custody secret.
 	 */
 	const confirmRecovery = useCallback(async () => {
 		if (ctaState !== "confirming") return;
 		setCtaState("pending");
 		try {
-			// TODO: replace stub with real API call once backend endpoint is ready:
-			//   await recoveryApi.initiateRecovery(walletId);
-			await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+			if (walletId !== null) {
+				const result = await initiateRecoveryApi(walletId);
+				if (!result.success) {
+					throw new Error(result.error ?? "Failed to initiate recovery.");
+				}
+			} else {
+				// Demo mode stub — no backend to call.
+				await new Promise<void>((resolve) => setTimeout(resolve, 1500));
+			}
 			setCtaState("success");
 		} catch (err) {
 			const message =
@@ -137,7 +150,7 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 			setCtaError(message);
 			setCtaState("error");
 		}
-	}, [ctaState]);
+	}, [ctaState, walletId]);
 
 	/** Cancels the confirmation step and returns to idle. */
 	const cancelRecovery = useCallback(() => {

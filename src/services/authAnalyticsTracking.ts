@@ -1,10 +1,10 @@
 /**
- * Auth & session analytics tracking stub.
+ * Auth & session analytics tracking.
  *
  * Provides event tracking for authentication flows (login, logout, session
- * expiry, etc.). This stub logs to console in development and can be swapped
- * for a real analytics provider (Segment, PostHog, Amplitude) without
- * changing call sites throughout the auth components.
+ * expiry, etc.). Events are forwarded to `window.analytics.track` (Segment,
+ * PostHog, Amplitude, ...) when the SDK is present, and additionally logged
+ * to the console in development for local verification.
  *
  * Usage:
  *   import { trackAuthEvent } from "@/services/authAnalyticsTracking";
@@ -40,8 +40,10 @@ export type AuthEventPayload = Record<string, unknown>;
 /**
  * Record an authentication-related analytics event.
  *
- * In development, logs to console for verification during testing. In
- * production this becomes a no-op until wired to a real analytics provider.
+ * In development, logs to console for verification during testing. Always
+ * forwards the event to `window.analytics.track` when the SDK is present
+ * (e.g. loaded via a script tag), which is a no-op in environments where it
+ * hasn't been injected (tests, demo mode, etc).
  *
  * @param eventName - The auth event identifier
  * @param payload - Optional metadata attached to the event
@@ -55,14 +57,13 @@ export function trackAuthEvent(
 		console.log(`[Auth Analytics] ${eventName}`, payload);
 	}
 
-	// TODO: Replace with real analytics provider integration:
-	//   if (typeof window !== "undefined" && window.analytics) {
-	//     window.analytics.track(eventName, {
-	//       ...payload,
-	//       category: "auth",
-	//       timestamp: Date.now(),
-	//     });
-	//   }
+	if (typeof window !== "undefined") {
+		window.analytics?.track(eventName, {
+			...payload,
+			category: "auth",
+			timestamp: Date.now(),
+		});
+	}
 }
 
 // ---------------------------------------------------------------------------

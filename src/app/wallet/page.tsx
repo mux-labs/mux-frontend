@@ -15,6 +15,7 @@ import ReceiveWalletModal from "@/components/wallet/ReceiveWalletModal";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import { StatusIndicator } from "@/components/wallet/StatusIndicator";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { useTransactions } from "@/hooks/useTransactions";
 import { useWallets } from "@/hooks/useWallets";
 import { isValidStellarAddress } from "@/utils/addressValidation";
 import { formatDate } from "@/utils/dateFormatting";
@@ -30,6 +31,12 @@ function WalletPageContent() {
 	const { copy, copied, error: copyError } = useCopyToClipboard();
 
 	const wallet = wallets?.[0] ?? null;
+	const {
+		transactions,
+		loading: transactionsLoading,
+		error: transactionsError,
+		refetch: refetchTransactions,
+	} = useTransactions(wallet?.address);
 	const canReceive = !!wallet && isValidStellarAddress(wallet.address.trim());
 	const receiveParam = searchParams.get("receive");
 
@@ -288,7 +295,13 @@ function WalletPageContent() {
 
 				{!loading && wallet && (
 					<section className="mt-8">
-						<TransactionsTable address={wallet.address} />
+						<TransactionsTable
+							address={wallet.address}
+							transactions={transactions}
+							loading={transactionsLoading}
+							error={transactionsError}
+							onRetry={refetchTransactions}
+						/>
 					</section>
 				)}
 			</div>

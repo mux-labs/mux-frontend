@@ -14,7 +14,6 @@ import {
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
-import { mockTransactions } from "@/mock-data/transactions";
 import { trackTransactionEvent } from "@/services/analyticsTracking";
 import type {
 	Transaction,
@@ -116,7 +115,11 @@ const RowCopyButton = ({ text, label }: { text: string; label: string }) => {
 export interface TransactionsTableProps {
 	/** Optional wallet address to scope transactions */
 	address?: string;
-	/** Pre-fetched transactions (defaults to mock data when omitted) */
+	/**
+	 * Pre-fetched transactions to render. Required — callers must pass real
+	 * data (or an empty array) explicitly; this component no longer falls
+	 * back to mock data when omitted.
+	 */
 	transactions?: Transaction[];
 	/** Loading state */
 	loading?: boolean;
@@ -138,7 +141,10 @@ export default function TransactionsTable({
 	error: errorProp,
 	onRetry,
 }: TransactionsTableProps = {}) {
-	const transactions = transactionsProp ?? mockTransactions;
+	// No implicit mock fallback: an omitted `transactions` prop renders the
+	// empty state rather than silently showing mock data. Callers that need
+	// real data must fetch it (e.g. via `useTransactions`) and pass it in.
+	const transactions = transactionsProp ?? [];
 	const loading = loadingProp ?? isLoadingProp ?? false;
 	const error = errorProp ?? null;
 	const handleRetry = onRetry ?? (() => {});

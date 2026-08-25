@@ -28,6 +28,7 @@ import { WalletNotFound } from "@/components/wallet/WalletNotFound";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
 import { useBalanceVisibility } from "@/hooks/useBalanceVisibility";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { useTransactions } from "@/hooks/useTransactions";
 import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { trackWalletEvent } from "@/services/walletAnalyticsTracking";
 import { truncateAddress } from "@/utils/addressFormatting";
@@ -47,6 +48,12 @@ export function WalletDetail({ id }: WalletDetailProps) {
 	const isValidId = trimmedId.length > 0;
 	const { wallet, balance, loading, error, lastUpdated, refresh } =
 		useWalletBalance(isValidId ? trimmedId : null);
+	const {
+		transactions,
+		loading: transactionsLoading,
+		error: transactionsError,
+		refetch: refetchTransactions,
+	} = useTransactions(wallet?.address);
 	const { copy, copied, error: copyError } = useCopyToClipboard();
 	const {
 		copy: copyLink,
@@ -557,7 +564,15 @@ export function WalletDetail({ id }: WalletDetailProps) {
 
 			{wallet && <WalletActivityFeed address={wallet.address} />}
 
-			{wallet && <TransactionsTable address={wallet.address} />}
+			{wallet && (
+				<TransactionsTable
+					address={wallet.address}
+					transactions={transactions}
+					loading={transactionsLoading}
+					error={transactionsError}
+					onRetry={refetchTransactions}
+				/>
+			)}
 		</div>
 
 		<ReceiveWalletModal

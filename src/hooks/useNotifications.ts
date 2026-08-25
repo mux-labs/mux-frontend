@@ -22,8 +22,9 @@ interface UseNotificationsResult {
 }
 
 /**
- * Stub notifications-center data source. Fetches the mock notifications
- * endpoint; marking as read is local-only until a real backend lands.
+ * Notifications-center data source. Fetches the real backend notifications
+ * feed (via `/api/notifications`, which proxies to the backend when
+ * configured) and persists mark-read through the same endpoint.
  */
 export function useNotifications(): UseNotificationsResult {
 	const [notifications, setNotifications] = useState<AppNotification[]>([]);
@@ -68,7 +69,22 @@ export function useNotifications(): UseNotificationsResult {
 	}, [tick]);
 
 	const markAllRead = useCallback(() => {
+		// Optimistic local update, then persist via the backend-wired
+		// notifications endpoint so mark-read survives a refresh.
 		setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+
+		const base = getApiBaseUrl();
+		const url = base ? `${base}/notifications/read` : "/api/notifications";
+
+		fetch(url, {
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ markAll: true }),
+		}).catch(() => {
+			// Persistence failures are non-critical; the optimistic local
+			// update stands and the next refetch will reconcile with the
+			// backend's actual state.
+		});
 	}, []);
 
 	const unreadCount = notifications.filter((n) => !n.read).length;

@@ -1,3 +1,12 @@
+/**
+ * Local/dev-only mock store for API keys.
+ *
+ * `src/app/api/api-keys/route.ts` only reads from this store as a fallback
+ * when no backend URL (`NEXT_PUBLIC_API_URL`/legacy aliases) is configured,
+ * so local dev/CI keeps working without a running API server. In any
+ * environment with a backend configured, create/revoke/list are served by
+ * the real mux-backend API instead.
+ */
 export interface ApiKey {
 	id: string;
 	name: string;

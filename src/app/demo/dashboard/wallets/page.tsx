@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AddWalletModal } from "@/components/wallet/AddWalletModal";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PageHeader } from "@/components/ui/PageHeader";
@@ -9,30 +9,35 @@ import { Toast } from "@/components/ui/toast";
 import { WalletTable } from "@/components/wallet/WalletTable";
 import { useNetwork } from "@/context/NetworkContext";
 import { useToast } from "@/hooks/useToast";
-import { dummyWallets } from "@/mock-data/wallets";
+import { useWallets } from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
 
 export default function WalletsPage() {
 	const { network } = useNetwork();
-	const [isLoading, setIsLoading] = useState(true);
-	const [wallets, setWallets] = useState<Wallet[]>([]);
+	// `demo: true` tells useWallets to source mock wallet data itself instead
+	// of hitting the real (auth-gated) wallets backend — the demo route has
+	// no authenticated session to fetch for.
+	const { wallets: fetchedWallets, loading: isLoading } = useWallets({
+		network,
+		demo: true,
+	});
+	const [addedWallets, setAddedWallets] = useState<Wallet[]>([]);
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const { toast, showToast, hideToast } = useToast(3000);
 
-	useEffect(() => {
-		setIsLoading(true);
-		const timer = setTimeout(() => {
-			const filteredWallets = dummyWallets.filter((w) => w.network === network);
-			setWallets(filteredWallets);
-			setIsLoading(false);
-		}, 800);
-
-		return () => clearTimeout(timer);
-	}, [network]);
+	// Combine optimistically-added wallets (scoped to current network) with
+	// the wallets returned by useWallets.
+	const wallets = useMemo(
+		() => [
+			...addedWallets.filter((wallet) => wallet.network === network),
+			...fetchedWallets,
+		],
+		[addedWallets, fetchedWallets, network],
+	);
 
 	const handleWalletAdded = useCallback(
 		(wallet: Wallet) => {
-			setWallets((prev) => [wallet, ...prev]);
+			setAddedWallets((prev) => [wallet, ...prev]);
 			setIsModalOpen(false);
 			showToast(
 				`${wallet.address.slice(0, 6)}…${wallet.address.slice(-4)} added successfully.`,

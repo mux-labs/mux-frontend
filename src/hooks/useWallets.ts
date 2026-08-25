@@ -1,13 +1,24 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { getApiBaseUrl } from "@/lib/api/config";
 import {
 	getWalletsPrefetchEntry,
 	prefetchWallets,
 } from "@/lib/walletsPrefetchCache";
-import type { Wallet } from "@/types/wallet";
+import { dummyWallets } from "@/mock-data/wallets";
+import type { Wallet, WalletNetwork } from "@/types/wallet";
 import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { normalizeWallets } from "@/utils/walletSerialization";
+
+function filterWalletsByNetwork(
+	wallets: Wallet[],
+	network: WalletNetwork | "all",
+): Wallet[] {
+	return network === "all"
+		? wallets
+		: wallets.filter((wallet) => wallet.network === network);
+}
 
 /** Reads the stored session token from localStorage (client-side only). */
 function getStoredAccessToken(): string | null {
@@ -38,6 +49,13 @@ type RefetchOptions = {
 
 export interface UseWalletsOptions {
 	network?: WalletNetwork | "all";
+	/**
+	 * When true, source wallets from local mock data instead of the real
+	 * (auth-gated) wallets backend. Demo routes have no authenticated
+	 * session to fetch for, so they pass `demo: true` here rather than
+	 * hand-rolling their own mock filtering logic.
+	 */
+	demo?: boolean;
 }
 
 interface UseWalletsResult {
@@ -101,6 +119,7 @@ export function clearWalletsCacheForTests() {
 
 export function useWallets({
 	network = "all",
+	demo = false,
 }: UseWalletsOptions = {}): UseWalletsResult {
 	const [wallets, setWallets] = useState<Wallet[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -116,6 +135,16 @@ export function useWallets({
 	}, []);
 
 	useEffect(() => {
+		if (demo) {
+			// Demo mode: source wallets from local mock data rather than the
+			// real (auth-gated) wallets backend.
+			setError(null);
+			setWallets(filterWalletsByNetwork(dummyWallets, network));
+			setIsCached(false);
+			setLoading(false);
+			return;
+		}
+
 		let cancelled = false;
 		setError(null);
 
@@ -167,7 +196,7 @@ export function useWallets({
 		return () => {
 			cancelled = true;
 		};
-	}, [network, request]);
+	}, [network, request, demo]);
 
 	return { wallets, loading, error, refetch, isCached };
 }

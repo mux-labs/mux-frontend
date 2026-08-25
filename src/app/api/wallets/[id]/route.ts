@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
 import { dummyWallets } from "@/mock-data/wallets";
 
 type RouteContext = {
@@ -11,9 +12,54 @@ type RouteContext = {
 		  }>;
 };
 
-export async function GET(_request: Request, { params }: RouteContext) {
+function backendHeaders(request: Request) {
+	const apiKey = getApiKey();
+	const authorization = request.headers.get("authorization");
+	return {
+		"content-type": "application/json",
+		...(apiKey ? { "x-api-key": apiKey } : {}),
+		...(authorization ? { authorization } : {}),
+	};
+}
+
+/**
+ * GET /api/wallets/[id]
+ *
+ * Proxies a single wallet to the configured backend (NEXT_PUBLIC_API_URL or
+ * legacy aliases). Falls back to the in-memory mock when no backend URL is
+ * configured so local development / demo still works.
+ */
+export async function GET(request: Request, { params }: RouteContext) {
 	const { id } = await params;
 	const walletId = id.trim();
+	const backendUrl = getApiBaseUrl();
+
+	if (backendUrl) {
+		try {
+			const upstream = await fetch(
+				`${backendUrl}/wallets/${encodeURIComponent(walletId)}`,
+				{
+					headers: backendHeaders(request),
+					cache: "no-store",
+				},
+			);
+
+			const data = await upstream.json().catch(() => ({}));
+
+			if (!upstream.ok) {
+				return NextResponse.json(data, { status: upstream.status });
+			}
+
+			return NextResponse.json(data, { status: 200 });
+		} catch {
+			return NextResponse.json(
+				{ error: "Unable to reach wallets service" },
+				{ status: 502 },
+			);
+		}
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
 	const wallet = dummyWallets.find((candidate) => candidate.id === walletId);
 
 	if (!wallet) {
@@ -23,18 +69,55 @@ export async function GET(_request: Request, { params }: RouteContext) {
 	return NextResponse.json(wallet);
 }
 
+/**
+ * PATCH /api/wallets/[id]
+ *
+ * Proxies label/archive updates to the configured backend. Falls back to
+ * mutating the in-memory mock when no backend URL is configured.
+ */
 export async function PATCH(request: Request, { params }: RouteContext) {
 	const { id } = await params;
-	const wallet = dummyWallets.find((candidate) => candidate.id === id.trim());
-	if (!wallet) {
-		return NextResponse.json({ error: "not_found" }, { status: 404 });
-	}
+	const walletId = id.trim();
 
 	let body: unknown;
 	try {
 		body = await request.json();
 	} catch {
 		return NextResponse.json({ error: "invalid_json" }, { status: 400 });
+	}
+
+	const backendUrl = getApiBaseUrl();
+
+	if (backendUrl) {
+		try {
+			const upstream = await fetch(
+				`${backendUrl}/wallets/${encodeURIComponent(walletId)}`,
+				{
+					method: "PATCH",
+					headers: backendHeaders(request),
+					body: JSON.stringify(body),
+				},
+			);
+
+			const data = await upstream.json().catch(() => ({}));
+
+			if (!upstream.ok) {
+				return NextResponse.json(data, { status: upstream.status });
+			}
+
+			return NextResponse.json(data, { status: 200 });
+		} catch {
+			return NextResponse.json(
+				{ error: "Unable to reach wallets service" },
+				{ status: 502 },
+			);
+		}
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	const wallet = dummyWallets.find((candidate) => candidate.id === walletId);
+	if (!wallet) {
+		return NextResponse.json({ error: "not_found" }, { status: 404 });
 	}
 
 	const hasArchived = typeof body === "object" && body !== null && "archived" in body;

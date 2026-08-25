@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRecoveryStatus } from "@/hooks/useRecoveryStatus";
+import type { RecoveryTimeline } from "@/types/recovery";
 
 export type RecoveryState =
 	| "loading"
@@ -14,6 +15,13 @@ export type RecoveryState =
 export interface UseRecoveryReturn {
 	state: RecoveryState;
 	errorMessage: string | null;
+	/**
+	 * The recovery timeline fetched from the backend for `walletId`. `null`
+	 * when running in demo mode (`walletId === null`) or before the fetch has
+	 * resolved — callers should fall back to demo/mock data explicitly in
+	 * that case rather than assuming this is always populated.
+	 */
+	timeline: RecoveryTimeline | null;
 	initiateRecovery: () => void;
 	confirmRecovery: () => Promise<void>;
 	cancelRecovery: () => void;
@@ -66,6 +74,7 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 
 	// ── Real API fetch (#455) ─────────────────────────────────────────────────
 	const {
+		timeline: apiTimeline,
 		loading: apiLoading,
 		error: apiError,
 		refetch,
@@ -162,6 +171,9 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 	return {
 		state,
 		errorMessage,
+		// Only surface the fetched timeline on the real API path; demo mode has
+		// no backend-derived timeline to offer.
+		timeline: walletId !== null ? (apiTimeline ?? null) : null,
 		initiateRecovery,
 		confirmRecovery,
 		cancelRecovery,

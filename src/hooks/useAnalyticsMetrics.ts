@@ -54,9 +54,14 @@ function isDataEmpty(data: AnalyticsMetricsData): boolean {
  *
  * Strategy:
  *  1. Attempt to fetch from the real API via `ApiClient`.
- *  2. If the API base URL is not configured (empty string) or the request
- *     fails, fall back to the local mock data so the UI is always functional
- *     during development and in environments without a live backend.
+ *  2. Outside of production, if the API base URL is not configured (empty
+ *     string) or the request fails, fall back to the local mock data so the
+ *     UI is always functional during development and in environments
+ *     without a live backend.
+ *  3. In production, a missing API base URL or a failed request is always
+ *     surfaced as an error — analytics must never silently report success
+ *     with mock data while the real backend is unreachable, as that would
+ *     hide a genuine outage from operators.
  *
  * The hook re-fetches whenever `range.from`, `range.to`, or `fetchKey`
  * changes, making it easy to wire up a date-range picker.
@@ -79,6 +84,7 @@ export function useAnalyticsMetrics(
 
 	useEffect(() => {
 		let cancelled = false;
+		const isProduction = process.env.NODE_ENV === "production";
 
 		async function load() {
 			setStatus("loading");
@@ -94,6 +100,12 @@ export function useAnalyticsMetrics(
 					// Real API path
 					const client = createApiClient(baseUrl);
 					loaded = await fetchAllAnalytics(client, currentRange);
+				} else if (isProduction) {
+					// No backend configured in production — do not silently report
+					// success with mock data, since that would hide a real outage.
+					throw new Error(
+						"Analytics API is not configured (NEXT_PUBLIC_API_URL is unset).",
+					);
 				} else {
 					// Fallback: load mock data (dynamic import keeps it tree-shakeable)
 					const mock = await import("@/mock-data/analytics");
@@ -118,8 +130,11 @@ export function useAnalyticsMetrics(
 			} catch (err) {
 				if (cancelled) return;
 
-				// If the real API failed, try the mock fallback before surfacing an error
-				if (baseUrl) {
+				// Outside of production, fall back to mock data before surfacing an
+				// error so local/dev environments without a live backend still work.
+				// In production this fallback is skipped: a failed or unconfigured
+				// backend must always surface as an error, never a silent success.
+				if (baseUrl && !isProduction) {
 					try {
 						const mock = await import("@/mock-data/analytics");
 						if (cancelled) return;

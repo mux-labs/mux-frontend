@@ -13,17 +13,32 @@ import { RecoveryTimelineList } from "@/components/recovery/RecoveryTimelineList
 import { Toast } from "@/components/ui/toast";
 import { useRecovery } from "@/hooks/useRecovery";
 import { useRecoveryTimeline } from "@/hooks/useRecoveryTimeline";
+import { useWallets } from "@/hooks/useWallets";
 import { mockRecoveryTimelineCompleted } from "@/mock-data/recovery";
 import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
 
 export default function RecoveryPage() {
-	const recovery = useRecovery();
+	// Drive recovery status/timeline off the first available real wallet. When
+	// no wallet is available (e.g. no auth session yet) we fall back to demo
+	// mode inside useRecovery(null), which is explicitly a stub bootstrap.
+	const { wallets } = useWallets();
+	const walletId = wallets[0]?.id ?? null;
+	const recovery = useRecovery(walletId);
 
-	// #456 – recovery timeline list: initialised with mock data as a stub until
-	// a real fetchRecoveryTimeline endpoint is wired to this page. The
-	// useRecoveryTimeline hook manages the event list locally; swap
-	// mockRecoveryTimelineCompleted for a fetched payload when the API is ready.
-	const { timeline } = useRecoveryTimeline(mockRecoveryTimelineCompleted);
+	// #456/#601 – recovery timeline list: sourced from the real
+	// fetchRecoveryStatus endpoint (via useRecovery -> useRecoveryStatus) when
+	// a wallet is available. mockRecoveryTimelineCompleted is only used as an
+	// explicit demo-mode placeholder before the real timeline has loaded or
+	// when there is no wallet to fetch a timeline for.
+	const { timeline, updateTimeline } = useRecoveryTimeline(
+		recovery.timeline ?? mockRecoveryTimelineCompleted,
+	);
+
+	useEffect(() => {
+		if (recovery.timeline) {
+			updateTimeline(recovery.timeline);
+		}
+	}, [recovery.timeline, updateTimeline]);
 
 	// Track whether recovery has ever successfully exited the loading phase so
 	// we can distinguish a bootstrap error (loading → error) from an action

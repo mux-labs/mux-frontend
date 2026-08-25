@@ -13,64 +13,19 @@
  * constants with calls to the appropriate service functions in
  * `src/services/analyticsService.ts`. The component props accept the same
  * types, so no component changes are required.
+ *
+ * The response-shape types (`Metric`, `ChartDataPoint`, `AssetData`) live in
+ * `src/types/analytics.ts` as shared domain types — this module re-exports
+ * them for existing call sites and otherwise only holds mock data values.
  */
 
 // ---------------------------------------------------------------------------
-// Types
+// Types (re-exported from the shared domain types module)
 // ---------------------------------------------------------------------------
 
-/**
- * A single KPI metric card shown in the MetricsCards grid.
- *
- * `value` is pre-formatted for display (e.g. `"$12.4M"`) so components do not
- * need to perform currency formatting themselves.
- */
-export interface Metric {
-	/** Display name shown above the value, e.g. "Total Volume". */
-	label: string;
-	/** Pre-formatted display value, e.g. "$12.4M" or "84,231". */
-	value: string;
-	/** Percentage change vs the previous period. Negative values indicate a decrease. */
-	change: number;
-	/** Context label shown next to the change badge, e.g. "vs last period". */
-	changeLabel: string;
-}
+import type { AssetData, ChartDataPoint, Metric } from "@/types/analytics";
 
-/**
- * A single data point for a bar or line chart.
- *
- * `date` is used as the X-axis label and can be a short day name ("Mon") or
- * an ISO date string ("2024-01-01") depending on the time range.
- */
-export interface ChartDataPoint {
-	/** X-axis label, e.g. "Mon" or "2024-01-01". */
-	date: string;
-	/** Raw numeric value used to compute bar height or line position. */
-	value: number;
-}
-
-/**
- * A single row in the TopAssetsTable.
- *
- * `volume` and `tvl` are pre-formatted strings (e.g. `"$4,234,567"`) so the
- * table component does not need to perform currency formatting.
- */
-export interface AssetData {
-	/** 1-based ranking position. */
-	rank: number;
-	/** Full asset name, e.g. "Mux Protocol". */
-	name: string;
-	/** Ticker symbol, e.g. "MUX". */
-	symbol: string;
-	/** Pre-formatted trading volume string, e.g. "$4,234,567". */
-	volume: string;
-	/** Percentage volume change vs the previous period. Negative = decrease. */
-	volumeChange: number;
-	/** Pre-formatted total value locked string, e.g. "$18.2M". */
-	tvl: string;
-	/** Raw transaction count for the period. */
-	txCount: number;
-}
+export type { Metric, ChartDataPoint, AssetData } from "@/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Mock data

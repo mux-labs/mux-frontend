@@ -1,10 +1,11 @@
 /**
- * Analytics tracking stub for the Spending Limits UI.
+ * Analytics tracking for the Spending Limits UI.
  *
- * Provides a lightweight, typed event-tracking interface that can be swapped
- * for a real analytics SDK (e.g. Segment, PostHog, Amplitude) without changing
- * call sites. In development the stubs log to the console; in production they
- * are no-ops until a real provider is wired in.
+ * Provides a lightweight, typed event-tracking interface backed by
+ * `window.analytics.track` (Segment, PostHog, Amplitude, ...). In
+ * non-production environments the events are additionally logged to the
+ * console; when the SDK isn't present (tests, demo mode, etc.) tracking is a
+ * no-op.
  *
  * Usage:
  *   import { trackSpendingLimitsEvent } from "@/services/spendingLimitsTracking";
@@ -36,15 +37,16 @@ export type SpendingLimitsEventName =
 export type SpendingLimitsEventPayload = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
-// Stub track function
+// Track function
 // ---------------------------------------------------------------------------
 
 /**
  * Record a spending-limits-related analytics event.
  *
- * In development this logs to the console so you can verify tracking calls
- * during manual testing. In production it becomes a no-op until a real
- * analytics provider adapter is implemented.
+ * In non-production environments this logs to the console so you can verify
+ * tracking calls during manual testing. It always forwards the event to
+ * `window.analytics.track` when the SDK is present; otherwise it's a no-op
+ * (e.g. demo mode, tests, or before the script tag resolves).
  */
 export function trackSpendingLimitsEvent(
 	eventName: SpendingLimitsEventName,
@@ -55,8 +57,7 @@ export function trackSpendingLimitsEvent(
 		console.log(`[Analytics] ${eventName}`, payload);
 	}
 
-	// TODO: Replace with real analytics provider integration, e.g.:
-	//   if (typeof window !== "undefined" && window.analytics) {
-	//     window.analytics.track(eventName, payload);
-	//   }
+	if (typeof window !== "undefined") {
+		window.analytics?.track(eventName, payload);
+	}
 }

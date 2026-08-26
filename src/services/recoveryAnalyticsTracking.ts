@@ -1,10 +1,10 @@
 /**
- * Analytics tracking stub for the Recovery UI.
+ * Analytics tracking for the Recovery UI.
  *
- * Follows the same lightweight event-tracking interface as analyticsTracking.ts
- * so it can be swapped for a real analytics SDK (e.g. Segment, PostHog,
- * Amplitude) without changing call sites. In development the stubs log to the
- * console; in production they are no-ops until a real provider is wired in.
+ * Follows the same lightweight event-tracking interface as analyticsTracking.ts,
+ * backed by `window.analytics.track` (Segment, PostHog, Amplitude, ...). In
+ * development the events are additionally logged to the console; when the SDK
+ * isn't present (tests, demo mode, etc.) tracking is a no-op.
  *
  * Usage:
  *   import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
@@ -32,15 +32,16 @@ export type RecoveryEventName =
 export type RecoveryEventPayload = Record<string, unknown>;
 
 // ---------------------------------------------------------------------------
-// Stub track function
+// Track function
 // ---------------------------------------------------------------------------
 
 /**
  * Record a recovery-related analytics event.
  *
  * In development this logs to the console so you can verify the tracking
- * calls during manual testing. In production it becomes a no-op until a
- * real analytics provider adapter is implemented.
+ * calls during manual testing. It always forwards the event to
+ * `window.analytics.track` when the SDK is present; otherwise it's a no-op
+ * (e.g. demo mode, tests, or before the script tag resolves).
  */
 export function trackRecoveryEvent(
 	eventName: RecoveryEventName,
@@ -51,8 +52,7 @@ export function trackRecoveryEvent(
 		console.log(`[Analytics] ${eventName}`, payload);
 	}
 
-	// TODO: Replace with real analytics provider integration, e.g.:
-	//   if (typeof window !== "undefined" && window.analytics) {
-	//     window.analytics.track(eventName, payload);
-	//   }
+	if (typeof window !== "undefined") {
+		window.analytics?.track(eventName, payload);
+	}
 }

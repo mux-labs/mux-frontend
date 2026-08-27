@@ -47,6 +47,16 @@ in a `NEXT_PUBLIC_*` variable.
 
 These never reach the browser and are safe for secrets.
 
+- **`SESSION_JWT_SECRET`** — HMAC secret for the session JWT. `POST
+  /api/auth/login` signs the `mux_auth_session` cookie with it (or passes
+  the `mux-backend` token through), and `src/middleware.ts` verifies the
+  JWT's signature + `exp` on every `/dashboard` request (issue #622).
+  **No default.** When unset:
+  - in a **production** build, every protected route is redirected to
+    `/login` (fail closed);
+  - outside production, the middleware falls back to a cookie-presence
+    check so `pnpm dev`, CI, and the `/demo` tree keep working.
+  Generate one with `openssl rand -base64 32`.
 - **`MUX_API_KEY`** / **`MUX_API_SECRET`** — credentials for server-side
   calls to the Mux Protocol API (Next.js route handlers / server
   components only).

@@ -45,6 +45,12 @@ const publicEnvVars: EnvVar[] = [
 
 const serverEnvVars: EnvVar[] = [
 	{
+		name: "SESSION_JWT_SECRET",
+		required: false,
+		description:
+			"HMAC secret used to sign/verify the session JWT in middleware. No default: when unset, protected routes fail closed in production builds (see src/middleware.ts).",
+	},
+	{
 		name: "MUX_API_KEY",
 		required: false,
 		description: "Mux Protocol API key for server-side requests",

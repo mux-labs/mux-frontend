@@ -9,7 +9,7 @@
  * - Returns upstream error when backend returns non-ok status
  */
 
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "../route";
 
 function makeRequest(body: unknown): Request {
@@ -126,6 +126,42 @@ describe("POST /api/auth/login (#325)", () => {
 			expect(res.status).toBe(502);
 			const body = await res.json();
 			expect(body.error).toBeTruthy();
+		});
+	});
+
+	describe("session cookie (#622)", () => {
+		it("sets a verifiable HS256 JWT cookie when SESSION_JWT_SECRET is configured", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("SESSION_JWT_SECRET", "login-route-test-secret-000000000");
+
+			const res = await POST(
+				makeRequest({ email: "jane@example.com", password: "secret123" }),
+			);
+			expect(res.status).toBe(200);
+
+			const setCookie = res.headers.get("set-cookie") ?? "";
+			expect(setCookie).toContain("mux_auth_session=");
+			expect(setCookie.toLowerCase()).toContain("httponly");
+
+			const match = setCookie.match(/mux_auth_session=([^;]+)/);
+			const token = decodeURIComponent(match?.[1] ?? "");
+			const { verifySessionToken } = await import("@/lib/auth/sessionToken");
+			const claims = await verifySessionToken(
+				token,
+				"login-route-test-secret-000000000",
+			);
+			expect(claims?.sub).toBe("jane@example.com");
+		});
+
+		it("falls back to the legacy marker cookie when no secret is configured", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("SESSION_JWT_SECRET", "");
+
+			const res = await POST(
+				makeRequest({ email: "jane@example.com", password: "secret123" }),
+			);
+			const setCookie = res.headers.get("set-cookie") ?? "";
+			expect(setCookie).toContain("mux_auth_session=1");
 		});
 	});
 });

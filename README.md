@@ -71,6 +71,7 @@ values for testnet/mainnet-connected work.
 | `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Public-facing URL of this application, used for building absolute links (e.g. callback URLs). |
 | `NEXT_PUBLIC_MUX_API_KEY` | No | _(none)_ | Client-visible API key sent with requests to the Mux Protocol API. Do not put secrets here — anything prefixed `NEXT_PUBLIC_` is bundled into client JS. |
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
+| `SESSION_JWT_SECRET` | No | _(none)_ | Server-only HMAC secret for signing/verifying the session JWT in `src/middleware.ts` (issue #622). When unset, protected `/dashboard` routes **fail closed** in a production build; outside production the middleware falls back to a cookie-presence check so local dev / CI / the `/demo` tree still work. Generate with `openssl rand -base64 32`. |
 | `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key, used for requests made from Next.js API routes / server components. Never exposed to the browser. |
 | `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
 | `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
@@ -102,6 +103,25 @@ This repo now includes a minimal auth flow and API client support for dev mode:
 * `src/lib/session.js` persists auth state in `localStorage` and clears stale sessions gracefully
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
+* **Session validation (issue #622):** `POST /api/auth/login` sets an `HttpOnly`
+  `mux_auth_session` cookie — an HS256 JWT signed with `SESSION_JWT_SECRET`
+  (or the token `mux-backend` returned). `src/middleware.ts` verifies that
+  JWT's signature and `exp` on every `/dashboard` request rather than
+  trusting cookie presence, and `POST /api/auth/logout` clears it. With no
+  secret configured the middleware fails closed in production and falls back
+  to a presence check elsewhere.
+* **`AuthGuard` (issue #623):** `DashboardLayout` wraps its children in
+  `AuthGuard` for the real `/dashboard/*` tree (`requireAuth` defaults to
+  `true`); the `/demo/dashboard/*` tree passes `requireAuth={false}` and
+  renders mock data with no session.
+* **TanStack Query (issue #619):** `src/lib/reactQuery/ReactQueryProvider.tsx`
+  mounts a real `QueryClient` at the app root. `RecentActivityFeed` reads
+  through `useQuery`; the send-draft step (`useSendDraft`) is a `useMutation`.
+* **Send flow (issue #616):** `POST /api/send/draft` validates a
+  `{ destination, amount }` draft and returns a fee/arrival preview —
+  proxied to `mux-backend` when configured, a local mock preview only
+  outside production, and `501` (never a fabricated success) in a
+  production build with no backend URL set.
 
 ### Smoke tests
 

@@ -169,6 +169,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const currentUser = user;
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		clearSessionCookie();
+		// The real session cookie is HttpOnly and can only be cleared by the
+		// server (issue #622) — fire-and-forget, never block sign-out on it.
+		if (typeof fetch === "function") {
+			void fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+		}
 		// Drop cached wallet data so the next session (or a different user on
 		// the same device) never sees a stale, pre-logout list before refetching.
 		invalidateWalletsCache();

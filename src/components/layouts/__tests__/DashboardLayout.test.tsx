@@ -16,8 +16,11 @@ import { DashboardLayout } from "../DashboardLayout";
 // Mocks
 // ---------------------------------------------------------------------------
 
+const mockRouterReplace = vi.fn();
+
 vi.mock("next/navigation", () => ({
 	usePathname: () => "/dashboard",
+	useRouter: () => ({ replace: mockRouterReplace, push: vi.fn() }),
 }));
 
 vi.mock("@/context/AuthContext", async (importOriginal) => {
@@ -147,5 +150,42 @@ describe("DashboardLayout — responsive shell (#470)", () => {
 	it("renders the main content area with correct id", async () => {
 		await renderWithSession();
 		expect(document.getElementById("main-content")).toBeInTheDocument();
+	});
+});
+
+describe("DashboardLayout — AuthGuard integration (#623)", () => {
+	afterEach(() => {
+		sessionStorage.clear();
+		mockRouterReplace.mockClear();
+	});
+
+	it("gates content behind AuthGuard and redirects when unauthenticated", async () => {
+		renderLayout();
+
+		expect(
+			await screen.findByTestId("dashboard-auth-skeleton"),
+		).toBeInTheDocument();
+		expect(screen.queryByTestId("page-content")).not.toBeInTheDocument();
+
+		await waitFor(() =>
+			expect(mockRouterReplace).toHaveBeenCalledWith(
+				expect.stringContaining("/login"),
+			),
+		);
+	});
+
+	it("does not gate the demo tree when requireAuth is false", async () => {
+		render(
+			<AuthProvider>
+				<NetworkProvider>
+					<DashboardLayout requireAuth={false}>
+						<div data-testid="page-content">Page</div>
+					</DashboardLayout>
+				</NetworkProvider>
+			</AuthProvider>,
+		);
+
+		expect(await screen.findByTestId("page-content")).toBeInTheDocument();
+		expect(mockRouterReplace).not.toHaveBeenCalled();
 	});
 });

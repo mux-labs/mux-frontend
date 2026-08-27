@@ -14,15 +14,34 @@ The Mux Protocol frontend uses a **client-side session** model:
 
 | Layer | Mechanism |
 |---|---|
-| Session storage | `sessionStorage` (key: `mux_auth_user`) |
-| Route protection (server) | Next.js middleware reads `mux_auth_session` cookie |
-| Route protection (client) | `useSessionGuard` hook redirects unauthenticated users |
+| Session storage (client UI) | `sessionStorage` (key: `mux_auth_user`) — display only, never trusted for authz |
+| Session token | `mux_auth_session` `HttpOnly` cookie, set by `POST /api/auth/login`, cleared by `POST /api/auth/logout` |
+| Route protection (server) | Next.js middleware **verifies the session JWT** (signature + `exp`) — see below |
+| Route protection (client) | `AuthGuard` (wraps `DashboardLayout`) + `useSessionGuard` redirect unauthenticated users |
 | Auth state | React context (`AuthContext`) — `isLoading`, `isAuthenticated`, `user` |
 
-There is **no backend auth server** in the current scaffold. The login page
-calls a placeholder `authenticateUser` function that accepts any valid
-credentials and returns a mock user. Replace this with a real API call when
-the backend endpoint is ready.
+The login page posts to `POST /api/auth/login`, which proxies to
+`mux-backend` when `NEXT_PUBLIC_API_URL` is set and otherwise returns a mock
+user. Either way, on success it sets the `mux_auth_session` cookie.
+
+### Session token validation (issue #622)
+
+`src/middleware.ts` does **not** treat cookie presence as proof of auth. It
+reads `mux_auth_session` and:
+
+- **`SESSION_JWT_SECRET` set** → verifies the value as an HS256 JWT
+  (signature against the secret, `exp` in the future). Invalid / expired /
+  forged ⇒ redirect to `/login`. This is the production path — the token is
+  either the one `mux-backend` returned at login or one signed locally by
+  `POST /api/auth/login` (`src/lib/auth/sessionToken.ts`).
+- **`SESSION_JWT_SECRET` unset, production build** → **fail closed**: every
+  protected request is redirected to `/login`.
+- **`SESSION_JWT_SECRET` unset, non-production** → falls back to a
+  cookie-presence check so `pnpm dev`, CI, and the `/demo` tree work with
+  zero configuration.
+
+Generate a secret with `openssl rand -base64 32` and put it in `.env.local`
+as `SESSION_JWT_SECRET=…` to exercise the production path locally.
 
 ---
 
@@ -112,9 +131,17 @@ signIn(user, 4 * 60 * 60 * 1000); // 4-hour session
 ```
 
 What `signIn` does:
-1. Writes a `SessionRecord` (user + `expiresAt`) to `sessionStorage`.
-2. Sets the `mux_auth_session=1` cookie (read by Next.js middleware).
+1. Writes a `SessionRecord` (user + `expiresAt`) to `sessionStorage` (client
+   UI state only).
+2. Writes a non-`HttpOnly` `mux_auth_session=1` marker cookie — used only by
+   the middleware's non-production presence-check fallback.
 3. Updates `user` state in `AuthContext` → `isAuthenticated` becomes `true`.
+
+The authoritative session token — the `HttpOnly` `mux_auth_session` cookie
+the middleware verifies in production — is set by `POST /api/auth/login`
+server-side, not by `signIn`. The browser keeps the `HttpOnly` value; the
+client-side marker write is ignored when an `HttpOnly` cookie of the same
+name already exists.
 
 ### Sign out (`signOut`)
 
@@ -125,8 +152,10 @@ signOut();
 
 What `signOut` does:
 1. Removes the `mux_auth_user` key from `sessionStorage`.
-2. Clears the `mux_auth_session` cookie (`max-age=0`).
-3. Sets `user` to `null` → `isAuthenticated` becomes `false`.
+2. Clears the client-side marker cookie (`max-age=0`).
+3. Fires `POST /api/auth/logout` (fire-and-forget) so the server clears the
+   `HttpOnly` `mux_auth_session` cookie — JS cannot delete it directly.
+4. Sets `user` to `null` → `isAuthenticated` becomes `false`.
 
 ### Session rehydration
 
@@ -147,21 +176,29 @@ On every page load, `AuthProvider` runs a `useEffect` that:
 
 ### Server-side (middleware)
 
-`src/middleware.ts` checks for the `mux_auth_session` cookie on every request
-to protected prefixes (e.g. `/dashboard`). If the cookie is absent, the user
-is redirected to `/login?callbackUrl=<original-path>`.
+`src/middleware.ts` runs on every request to a protected prefix (e.g.
+`/dashboard`) and validates the `mux_auth_session` JWT as described in
+[Session token validation](#session-token-validation-issue-622). A missing,
+invalid, or expired token ⇒ redirect to `/login?callbackUrl=<original-path>`.
 
 ```ts
 // src/middleware.ts
 const PROTECTED_PREFIXES = ["/dashboard"];
 ```
 
-Add new protected route prefixes to this array as the app grows.
+Add new protected route prefixes to this array as the app grows. The
+`/demo/dashboard/*` tree is deliberately **not** protected.
 
-### Client-side (hook)
+### Client-side (AuthGuard + hook)
 
-Use `useSessionGuard()` at the top of any protected page or layout to handle
-the case where the middleware cookie passes but the in-memory session is stale:
+`DashboardLayout` wraps its children in `AuthGuard` for the real
+`/dashboard/*` tree (`requireAuth` defaults to `true`; the demo tree passes
+`requireAuth={false}`). `AuthGuard` shows a skeleton while the session
+rehydrates and redirects to `/login` if there is no in-memory session.
+
+`useSessionGuard()` can also be used at the top of any protected page to
+handle the case where the middleware cookie passes but the in-memory session
+is stale:
 
 ```ts
 "use client";
@@ -211,9 +248,17 @@ authenticator. When integrating a real backend, add the following to
 `.env.local`:
 
 ```env
-# Base URL for the auth API (used by authenticateUser)
-NEXT_PUBLIC_API_BASE_URL=http://localhost:4000
+# Base URL for the Mux backend API (proxied by /api/auth/login and others)
+NEXT_PUBLIC_API_URL=http://localhost:4000
+
+# HMAC secret for the session JWT verified in src/middleware.ts (#622).
+# Required to exercise the production auth path locally; without it the
+# middleware falls back to a cookie-presence check outside production and
+# fails closed in a production build. Generate: openssl rand -base64 32
+SESSION_JWT_SECRET=replace-with-openssl-rand-base64-32
 ```
+
+See [`frontend-env-vars.md`](frontend-env-vars.md) for the full reference.
 
 ---
 
@@ -224,6 +269,12 @@ Tests for the login page and auth context live in:
 ```
 src/app/login/__tests__/LoginPage.test.tsx
 src/context/__tests__/AuthContext.test.ts
+src/lib/auth/__tests__/sessionToken.test.ts   # JWT sign/verify (#622)
+src/__tests__/middleware.test.ts               # route protection (#622)
+src/app/api/auth/login/__tests__/route.test.ts # sets the session cookie
+src/app/api/auth/logout/route.test.ts          # clears the session cookie
+src/components/layouts/__tests__/AuthGuard.test.tsx
+src/components/layouts/__tests__/DashboardLayout.test.tsx  # AuthGuard wiring (#623)
 ```
 
 Run tests with:

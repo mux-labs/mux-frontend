@@ -22,7 +22,7 @@ Set `PLAYWRIGHT_BASE_URL` to point the suite at an already-running server
 | Spec | States covered |
 | --- | --- |
 | `login.spec.ts` | empty/welcome state, field validation errors, password visibility toggle, successful sign-in + redirect, failed sign-in error card |
-| `wallets.spec.ts` | auth redirect for signed-out visitors, sidebar navigation into the page, error state, empty state, populated table, add-wallet modal |
+| `wallets.spec.ts` | auth redirect for signed-out visitors, sidebar navigation into the page, error state, empty state, populated table, add-wallet modal, network scoping via the in-app switcher with no separate/double network filter |
 
 Both specs run under two Playwright projects — `desktop-chromium` and
 `mobile-chromium` (Pixel 7 viewport) — so layout regressions on narrow

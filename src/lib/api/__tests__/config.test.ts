@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getApiBaseUrl } from "../config";
+import { getApiBaseUrl, isMockFallbackAllowed } from "../config";
 
 describe("getApiBaseUrl", () => {
 	beforeEach(() => {
@@ -32,5 +32,26 @@ describe("getApiBaseUrl", () => {
 
 	it("returns empty string when no API base URL is configured", () => {
 		expect(getApiBaseUrl()).toBe("");
+	});
+});
+
+describe("isMockFallbackAllowed", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("is false in a production build", () => {
+		vi.stubEnv("NODE_ENV", "production");
+		expect(isMockFallbackAllowed()).toBe(false);
+	});
+
+	it("is true outside of production (e.g. development)", () => {
+		vi.stubEnv("NODE_ENV", "development");
+		expect(isMockFallbackAllowed()).toBe(true);
+	});
+
+	it("is true in the test environment", () => {
+		vi.stubEnv("NODE_ENV", "test");
+		expect(isMockFallbackAllowed()).toBe(true);
 	});
 });

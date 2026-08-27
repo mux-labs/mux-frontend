@@ -65,7 +65,7 @@ values for testnet/mainnet-connected work.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | No | _(none)_ | Base URL for the Mux backend API used by client-side requests, e.g. `https://api.muxprotocol.com` for mainnet or a testnet-specific URL. When unset, API routes such as `/api/auth/login` fall back to an in-repo mock so `pnpm run dev` and CI work without a live backend. |
+| `NEXT_PUBLIC_API_URL` | No | _(none)_ | Base URL for the Mux backend API used by client-side requests, e.g. `https://api.muxprotocol.com` for mainnet or a testnet-specific URL. When unset, API routes such as `/api/auth/login` and `/api/wallets` fall back to an in-repo mock so `pnpm run dev` and CI work without a live backend — but only when `NODE_ENV` is not `production` (see the production note below). |
 | `NEXT_PUBLIC_MUX_API_URL` | No | `https://api.muxprotocol.com` | Legacy alias for the API base URL, checked after `NEXT_PUBLIC_API_URL` (see `src/lib/api/config.ts`). Kept for backward compatibility with older deploys. |
 | `NEXT_PUBLIC_API_BASE` | No | _(none)_ | Third fallback in the API base URL resolution chain, checked after the two vars above. |
 | `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Public-facing URL of this application, used for building absolute links (e.g. callback URLs). |
@@ -75,13 +75,18 @@ values for testnet/mainnet-connected work.
 | `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
 | `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
 
-**Testnet vs. mainnet:** this frontend does not hardcode a network — it
-is entirely driven by which backend `NEXT_PUBLIC_API_URL` (or its
-aliases above) points at. Point it at a testnet-configured Mux backend
-for staging/testnet work, and at the production backend for mainnet.
-The CI workflow (`.github/workflows/ci.yml`) sets a placeholder
-`NEXT_PUBLIC_API_URL` only so `next build` can run without secrets; it
-does not reflect a real environment.
+**Testnet vs. mainnet:** which *backend* this frontend talks to is driven
+entirely by `NEXT_PUBLIC_API_URL` (or its aliases above) — point it at a
+testnet-configured Mux backend for staging/testnet work, and at the
+production backend for mainnet. Separately, the dashboard has an in-app
+Testnet/Mainnet switcher (`NetworkContext`, in the top nav) that scopes
+which network's wallets are fetched *within* that backend — `useWallets`
+sends it as a `?network=` query param on `/api/wallets`, so wallets are
+never double-filtered by both a server-side scope and an independent
+client-side one. The env var picks the backend; the in-app switcher picks
+the network within it. The CI workflow (`.github/workflows/ci.yml`) sets a
+placeholder `NEXT_PUBLIC_API_URL` only so `next build` can run without
+secrets; it does not reflect a real environment.
 
 `NODE_ENV` (standard Next.js variable, not defined in `.env.example`)
 also gates some behavior: analytics/tracking hooks
@@ -89,6 +94,17 @@ also gates some behavior: analytics/tracking hooks
 `recoveryAnalyticsTracking.ts`, `spendingLimitsTracking.ts`) log to the
 console outside of `production`, and `src/lib/env.ts` throws on missing
 *required* vars only when `NODE_ENV=production`.
+
+**Production never silently falls back to mock data.** `/api/auth/login`,
+`/api/auth/refresh`, `/api/wallets`, and `/api/wallets/[id]` all fall back
+to in-repo mock data (fake wallets, a hardcoded mock bearer/refresh token)
+when no backend URL is configured — that's what makes `pnpm run dev`, CI,
+and the `/demo` routes work with no live backend. In a production build
+(`NODE_ENV=production`) that fallback is disabled: if `NEXT_PUBLIC_API_URL`
+(or its aliases) is missing, those routes return `503 backend_unavailable`
+instead of serving fabricated wallets/analytics or accepting the mock
+token as valid auth. See `isMockFallbackAllowed()` in
+`src/lib/api/config.ts`.
 
 See [`docs/frontend-env-vars.md`](docs/frontend-env-vars.md) for the full
 reference, including which file reads each variable and a manual

@@ -2,7 +2,17 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import WalletsPage from "@/app/dashboard/wallets/page";
+import { NetworkProvider } from "@/context/NetworkContext";
+import { clearWalletsCacheForTests } from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
+
+function renderWalletsPage() {
+	return render(
+		<NetworkProvider>
+			<WalletsPage />
+		</NetworkProvider>,
+	);
+}
 
 const activeWallet: Wallet = {
 	id: "wallet-001",
@@ -32,17 +42,24 @@ function mockFetchOk(data: unknown) {
 
 describe("WalletsPage archived toggle", () => {
 	beforeEach(() => {
+		// Each test stubs its own wallet fetch response; without clearing
+		// useWallets' module-level cache, a later test in this file can
+		// silently reuse an earlier test's cached wallets instead of its own
+		// mocked fetch response (the cache is keyed by network and has a
+		// 30s TTL, so it stays "fresh" across tests in the same run).
+		clearWalletsCacheForTests();
 		vi.spyOn(console, "debug").mockImplementation(() => {});
 	});
 
 	afterEach(() => {
+		clearWalletsCacheForTests();
 		vi.restoreAllMocks();
 		vi.unstubAllGlobals();
 	});
 
 	it("hides archived wallets by default", async () => {
 		mockFetchOk([activeWallet, archivedWallet]);
-		render(<WalletsPage />);
+		renderWalletsPage();
 
 		await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
 		expect(screen.getByText("1 wallet")).toBeInTheDocument();
@@ -52,7 +69,7 @@ describe("WalletsPage archived toggle", () => {
 	it("shows archived wallets once the toggle is checked", async () => {
 		mockFetchOk([activeWallet, archivedWallet]);
 		const user = userEvent.setup();
-		render(<WalletsPage />);
+		renderWalletsPage();
 
 		await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
 		await user.click(screen.getByTestId("show-archived-toggle"));
@@ -62,15 +79,17 @@ describe("WalletsPage archived toggle", () => {
 
 	it("does not render the archived toggle when there are no archived wallets", async () => {
 		mockFetchOk([activeWallet]);
-		render(<WalletsPage />);
+		renderWalletsPage();
 
 		await waitFor(() => expect(screen.getByRole("table")).toBeInTheDocument());
-		expect(screen.queryByTestId("show-archived-toggle")).not.toBeInTheDocument();
+		expect(
+			screen.queryByTestId("show-archived-toggle"),
+		).not.toBeInTheDocument();
 	});
 
 	it("shows an empty state when every wallet is archived and the toggle is off", async () => {
 		mockFetchOk([archivedWallet]);
-		render(<WalletsPage />);
+		renderWalletsPage();
 
 		await waitFor(() =>
 			expect(screen.getByText(/no wallets to show/i)).toBeInTheDocument(),

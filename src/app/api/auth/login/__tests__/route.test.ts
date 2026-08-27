@@ -9,7 +9,7 @@
  * - Returns upstream error when backend returns non-ok status
  */
 
-import { describe, expect, it, vi, afterEach } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { POST } from "../route";
 
 function makeRequest(body: unknown): Request {
@@ -126,6 +126,24 @@ describe("POST /api/auth/login (#325)", () => {
 			expect(res.status).toBe(502);
 			const body = await res.json();
 			expect(body.error).toBeTruthy();
+		});
+	});
+
+	describe("production without a configured backend", () => {
+		it("returns 503 instead of silently signing in any credentials", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+			vi.stubEnv("NODE_ENV", "production");
+
+			const res = await POST(
+				makeRequest({ email: "anyone@example.com", password: "anything123" }),
+			);
+
+			expect(res.status).toBe(503);
+			const body = await res.json();
+			expect(body.error).toBe("backend_unavailable");
+			expect(body.user).toBeUndefined();
 		});
 	});
 });

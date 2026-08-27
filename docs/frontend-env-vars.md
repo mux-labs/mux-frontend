@@ -64,20 +64,49 @@ These never reach the browser and are safe for secrets.
 
 ## Testnet vs. mainnet
 
-This app has no built-in network switch — network selection is entirely a
-function of which backend `NEXT_PUBLIC_API_URL` (or its aliases) points
-at:
+Two independent things decide "which network" a request is scoped to:
 
-| Environment | `NEXT_PUBLIC_API_URL` example |
-| --- | --- |
-| Local dev (mocked) | _(unset)_ |
-| Testnet / staging | `https://testnet-api.muxprotocol.com` |
-| Mainnet / production | `https://api.muxprotocol.com` |
+1. **Which backend** — `NEXT_PUBLIC_API_URL` (or its aliases) points this
+   app at a specific Mux backend:
+
+   | Environment | `NEXT_PUBLIC_API_URL` example |
+   | --- | --- |
+   | Local dev (mocked) | _(unset)_ |
+   | Testnet / staging | `https://testnet-api.muxprotocol.com` |
+   | Mainnet / production | `https://api.muxprotocol.com` |
+
+2. **Which network within that backend** — the in-app Testnet/Mainnet
+   switcher in the top nav (`NetworkContext`, `src/context/NetworkContext.tsx`,
+   persisted to `localStorage` under `mux_network`). `useWallets({ network })`
+   sends this as a `?network=` query param on `/api/wallets`, so the backend
+   itself scopes the response to one network — wallets are not additionally
+   re-filtered client-side. (An earlier version of the wallets page *did*
+   also run a second, independent client-side "all/testnet/mainnet" filter
+   on top of that already-scoped fetch, which could show a false "no
+   wallets on this network" empty state whenever it disagreed with the
+   in-app switcher. That double-filtering has been removed — see
+   `src/app/dashboard/wallets/page.tsx`.)
 
 The wallet rows themselves also carry a per-wallet `network` field
-(`"testnet"` \| `"mainnet"`, see `src/types/wallet.ts`), so a single
-backend can return a mix of both — the env var controls *which backend*
-you talk to, not which network's wallets are shown.
+(`"testnet"` \| `"mainnet"`, see `src/types/wallet.ts`) that both the
+backend proxy and the mock fallback in `/api/wallets` use to honor that
+query param.
+
+## Production never silently serves mock data
+
+`/api/auth/login`, `/api/auth/refresh`, `/api/wallets`, and
+`/api/wallets/[id]` fall back to in-repo mock responses (fake wallets, a
+hardcoded mock bearer/refresh token) whenever no backend URL is
+configured — that's what lets `pnpm run dev`, CI, and the `/demo` routes
+run with no live backend. `isMockFallbackAllowed()`
+(`src/lib/api/config.ts`) disables that fallback whenever
+`NODE_ENV=production`: those routes return `503 backend_unavailable`
+instead. This matters because the mock fallback accepts a hardcoded
+bearer token (`mock-access-token`) and refresh token
+(`mock-refresh-token`) as valid — without the guard, a production
+deployment that forgot to set `NEXT_PUBLIC_API_URL` would silently serve
+fabricated wallets/analytics and accept those hardcoded tokens as a real
+authenticated session.
 
 ## CI
 
@@ -97,3 +126,12 @@ live mainnet or testnet target.
 - [ ] Removing a `NEXT_PUBLIC_*` var and setting `NODE_ENV=production`
       surfaces a startup error only for vars marked `required` in
       `src/lib/env.ts` (none currently are, by design).
+- [ ] `NODE_ENV=production` with `NEXT_PUBLIC_API_URL` (and its aliases)
+      unset → `/api/wallets`, `/api/wallets/[id]`, `/api/auth/login`, and
+      `/api/auth/refresh` all return `503 { error: "backend_unavailable" }`
+      instead of mock data, and the hardcoded mock bearer/refresh tokens
+      are rejected.
+- [ ] Switching the in-app Testnet/Mainnet control on `/dashboard/wallets`
+      re-fetches `/api/wallets?network=<selected>` and shows only that
+      network's wallets — with no separate "all networks" filter control
+      left on the page to disagree with it.

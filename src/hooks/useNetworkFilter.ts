@@ -19,6 +19,19 @@ import type { WalletNetwork } from "@/types/wallet";
  * @example
  * const { selectedNetwork, setSelectedNetwork, filterByNetwork } = useNetworkFilter();
  * const filteredWallets = filterByNetwork(allWallets);
+ *
+ * @remarks
+ * Only use `filterByNetwork` on a list that is *not* already network-scoped
+ * (e.g. `useWallets({ network: "all" })`, or client-only data). If the list
+ * came from a fetch already scoped to one network — as `useWallets({
+ * network })` is, via a `?network=` query param — don't run it through this
+ * hook too: a second, independently-driven filter on top of an
+ * already-scoped fetch is double filtering. It can only ever agree with the
+ * server-side scope or contradict it (e.g. selecting "testnet" here while
+ * the fetch was scoped to "mainnet" produces a false "no results" state
+ * instead of the mainnet data that was actually loaded). See the removal of
+ * this exact bug from `/dashboard/wallets` (src/app/dashboard/wallets/page.tsx)
+ * and `src/docs/API_Hooks.md`.
  */
 export function useNetworkFilter() {
 	const [selectedNetwork, setSelectedNetworkState] = useState<

@@ -28,7 +28,8 @@ in a `NEXT_PUBLIC_*` variable.
   `src/app/api/auth/login/route.ts` to decide whether to proxy to a real
   backend or fall back to the mock login response, and in
   `src/lib/api/config.ts::getApiBaseUrl()` as the first candidate for all
-  other API calls (e.g. `useWallets`).
+  other API calls (e.g. `useWallets`, `GET /api/requests/today`, and
+  `POST /api/transactions` for the wallet "Send" flow).
 - **`NEXT_PUBLIC_MUX_API_URL`** — second candidate in the same
   `getApiBaseUrl()` fallback chain; defaults to
   `https://api.muxprotocol.com` when nothing else is set. Predates

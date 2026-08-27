@@ -102,6 +102,12 @@ This repo now includes a minimal auth flow and API client support for dev mode:
 * `src/lib/session.js` persists auth state in `localStorage` and clears stale sessions gracefully
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
+* `src/app/api/requests/today/route.ts` and `POST /api/transactions` (used by the wallet "Send" flow) follow the
+  same pattern as the routes above: they proxy to `NEXT_PUBLIC_API_URL` (or its aliases) when configured, and fall
+  back to mock data/an in-memory mock transaction otherwise — never a hardcoded value in production
+* Receive-address QR codes (`src/components/wallet/QrCode.tsx`) and the QR download action
+  (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
+  package; no backend call is involved
 
 ### Smoke tests
 
@@ -111,8 +117,8 @@ Run unit/component smoke tests with:
 npm test
 ```
 
-Run Playwright end-to-end smoke tests (login + wallet monitoring, desktop
-and mobile viewports) with:
+Run Playwright end-to-end smoke tests (login, wallet monitoring, and
+wallet send/receive, desktop and mobile viewports) with:
 
 ```bash
 pnpm exec playwright install --with-deps chromium

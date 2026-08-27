@@ -1,10 +1,10 @@
 # Playwright smoke tests
 
-End-to-end smoke coverage for the two highest-traffic flows in the
-developer console: **login** and **wallet monitoring**. These specs run
-against a real `next dev` server (see `playwright.config.ts`) and exercise
-the same API routes the browser hits in local dev, testnet, and mainnet
-configurations.
+End-to-end smoke coverage for the highest-traffic flows in the developer
+console: **login**, **wallet monitoring**, and **wallet send/receive**.
+These specs run against a real `next dev` server (see
+`playwright.config.ts`) and exercise the same API routes the browser hits
+in local dev, testnet, and mainnet configurations.
 
 ## Running
 
@@ -23,8 +23,9 @@ Set `PLAYWRIGHT_BASE_URL` to point the suite at an already-running server
 | --- | --- |
 | `login.spec.ts` | empty/welcome state, field validation errors, password visibility toggle, successful sign-in + redirect, failed sign-in error card |
 | `wallets.spec.ts` | auth redirect for signed-out visitors, sidebar navigation into the page, error state, empty state, populated table, add-wallet modal |
+| `wallet-send-receive.spec.ts` | receive modal renders a real (non-stub) QR code and downloads it as a file; send modal submits to the real `/api/transactions` route and closes on success |
 
-Both specs run under two Playwright projects — `desktop-chromium` and
+All specs run under two Playwright projects — `desktop-chromium` and
 `mobile-chromium` (Pixel 7 viewport) — so layout regressions on narrow
 screens are caught automatically instead of relying on manual checks.
 

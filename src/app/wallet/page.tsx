@@ -219,8 +219,8 @@ function WalletPageContent() {
 									</p>
 									<p className="text-sm text-neutral-500 mt-0.5">
 										{isWalletFunded(wallet)
-											? "Send tokens out or show the receive QR stub for incoming transfers."
-											: "Show the receive QR stub or copy the address to accept incoming transfers."}
+											? "Send tokens out or show the receive QR code for incoming transfers."
+											: "Show the receive QR code or copy the address to accept incoming transfers."}
 									</p>
 								</div>
 								<div className="flex flex-wrap gap-3">
@@ -261,7 +261,7 @@ function WalletPageContent() {
 										disabled={!canReceive}
 										title={
 											canReceive
-												? "Show receive QR stub"
+												? "Show receive QR code"
 												: "Wallet address is invalid"
 										}
 										aria-label={

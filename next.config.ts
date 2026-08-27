@@ -27,6 +27,14 @@ const nextConfig = {
 			"@/components/dashboard",
 		],
 	},
+
+	/**
+	 * The dev-mode build indicator overlay renders a full-viewport portal
+	 * that intercepts pointer events, which blocks Playwright (and manual
+	 * QA) from clicking through the app in `next dev`. Disabling it only
+	 * affects local development UI, not production behavior.
+	 */
+	devIndicators: false,
 };
 
 export default nextConfig;

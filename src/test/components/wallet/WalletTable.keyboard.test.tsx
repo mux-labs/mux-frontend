@@ -138,7 +138,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			await user.keyboard("{Enter}");
 
 			// Should call router.push with correct URL
-			expect(mockPush).toHaveBeenCalledWith("/demo/dashboard/wallets/w-001");
+			expect(mockPush).toHaveBeenCalledWith("/dashboard/wallets/w-001");
 		});
 
 		it("should navigate to wallet detail page on Space key", async () => {
@@ -154,7 +154,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			await user.keyboard("{ }");
 
 			// Should call router.push with correct URL
-			expect(mockPush).toHaveBeenCalledWith("/demo/dashboard/wallets/w-002");
+			expect(mockPush).toHaveBeenCalledWith("/dashboard/wallets/w-002");
 		});
 	});
 
@@ -253,9 +253,7 @@ describe("WalletTable Keyboard Navigation", () => {
 			// The first link in each row should have tabIndex="-1" to prevent tab conflicts
 			// This ensures row-level keyboard navigation works properly
 			const firstRow = rows[0];
-			const firstLink = firstRow.querySelector(
-				"a[href*='/demo/dashboard/wallets']",
-			);
+			const firstLink = firstRow.querySelector("a[href*='/dashboard/wallets']");
 
 			// The link should have tabIndex -1 to prevent it from stealing focus during keyboard nav
 			expect(firstLink).toHaveAttribute("tabIndex", "-1");
@@ -305,7 +303,7 @@ describe("WalletTable Keyboard Navigation", () => {
 
 			// Enter should still navigate
 			await user.keyboard("{Enter}");
-			expect(mockPush).toHaveBeenCalledWith("/demo/dashboard/wallets/w-001");
+			expect(mockPush).toHaveBeenCalledWith("/dashboard/wallets/w-001");
 		});
 	});
 

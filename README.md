@@ -50,7 +50,7 @@ End users do not interact with this dashboard — it is purely for developers in
 ### Installation
 
 ```bash
-git clone https://github.com/muxlabs/mux-frontend.git
+git clone https://github.com/mux-labs/mux-frontend.git
 cd mux-frontend
 pnpm install
 pnpm run dev

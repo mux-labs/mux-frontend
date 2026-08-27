@@ -18,8 +18,14 @@ import { NextResponse } from "next/server";
  *   (set via a server-side `Set-Cookie` header in the login route).
  *
  * See docs/auth-local-setup.md for the full auth flow documentation.
+ *
+ * `/demo/dashboard` is the relocated dashboard shell. It renders the same
+ * full UI as `/dashboard` (sidebar, wallet tables, analytics) sourced from
+ * local mock data, so it must sit behind the same auth gate — otherwise the
+ * developer console is publicly reachable with mock wallets and fake
+ * analytics in production builds.
  */
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 
 /**
  * The path users are redirected to when they are not authenticated.
@@ -53,8 +59,13 @@ export function middleware(request: NextRequest) {
 
 export const config = {
 	/*
-	 * Match all routes under /dashboard.
+	 * Match all routes under /dashboard and its /demo/dashboard mirror.
 	 * Exclude Next.js internals and static assets.
 	 */
-	matcher: ["/dashboard", "/dashboard/:path*"],
+	matcher: [
+		"/dashboard",
+		"/dashboard/:path*",
+		"/demo/dashboard",
+		"/demo/dashboard/:path*",
+	],
 };

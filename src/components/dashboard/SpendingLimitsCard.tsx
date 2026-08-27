@@ -35,6 +35,7 @@ interface StoredSpendingLimits {
 
 interface SpendingLimitsCardProps {
 	loading?: boolean;
+	apiPath?: string;
 }
 
 function useInputKeyNav(onSave: () => void) {
@@ -147,6 +148,7 @@ function CopyLimitButton({ value, label }: { value: string; label: string }) {
 
 export function SpendingLimitsCard({
 	loading = false,
+	apiPath = "/api/spending-limits",
 }: SpendingLimitsCardProps) {
 	const [dailyLimit, setDailyLimit] = useState(String(DEFAULT_DAILY_LIMIT));
 	const [transactionLimit, setTransactionLimit] = useState(
@@ -211,7 +213,7 @@ export function SpendingLimitsCard({
 		}
 
 		try {
-			const response = await fetch("/api/spending-limits", {
+			const response = await fetch(apiPath, {
 				cache: "no-store",
 			});
 
@@ -237,7 +239,7 @@ export function SpendingLimitsCard({
 		} finally {
 			setIsRefreshing(false);
 		}
-	}, [applyResponse]);
+	}, [apiPath, applyResponse]);
 
 	useEffect(() => {
 		if (loading) return;
@@ -276,7 +278,7 @@ export function SpendingLimitsCard({
 		persistCachedLimits(payload);
 
 		try {
-			const response = await fetch("/api/spending-limits", {
+			const response = await fetch(apiPath, {
 				method: "PUT",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify(payload),
@@ -318,7 +320,7 @@ export function SpendingLimitsCard({
 		} finally {
 			setIsSaving(false);
 		}
-	}, [applyResponse, dailyLimit, showToast, transactionLimit]);
+	}, [apiPath, applyResponse, dailyLimit, showToast, transactionLimit]);
 
 	const handleInputKeyDown = useInputKeyNav(handleSave);
 

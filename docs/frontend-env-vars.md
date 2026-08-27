@@ -50,6 +50,10 @@ These never reach the browser and are safe for secrets.
 - **`MUX_API_KEY`** / **`MUX_API_SECRET`** — credentials for server-side
   calls to the Mux Protocol API (Next.js route handlers / server
   components only).
+- **`MUX_BACKEND_URL`** — server-only mux-backend base URL. The production
+  spending-limits route uses this value first and returns an error instead of
+  silently falling back to an in-memory store. Do not expose it as
+  `NEXT_PUBLIC_*`.
 - **`DATABASE_URL`** — connection string, if this deployment persists any
   data outside the backend API.
 

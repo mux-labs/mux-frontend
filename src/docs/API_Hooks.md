@@ -1,5 +1,15 @@
 # API Hooks
 
+## Spending limits
+
+The production dashboard calls `/api/spending-limits`, which proxies `GET` and
+`PUT` requests to mux-backend at `MUX_BACKEND_URL`. It forwards the server API
+key and any caller `Authorization` header, and returns `503` when no backend is
+configured. It does not persist values in the frontend process.
+
+The `/demo/dashboard/spending-limits` page intentionally calls
+`/api/demo/spending-limits`, whose in-memory store is demo-only.
+
 This document explains the new API hooks added to the project:
 
 - `useApiKeys()` — a client hook that fetches API keys and exposes `data`, `loading`, `error`, and `refetch`.

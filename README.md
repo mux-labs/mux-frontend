@@ -73,12 +73,18 @@ values for testnet/mainnet-connected work.
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
 | `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key, used for requests made from Next.js API routes / server components. Never exposed to the browser. |
 | `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
+| `MUX_BACKEND_URL` | No | _(none)_ | Server-only mux-backend base URL used by the production spending-limits route. Prefer this over a `NEXT_PUBLIC_*` URL for deployed server routes. |
 | `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
 
 **Testnet vs. mainnet:** this frontend does not hardcode a network — it
 is entirely driven by which backend `NEXT_PUBLIC_API_URL` (or its
 aliases above) points at. Point it at a testnet-configured Mux backend
 for staging/testnet work, and at the production backend for mainnet.
+
+The production `/api/spending-limits` route proxies reads and updates to
+`MUX_BACKEND_URL` and returns `503` when no backend is configured. It never
+uses a process-memory store. The `/demo/dashboard` spending-limits page uses
+the explicit `/api/demo/spending-limits` mock route for demonstrations only.
 The CI workflow (`.github/workflows/ci.yml`) sets a placeholder
 `NEXT_PUBLIC_API_URL` only so `next build` can run without secrets; it
 does not reflect a real environment.

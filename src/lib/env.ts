@@ -45,6 +45,11 @@ const publicEnvVars: EnvVar[] = [
 
 const serverEnvVars: EnvVar[] = [
 	{
+		name: "MUX_BACKEND_URL",
+		required: false,
+		description: "Server-only mux-backend base URL for production API routes",
+	},
+	{
 		name: "MUX_API_KEY",
 		required: false,
 		description: "Mux Protocol API key for server-side requests",

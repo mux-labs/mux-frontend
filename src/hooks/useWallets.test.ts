@@ -6,6 +6,7 @@ import {
 	useWallets,
 	WALLETS_RATE_LIMIT_MESSAGE,
 } from "@/hooks/useWallets";
+import { clearSession, saveSession } from "@/lib/session";
 import type { Wallet } from "@/types/wallet";
 
 const mockWallet: Wallet = {
@@ -24,6 +25,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	clearWalletsCacheForTests();
+	clearSession();
+	window.localStorage.removeItem("mux-auth-session");
 	vi.unstubAllEnvs();
 	vi.restoreAllMocks();
 });
@@ -164,6 +167,55 @@ describe("useWallets", () => {
 		act(() => result.current.refetch());
 		await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
 		await waitFor(() => expect(result.current.loading).toBe(false));
+	});
+
+	// Regression test for the sessionStorage/localStorage key mismatch: the
+	// access token is written via `saveSession()` (src/lib/session.js, backed
+	// by sessionStorage), so it must be read back the same way rather than
+	// via a second, ad-hoc `localStorage` lookup that never sees it.
+	it("attaches the Authorization header from the shared session store", async () => {
+		saveSession({
+			accessToken: "shared-store-token",
+			refreshToken: "r",
+			expiresAt: Date.now() + 60_000,
+		});
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useWallets());
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			expect.any(String),
+			expect.objectContaining({
+				headers: expect.objectContaining({
+					Authorization: "Bearer shared-store-token",
+				}),
+			}),
+		);
+	});
+
+	it("omits the Authorization header when a token exists only under the legacy localStorage key", async () => {
+		window.localStorage.setItem(
+			"mux-auth-session",
+			JSON.stringify({ accessToken: "stale-localstorage-token" }),
+		);
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useWallets());
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		const [, init] = fetchMock.mock.calls[0];
+		expect((init.headers as Record<string, string>).Authorization).toBeUndefined();
 	});
 });
 

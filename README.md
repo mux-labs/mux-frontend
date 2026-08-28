@@ -194,5 +194,10 @@ stay easy to find and don't clutter the repo root as features evolve.
 
 * Per-key usage analytics
 * Webhooks and notifications for SDK events
-* Team access management
-* Audit logs for all wallet and API activity
+* ~~Team access management~~ — basic admin/developer member management is in
+  at `/dashboard/settings/team` (`/api/team`); see
+  [`docs/team-access-and-audit-log.md`](docs/team-access-and-audit-log.md)
+* ~~Audit logs for all wallet and API activity~~ — `/api/activity` now
+  follows the same production/mock split as the rest of the app instead of
+  always serving mock data; see
+  [`docs/team-access-and-audit-log.md`](docs/team-access-and-audit-log.md)

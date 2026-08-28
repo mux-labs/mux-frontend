@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 import {
 	getNotifications,
 	markAllNotificationsRead,
@@ -7,10 +7,10 @@ import {
 } from "@/mock-data/notifications";
 
 function backendHeaders(): Record<string, string> {
-	const headers: Record<string, string> = { "content-type": "application/json" };
-	const apiKey = getApiKey();
-	if (apiKey) headers["x-api-key"] = apiKey;
-	return headers;
+	return {
+		"content-type": "application/json",
+		...getUpstreamAuthHeaders(),
+	};
 }
 
 /**

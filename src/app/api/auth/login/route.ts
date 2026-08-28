@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 
 /**
  * POST /api/auth/login
@@ -7,6 +7,10 @@ import { getApiBaseUrl } from "@/lib/api/config";
  * Proxies login credentials to the configured backend API
  * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls back to a mock
  * response so local development works without a running API server.
+ *
+ * The mock fallback is disabled in production builds (`NODE_ENV=production`)
+ * — see `isMockFallbackAllowed()` — so a misconfigured deployment fails
+ * loudly instead of accepting any credentials.
  */
 export async function POST(request: Request) {
 	let body: Record<string, unknown>;
@@ -34,7 +38,10 @@ export async function POST(request: Request) {
 		try {
 			const upstream = await fetch(`${backendUrl}/auth/login`, {
 				method: "POST",
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+					...getUpstreamAuthHeaders(),
+				},
 				body: JSON.stringify({ email, password }),
 			});
 
@@ -53,7 +60,18 @@ export async function POST(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return NextResponse.json(
+			{
+				error: "backend_unavailable",
+				message:
+					"No auth backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+			},
+			{ status: 503 },
+		);
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	// Accepts any well-formed credentials; used for local dev / CI.
 	const namePart = email.split("@")[0] ?? "User";
 	const name = namePart

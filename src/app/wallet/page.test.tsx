@@ -142,7 +142,11 @@ describe("WalletPage", () => {
 
 		const dialog = screen.getByRole("dialog");
 		expect(dialog).toBeInTheDocument();
-		expect(within(dialog).getByText(/qr stub/i)).toBeInTheDocument();
+		expect(
+			await within(dialog).findByRole("img", {
+				name: `QR code for wallet address ${mockFundedWallet.address}`,
+			}),
+		).toBeInTheDocument();
 		expect(
 			within(dialog).getByText(mockFundedWallet.address),
 		).toBeInTheDocument();
@@ -184,7 +188,7 @@ describe("WalletPage", () => {
 			expect(screen.getByText(/send or receive funds/i)).toBeInTheDocument();
 			expect(
 				screen.getByText(
-					/send tokens out or show the receive qr stub for incoming transfers/i,
+					/send tokens out or show the receive qr code for incoming transfers/i,
 				),
 			).toBeInTheDocument();
 		});
@@ -204,7 +208,7 @@ describe("WalletPage", () => {
 		await waitFor(() => {
 			expect(
 				screen.getByText(
-					/show the receive qr stub or copy the address to accept incoming transfers/i,
+					/show the receive qr code or copy the address to accept incoming transfers/i,
 				),
 			).toBeInTheDocument();
 		});

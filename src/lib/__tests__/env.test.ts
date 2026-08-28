@@ -6,7 +6,7 @@
  * Run with: npx vitest run or similar test runner.
  */
 
-import { validateEnv } from "../env";
+import { getEnv, validateEnv } from "../env";
 
 describe("validateEnv", () => {
 	beforeEach(() => {
@@ -54,5 +54,60 @@ describe("validateEnv", () => {
 
 		expect(consoleWarnSpy).toHaveBeenCalled();
 		consoleWarnSpy.mockRestore();
+	});
+
+	it("should not reference DATABASE_URL — nothing in the app reads it (#638)", () => {
+		const consoleWarnSpy = vi
+			.spyOn(console, "warn")
+			.mockImplementation(() => {});
+
+		validateEnv({});
+
+		const allWarnings = consoleWarnSpy.mock.calls.flat().join("\n");
+		expect(allWarnings).not.toContain("DATABASE_URL");
+		consoleWarnSpy.mockRestore();
+	});
+});
+
+describe("getEnv", () => {
+	beforeEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("does not apply documented defaults outside production", () => {
+		vi.stubEnv("NODE_ENV", "test");
+		expect(getEnv().NEXT_PUBLIC_MUX_API_URL).toBeUndefined();
+	});
+
+	it("applies documented defaults for unset vars in production (#637)", () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+		vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+		vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+
+		const result = getEnv();
+
+		expect(result.NEXT_PUBLIC_MUX_API_URL).toBe("https://api.muxprotocol.com");
+		expect(result.NEXT_PUBLIC_APP_URL).toBe("http://localhost:3000");
+	});
+
+	it("never overrides an explicitly configured value with the default", () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "https://custom-backend.example.com");
+
+		expect(getEnv().NEXT_PUBLIC_MUX_API_URL).toBe(
+			"https://custom-backend.example.com",
+		);
+	});
+
+	it("leaves vars with no documented default unset", () => {
+		vi.stubEnv("NODE_ENV", "production");
+		vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+
+		expect(getEnv().NEXT_PUBLIC_API_URL).toBeFalsy();
 	});
 });

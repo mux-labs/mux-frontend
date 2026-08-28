@@ -5,6 +5,7 @@ import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import type { Wallet } from "@/types/wallet";
 import { isValidStellarAddress } from "@/utils/addressValidation";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
 
 interface SendWalletModalProps {
@@ -72,6 +73,8 @@ export function SendWalletModal({
 		destination?: boolean;
 		amount?: boolean;
 	}>({});
+	const [submitting, setSubmitting] = useState(false);
+	const [submitError, setSubmitError] = useState<string | null>(null);
 
 	const maxBalance = wallet ? parseBalance(wallet.balance) : null;
 
@@ -80,6 +83,7 @@ export function SendWalletModal({
 		setAmount("");
 		setErrors({});
 		setTouched({});
+		setSubmitError(null);
 		onClose();
 	};
 
@@ -89,14 +93,39 @@ export function SendWalletModal({
 		setErrors(newErrors);
 	};
 
-	const handleSubmit = (e: React.FormEvent) => {
+	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
 		setTouched({ destination: true, amount: true });
 		const newErrors = validateSendForm(destination, amount, maxBalance);
 		setErrors(newErrors);
-		if (Object.keys(newErrors).length === 0) {
-			// Send form is valid — actual send logic goes here
+		if (Object.keys(newErrors).length > 0) return;
+
+		setSubmitting(true);
+		setSubmitError(null);
+		try {
+			const res = await fetchWithAuth("/api/transactions", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({
+					from: wallet?.address,
+					to: destination.trim(),
+					amountXlm: amount.trim(),
+					network: wallet?.network ?? "testnet",
+				}),
+			});
+
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}) as { error?: string });
+				throw new Error(data?.error || `Request failed: ${res.status}`);
+			}
+
 			handleClose();
+		} catch (err) {
+			setSubmitError(
+				err instanceof Error ? err.message : "Unable to send funds.",
+			);
+		} finally {
+			setSubmitting(false);
 		}
 	};
 
@@ -244,15 +273,34 @@ export function SendWalletModal({
 								</p>
 							)}
 						</div>
+
+						{submitError && (
+							<p
+								role="alert"
+								className="flex items-center gap-1.5 text-sm text-red-600"
+							>
+								<AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+								{submitError}
+							</p>
+						)}
 					</div>
 
 					<div className="flex justify-end gap-3 border-t border-neutral-200 px-6 py-4">
-						<Button type="button" variant="outline" onClick={handleClose}>
+						<Button
+							type="button"
+							variant="outline"
+							onClick={handleClose}
+							disabled={submitting}
+						>
 							Cancel
 						</Button>
-						<Button type="submit" aria-label="Submit send transaction">
+						<Button
+							type="submit"
+							aria-label="Submit send transaction"
+							disabled={submitting}
+						>
 							<SendHorizonal className="h-4 w-4" aria-hidden="true" />
-							Send
+							{submitting ? "Sending…" : "Send"}
 						</Button>
 					</div>
 				</form>

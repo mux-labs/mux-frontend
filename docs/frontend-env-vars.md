@@ -28,7 +28,8 @@ in a `NEXT_PUBLIC_*` variable.
   `src/app/api/auth/login/route.ts` to decide whether to proxy to a real
   backend or fall back to the mock login response, and in
   `src/lib/api/config.ts::getApiBaseUrl()` as the first candidate for all
-  other API calls (e.g. `useWallets`).
+  other API calls (e.g. `useWallets`, `GET /api/requests/today`, and
+  `POST /api/transactions` for the wallet "Send" flow).
 - **`NEXT_PUBLIC_MUX_API_URL`** — second candidate in the same
   `getApiBaseUrl()` fallback chain; defaults to
   `https://api.muxprotocol.com` when nothing else is set. Predates
@@ -37,21 +38,26 @@ in a `NEXT_PUBLIC_*` variable.
   chain, for deploys that used this older name.
 - **`NEXT_PUBLIC_APP_URL`** — this app's own public URL; defaults to
   `http://localhost:3000`.
-- **`NEXT_PUBLIC_MUX_API_KEY`** — read by `getApiKey()` in
-  `src/lib/api/config.ts`; attached to outgoing API requests where a
-  client-visible key is acceptable.
 - **`NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`** — only relevant if
   WalletConnect-based wallet flows are enabled.
+
+There is intentionally no client-visible Mux API key. A project API key
+is a real credential, and anything under `NEXT_PUBLIC_*` is inlined into
+the browser bundle for every visitor to read — see #636. `ApiContext.tsx`
+(a client component) never reads `MUX_API_KEY`/`MUX_API_SECRET`; it only
+constructs an unauthenticated client that talks to this app's own
+same-origin `/api/*` routes.
 
 ### Server-only
 
 These never reach the browser and are safe for secrets.
 
-- **`MUX_API_KEY`** / **`MUX_API_SECRET`** — credentials for server-side
-  calls to the Mux Protocol API (Next.js route handlers / server
-  components only).
-- **`DATABASE_URL`** — connection string, if this deployment persists any
-  data outside the backend API.
+- **`MUX_API_KEY`** / **`MUX_API_SECRET`** — read by
+  `getUpstreamAuthHeaders()` in `src/lib/api/config.ts` and attached
+  (`x-api-key` / `x-api-secret`) to every upstream request a Next.js API
+  route makes to the Mux backend. Only ever read inside `src/app/api/**`
+  route handlers or other server-only modules — never import
+  `getApiKey()`/`getApiSecret()` from a client component.
 
 ### Implicit
 
@@ -59,25 +65,67 @@ These never reach the browser and are safe for secrets.
   console logging in the analytics/tracking hooks
   (`useAnalytics.ts`, `useAnalyticsMetrics.ts`, `useAnalyticsTracking.ts`,
   `recoveryAnalyticsTracking.ts`, `spendingLimitsTracking.ts`) outside of
-  `production`, and makes `validateEnv()` in `src/lib/env.ts` throw
-  (instead of warn) on missing *required* vars when set to `production`.
+  `production`, makes `validateEnv()` in `src/lib/env.ts` throw
+  (instead of warn) on missing *required* vars when set to `production`,
+  and controls whether `getEnv()` merges in documented defaults (see
+  "Production defaults" below — it only does so when `NODE_ENV=production`).
+
+### Production defaults
+
+`getEnv()` merges each var's documented `defaultValue` (from the schema
+in `src/lib/env.ts`) into whatever is set, but only when
+`NODE_ENV=production`. Concretely: if a production deploy forgets to set
+`NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_MUX_API_URL`, it now resolves to the
+documented default `https://api.muxprotocol.com` instead of silently
+falling through every API route's mock branch (#637). Local dev and test
+runs are untouched — `NODE_ENV` isn't `production`, so leaving vars unset
+still exercises the in-repo mocks described throughout this doc.
 
 ## Testnet vs. mainnet
 
-This app has no built-in network switch — network selection is entirely a
-function of which backend `NEXT_PUBLIC_API_URL` (or its aliases) points
-at:
+Two independent things decide "which network" a request is scoped to:
 
-| Environment | `NEXT_PUBLIC_API_URL` example |
-| --- | --- |
-| Local dev (mocked) | _(unset)_ |
-| Testnet / staging | `https://testnet-api.muxprotocol.com` |
-| Mainnet / production | `https://api.muxprotocol.com` |
+1. **Which backend** — `NEXT_PUBLIC_API_URL` (or its aliases) points this
+   app at a specific Mux backend:
+
+   | Environment | `NEXT_PUBLIC_API_URL` example |
+   | --- | --- |
+   | Local dev (mocked) | _(unset)_ |
+   | Testnet / staging | `https://testnet-api.muxprotocol.com` |
+   | Mainnet / production | `https://api.muxprotocol.com` |
+
+2. **Which network within that backend** — the in-app Testnet/Mainnet
+   switcher in the top nav (`NetworkContext`, `src/context/NetworkContext.tsx`,
+   persisted to `localStorage` under `mux_network`). `useWallets({ network })`
+   sends this as a `?network=` query param on `/api/wallets`, so the backend
+   itself scopes the response to one network — wallets are not additionally
+   re-filtered client-side. (An earlier version of the wallets page *did*
+   also run a second, independent client-side "all/testnet/mainnet" filter
+   on top of that already-scoped fetch, which could show a false "no
+   wallets on this network" empty state whenever it disagreed with the
+   in-app switcher. That double-filtering has been removed — see
+   `src/app/dashboard/wallets/page.tsx`.)
 
 The wallet rows themselves also carry a per-wallet `network` field
-(`"testnet"` \| `"mainnet"`, see `src/types/wallet.ts`), so a single
-backend can return a mix of both — the env var controls *which backend*
-you talk to, not which network's wallets are shown.
+(`"testnet"` \| `"mainnet"`, see `src/types/wallet.ts`) that both the
+backend proxy and the mock fallback in `/api/wallets` use to honor that
+query param.
+
+## Production never silently serves mock data
+
+`/api/auth/login`, `/api/auth/refresh`, `/api/wallets`, and
+`/api/wallets/[id]` fall back to in-repo mock responses (fake wallets, a
+hardcoded mock bearer/refresh token) whenever no backend URL is
+configured — that's what lets `pnpm run dev`, CI, and the `/demo` routes
+run with no live backend. `isMockFallbackAllowed()`
+(`src/lib/api/config.ts`) disables that fallback whenever
+`NODE_ENV=production`: those routes return `503 backend_unavailable`
+instead. This matters because the mock fallback accepts a hardcoded
+bearer token (`mock-access-token`) and refresh token
+(`mock-refresh-token`) as valid — without the guard, a production
+deployment that forgot to set `NEXT_PUBLIC_API_URL` would silently serve
+fabricated wallets/analytics and accept those hardcoded tokens as a real
+authenticated session.
 
 ## CI
 
@@ -97,3 +145,12 @@ live mainnet or testnet target.
 - [ ] Removing a `NEXT_PUBLIC_*` var and setting `NODE_ENV=production`
       surfaces a startup error only for vars marked `required` in
       `src/lib/env.ts` (none currently are, by design).
+- [ ] `NODE_ENV=production` with `NEXT_PUBLIC_API_URL` (and its aliases)
+      unset → `/api/wallets`, `/api/wallets/[id]`, `/api/auth/login`, and
+      `/api/auth/refresh` all return `503 { error: "backend_unavailable" }`
+      instead of mock data, and the hardcoded mock bearer/refresh tokens
+      are rejected.
+- [ ] Switching the in-app Testnet/Mainnet control on `/dashboard/wallets`
+      re-fetches `/api/wallets?network=<selected>` and shows only that
+      network's wallets — with no separate "all networks" filter control
+      left on the page to disagree with it.

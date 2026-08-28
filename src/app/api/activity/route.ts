@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 import { mockTransactions } from "@/mock-data/transactions";
 import type { Transaction } from "@/types/transaction";
 
@@ -47,7 +47,10 @@ export async function GET() {
 		// SDK/events rather than a client-side heuristic over mock data.
 		try {
 			const upstream = await fetch(`${backendUrl}/activity`, {
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+					...getUpstreamAuthHeaders(),
+				},
 				cache: "no-store",
 			});
 

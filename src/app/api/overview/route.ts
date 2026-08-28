@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 import { mockOverview } from "@/mock-data/overview";
 
 /**
@@ -14,11 +14,10 @@ export async function GET(request: Request) {
 
 	if (backendUrl) {
 		try {
-			const apiKey = getApiKey();
 			const upstream = await fetch(`${backendUrl}/overview`, {
 				headers: {
 					"content-type": "application/json",
-					...(apiKey ? { "x-api-key": apiKey } : {}),
+					...getUpstreamAuthHeaders(),
 					...(request.headers.get("authorization")
 						? { authorization: request.headers.get("authorization") as string }
 						: {}),

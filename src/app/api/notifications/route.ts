@@ -1,16 +1,26 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 import {
 	getNotifications,
 	markAllNotificationsRead,
 	markNotificationRead,
 } from "@/mock-data/notifications";
 
+/** 503 body returned when a production build has no notifications backend. */
+const NO_BACKEND_RESPONSE = NextResponse.json(
+	{
+		error:
+			"Notifications backend is not configured. Set NEXT_PUBLIC_API_URL — " +
+			"mock notifications are not served in production.",
+	},
+	{ status: 503 },
+);
+
 function backendHeaders(): Record<string, string> {
-	const headers: Record<string, string> = { "content-type": "application/json" };
-	const apiKey = getApiKey();
-	if (apiKey) headers["x-api-key"] = apiKey;
-	return headers;
+	return {
+		"content-type": "application/json",
+		...getUpstreamAuthHeaders(),
+	};
 }
 
 /**
@@ -48,7 +58,8 @@ export async function GET() {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	// --- Mock fallback (local dev / CI only, never in production) ---
+	if (!canUseMockFallback()) return NO_BACKEND_RESPONSE;
 	return NextResponse.json(getNotifications());
 }
 
@@ -99,7 +110,9 @@ export async function PATCH(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	// --- Mock fallback (local dev / CI only, never in production) ---
+	if (!canUseMockFallback()) return NO_BACKEND_RESPONSE;
+
 	if (body.markAll) {
 		return NextResponse.json(markAllNotificationsRead());
 	}

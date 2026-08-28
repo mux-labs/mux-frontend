@@ -10,38 +10,35 @@ or replace the auth layer when a real backend is available.
 
 ## Overview
 
-The Mux Protocol frontend uses a **client-side session** model:
+The Mux Protocol frontend uses a **hybrid session** model:
 
 | Layer | Mechanism |
 |---|---|
-| Session storage (client UI) | `sessionStorage` (key: `mux_auth_user`) — display only, never trusted for authz |
-| Session token | `mux_auth_session` `HttpOnly` cookie, set by `POST /api/auth/login`, cleared by `POST /api/auth/logout` |
-| Route protection (server) | Next.js middleware **verifies the session JWT** (signature + `exp`) — see below |
-| Route protection (client) | `AuthGuard` (wraps `DashboardLayout`) + `useSessionGuard` redirect unauthenticated users |
+| Session storage (client rehydration) | `sessionStorage` (key: `mux_auth_user`) |
+| Server-verified session (backend mode) | HttpOnly `mux_auth_token` cookie, set by `/api/auth/login` from the backend login response, verified on every protected request via `GET {backend}/auth/session` |
+| Route protection (server) | Next.js middleware — see `src/lib/auth/routeAccess.ts` |
+| Route protection (client) | `useSessionGuard` hook redirects unauthenticated users |
 | Auth state | React context (`AuthContext`) — `isLoading`, `isAuthenticated`, `user` |
 
-The login page posts to `POST /api/auth/login`, which proxies to
-`mux-backend` when `NEXT_PUBLIC_API_URL` is set and otherwise returns a mock
-user. Either way, on success it sets the `mux_auth_session` cookie.
+### Backend mode vs mock mode (#621)
 
-### Session token validation (issue #622)
+- **Backend configured** (`NEXT_PUBLIC_API_URL` / aliases set): a protected
+  route requires the HttpOnly `mux_auth_token` cookie **and** a live
+  `GET {backend}/auth/session` check confirming it is still valid. The
+  client-set `mux_auth_session` marker cookie is **not** trusted on its own —
+  this closes the "anyone can forge `mux_auth_session=1`" gap. `/api/auth/login`
+  proxies credentials to `{backend}/auth/login` and, on success, stores the
+  backend-issued token in the `mux_auth_token` cookie. `signOut()` calls
+  `POST /api/auth/logout`, which clears the cookie and best-effort notifies
+  `{backend}/auth/logout`.
+- **Mock mode** (no backend, non-production only): `/api/auth/login` accepts
+  any well-formed credentials and returns a mock user; the middleware accepts
+  the `mux_auth_session` marker cookie so `pnpm dev` / CI work without a live
+  auth server. In a **production** build with no backend, `/api/auth/login`
+  returns `503` — there is no mock sign-in in production.
 
-`src/middleware.ts` does **not** treat cookie presence as proof of auth. It
-reads `mux_auth_session` and:
-
-- **`SESSION_JWT_SECRET` set** → verifies the value as an HS256 JWT
-  (signature against the secret, `exp` in the future). Invalid / expired /
-  forged ⇒ redirect to `/login`. This is the production path — the token is
-  either the one `mux-backend` returned at login or one signed locally by
-  `POST /api/auth/login` (`src/lib/auth/sessionToken.ts`).
-- **`SESSION_JWT_SECRET` unset, production build** → **fail closed**: every
-  protected request is redirected to `/login`.
-- **`SESSION_JWT_SECRET` unset, non-production** → falls back to a
-  cookie-presence check so `pnpm dev`, CI, and the `/demo` tree work with
-  zero configuration.
-
-Generate a secret with `openssl rand -base64 32` and put it in `.env.local`
-as `SESSION_JWT_SECRET=…` to exercise the production path locally.
+Full SSO / OAuth (Clerk, Better Auth, …) is a later change; this model is
+provider-agnostic and does not add any SaaS dependency.
 
 ---
 
@@ -176,20 +173,22 @@ On every page load, `AuthProvider` runs a `useEffect` that:
 
 ### Server-side (middleware)
 
-`src/middleware.ts` runs on every request to a protected prefix (e.g.
-`/dashboard`) and validates the `mux_auth_session` JWT as described in
-[Session token validation](#session-token-validation-issue-622). A missing,
-invalid, or expired token ⇒ redirect to `/login?callbackUrl=<original-path>`.
+`src/middleware.ts` checks for the `mux_auth_session` cookie on every request
+to protected prefixes. If the cookie is absent, the user is redirected to
+`/login?callbackUrl=<original-path>`.
 
 ```ts
 // src/middleware.ts
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 ```
 
-Add new protected route prefixes to this array as the app grows. The
-`/demo/dashboard/*` tree is deliberately **not** protected.
+`/demo/dashboard` renders the same full dashboard shell as `/dashboard`
+(sourced from local mock data), so it sits behind the same gate — the
+developer console must never be publicly reachable with mock wallets and
+fake analytics in a production build.
 
-### Client-side (AuthGuard + hook)
+Add new protected route prefixes to this array **and** to the `config.matcher`
+list at the bottom of `src/middleware.ts` as the app grows.
 
 `DashboardLayout` wraps its children in `AuthGuard` for the real
 `/dashboard/*` tree (`requireAuth` defaults to `true`; the demo tree passes
@@ -243,22 +242,22 @@ no changes.
 
 ## Environment Variables
 
-No environment variables are required for local development with the stub
-authenticator. When integrating a real backend, add the following to
-`.env.local`:
+No environment variables are required for local development in mock mode.
+To run against a real backend (which also enables server-verified sessions,
+#621), set the API base URL in `.env.local`:
 
 ```env
-# Base URL for the Mux backend API (proxied by /api/auth/login and others)
+# Base URL for the Mux backend API. When set, /api/auth/login proxies to
+# {NEXT_PUBLIC_API_URL}/auth/login and the middleware verifies sessions via
+# {NEXT_PUBLIC_API_URL}/auth/session on every protected request.
 NEXT_PUBLIC_API_URL=http://localhost:4000
-
-# HMAC secret for the session JWT verified in src/middleware.ts (#622).
-# Required to exercise the production auth path locally; without it the
-# middleware falls back to a cookie-presence check outside production and
-# fails closed in a production build. Generate: openssl rand -base64 32
-SESSION_JWT_SECRET=replace-with-openssl-rand-base64-32
 ```
 
-See [`frontend-env-vars.md`](frontend-env-vars.md) for the full reference.
+The backend is expected to expose `POST /auth/login` (returning a user plus
+an opaque session `token` / `accessToken` / `sessionToken`),
+`GET /auth/session` (200 when the token is valid), and
+`POST /auth/logout`. No custody secrets are ever placed in `NEXT_PUBLIC_*`
+or `localStorage`; the session token lives only in an HttpOnly cookie.
 
 ---
 

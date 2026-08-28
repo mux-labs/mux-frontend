@@ -106,7 +106,10 @@ describe("useWallets", () => {
 
 		const { result } = renderHook(() => useWallets());
 		await waitFor(() => expect(result.current.loading).toBe(false));
-		expect(fetchMock).toHaveBeenCalledWith("/api/wallets");
+		expect(fetchMock).toHaveBeenCalledWith(
+			"/api/wallets",
+			expect.objectContaining({ headers: expect.any(Object) }),
+		);
 		expect(result.current.error).toBeNull();
 		expect(result.current.wallets).toEqual([mockWallet]);
 	});
@@ -123,6 +126,7 @@ describe("useWallets", () => {
 
 		expect(fetchMock).toHaveBeenCalledWith(
 			"https://api.example.com/wallets?network=mainnet",
+			expect.objectContaining({ headers: expect.any(Object) }),
 		);
 		expect(result.current.wallets).toEqual([mockWallet]);
 	});

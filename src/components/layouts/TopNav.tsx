@@ -11,9 +11,11 @@ import {
 } from "@heroicons/react/24/outline";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { NotificationsPanel } from "@/components/notifications/NotificationsPanel";
 import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
 import { useDarkMode } from "@/hooks/useDarkMode";
+import { useNotifications } from "@/hooks/useNotifications";
 import type { WalletNetwork } from "@/types/wallet";
 
 interface TopNavProps {
@@ -30,6 +32,8 @@ const networkBadgeClass = {
 export function TopNav({ onMenuClick }: TopNavProps) {
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [menuOpen, setMenuOpen] = useState(false);
+	const [notificationsOpen, setNotificationsOpen] = useState(false);
+	const { unreadCount, refetch: refetchNotifications } = useNotifications();
 	const pathname = usePathname();
 	const { network, setNetwork } = useNetwork();
 	const [optimisticNetwork, setOptimisticNetwork] =
@@ -253,15 +257,45 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 					</button>
 
 					{/* Notifications */}
-					<button
-						type="button"
-						aria-label="View notifications"
-						className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-					>
-						<span className="sr-only">View notifications</span>
-						<BellIcon className="h-6 w-6" aria-hidden="true" />
-						<span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-red-500 border-2 border-white" />
-					</button>
+					<div className="relative">
+						<button
+							type="button"
+							aria-label={
+								unreadCount > 0
+									? `View notifications (${unreadCount} unread)`
+									: "View notifications"
+							}
+							aria-haspopup="dialog"
+							aria-expanded={notificationsOpen}
+							data-testid="notifications-bell"
+							onClick={() => setNotificationsOpen((open) => !open)}
+							className="relative rounded-full p-1 text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+						>
+							<span className="sr-only">View notifications</span>
+							<BellIcon className="h-6 w-6" aria-hidden="true" />
+							{unreadCount > 0 && (
+								<span
+									data-testid="notifications-unread-dot"
+									className="absolute -top-1 -right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-semibold leading-none text-white border-2 border-white dark:border-zinc-900"
+								>
+									{unreadCount > 9 ? "9+" : unreadCount}
+								</span>
+							)}
+						</button>
+						{/* Mounted only while open so the panel's own notifications
+						    fetch doesn't run on every dashboard page load. */}
+						{notificationsOpen && (
+							<NotificationsPanel
+								open
+								onClose={() => {
+									setNotificationsOpen(false);
+									// Reconcile the bell's unread badge with whatever the
+									// panel did (e.g. mark-all-read) while it was open.
+									refetchNotifications();
+								}}
+							/>
+						)}
+					</div>
 
 					{/* User dropdown */}
 					<div className="relative" ref={menuRef}>

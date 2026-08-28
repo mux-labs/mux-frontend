@@ -5,11 +5,24 @@ import { NetworkProvider } from "@/context/NetworkContext";
 
 vi.mock("next/navigation", () => ({
 	usePathname: () => "/dashboard/wallets",
+	useRouter: () => ({ replace: vi.fn(), push: vi.fn(), prefetch: vi.fn() }),
 }));
 
 // TopNav calls useAuth — provide a minimal stub so the component renders
 vi.mock("@/context/AuthContext", () => ({
 	useAuth: () => ({ user: null, isLoading: false }),
+}));
+
+// TopNav mounts the notifications bell/panel; keep it inert for these tests
+vi.mock("@/hooks/useNotifications", () => ({
+	useNotifications: () => ({
+		notifications: [],
+		unreadCount: 0,
+		loading: false,
+		error: null,
+		refetch: vi.fn(),
+		markAllRead: vi.fn(),
+	}),
 }));
 
 function renderTopNav(onMenuClick = vi.fn()) {

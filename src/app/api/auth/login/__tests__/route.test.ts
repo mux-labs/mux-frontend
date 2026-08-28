@@ -65,6 +65,67 @@ describe("POST /api/auth/login (#325)", () => {
 		});
 	});
 
+	describe("mock fallback is disabled in production (#621)", () => {
+		it("returns 503 instead of a mock user when NODE_ENV=production and no backend", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NODE_ENV", "production");
+			const res = await POST(
+				makeRequest({ email: "jane@example.com", password: "secret123" }),
+			);
+			expect(res.status).toBe(503);
+			const body = await res.json();
+			expect(body.error).toMatch(/not configured/i);
+		});
+	});
+
+	describe("server-verified session cookie (#621)", () => {
+		it("sets an HttpOnly mux_auth_token cookie from the backend token", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({
+							user: { name: "Jane", email: "jane@example.com", role: "developer" },
+							token: "backend-session-token-abc",
+						}),
+				}),
+			);
+
+			const res = await POST(
+				makeRequest({ email: "jane@example.com", password: "secret123" }),
+			);
+			expect(res.status).toBe(200);
+			const cookie = res.cookies.get("mux_auth_token");
+			expect(cookie?.value).toBe("backend-session-token-abc");
+			expect(cookie?.httpOnly).toBe(true);
+			expect(cookie?.sameSite).toBe("lax");
+		});
+
+		it("does not set a token cookie when the backend returns none", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({
+							user: { name: "Jane", email: "jane@example.com", role: "developer" },
+						}),
+				}),
+			);
+
+			const res = await POST(
+				makeRequest({ email: "jane@example.com", password: "secret123" }),
+			);
+			expect(res.status).toBe(200);
+			expect(res.cookies.get("mux_auth_token")).toBeUndefined();
+		});
+	});
+
 	describe("backend proxy (NEXT_PUBLIC_API_URL is set)", () => {
 		it("proxies the request to the backend and returns 200 on success", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
@@ -129,39 +190,21 @@ describe("POST /api/auth/login (#325)", () => {
 		});
 	});
 
-	describe("session cookie (#622)", () => {
-		it("sets a verifiable HS256 JWT cookie when SESSION_JWT_SECRET is configured", async () => {
+	describe("production without a configured backend", () => {
+		it("returns 503 instead of silently signing in any credentials", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
-			vi.stubEnv("SESSION_JWT_SECRET", "login-route-test-secret-000000000");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+			vi.stubEnv("NODE_ENV", "production");
 
 			const res = await POST(
-				makeRequest({ email: "jane@example.com", password: "secret123" }),
+				makeRequest({ email: "anyone@example.com", password: "anything123" }),
 			);
-			expect(res.status).toBe(200);
 
-			const setCookie = res.headers.get("set-cookie") ?? "";
-			expect(setCookie).toContain("mux_auth_session=");
-			expect(setCookie.toLowerCase()).toContain("httponly");
-
-			const match = setCookie.match(/mux_auth_session=([^;]+)/);
-			const token = decodeURIComponent(match?.[1] ?? "");
-			const { verifySessionToken } = await import("@/lib/auth/sessionToken");
-			const claims = await verifySessionToken(
-				token,
-				"login-route-test-secret-000000000",
-			);
-			expect(claims?.sub).toBe("jane@example.com");
-		});
-
-		it("falls back to the legacy marker cookie when no secret is configured", async () => {
-			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
-			vi.stubEnv("SESSION_JWT_SECRET", "");
-
-			const res = await POST(
-				makeRequest({ email: "jane@example.com", password: "secret123" }),
-			);
-			const setCookie = res.headers.get("set-cookie") ?? "";
-			expect(setCookie).toContain("mux_auth_session=1");
+			expect(res.status).toBe(503);
+			const body = await res.json();
+			expect(body.error).toBe("backend_unavailable");
+			expect(body.user).toBeUndefined();
 		});
 	});
 });

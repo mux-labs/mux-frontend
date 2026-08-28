@@ -1,30 +1,36 @@
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { verifySessionToken } from "@/lib/auth/sessionToken";
+import { getApiBaseUrl } from "@/lib/api/config";
+import {
+	evaluateAccess,
+	LOGIN_PATH,
+	SESSION_MARKER_COOKIE,
+	SESSION_TOKEN_COOKIE,
+	verifySessionToken,
+} from "@/lib/auth/routeAccess";
 
 /**
- * Protected route prefixes. A request whose pathname starts with one of
- * these requires a valid session token.
+ * Server-side route protection for protected prefixes (e.g. `/dashboard`).
  *
- * Session validation (issue #622):
- *   The `mux_auth_session` cookie must be a valid HS256 JWT — signature
- *   checked against `SESSION_JWT_SECRET`, and `exp` in the future. Mere
- *   cookie presence is NOT sufficient.
+ * Auth model (#621): provider-agnostic, server-verified sessions.
  *
- *   The token is issued server-side by `POST /api/auth/login` (which signs
- *   it locally in mock mode, or passes the `mux-backend` token through) and
- *   set as an `HttpOnly` cookie. The client never mints or reads it.
- *
- *   Fail-closed: if `SESSION_JWT_SECRET` is unset in a production build,
- *   every protected request is redirected to login. Outside production the
- *   middleware falls back to a presence check so `pnpm dev` / CI / the demo
- *   tree keep working without configuring a secret.
- *
- * The parallel `/demo/dashboard/*` tree is intentionally NOT protected.
+ *  - With a backend configured (`NEXT_PUBLIC_API_URL` / aliases): a protected
+ *    route requires the HttpOnly `mux_auth_token` cookie (set by
+ *    `/api/auth/login` from the backend's login response) AND a live
+ *    `GET {backend}/auth/session` check confirming it is still valid. The
+ *    client-set `mux_auth_session` marker cookie is NOT trusted on its own.
+ *  - Without a backend (local dev / CI against in-repo mocks): the marker
+ *    cookie is accepted so `pnpm dev` works without a live auth server.
  *
  * See docs/auth-local-setup.md for the full auth flow documentation.
+ *
+ * `/demo/dashboard` is the relocated dashboard shell. It renders the same
+ * full UI as `/dashboard` (sidebar, wallet tables, analytics) sourced from
+ * local mock data, so it must sit behind the same auth gate — otherwise the
+ * developer console is publicly reachable with mock wallets and fake
+ * analytics in production builds.
  */
-const PROTECTED_PREFIXES = ["/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 
 /** Path unauthenticated users are redirected to. */
 const LOGIN_PATH = "/login";
@@ -42,44 +48,42 @@ function redirectToLogin(request: NextRequest) {
 export async function middleware(request: NextRequest) {
 	const { pathname } = request.nextUrl;
 
-	const isProtected = PROTECTED_PREFIXES.some((prefix) =>
-		pathname.startsWith(prefix),
-	);
-	if (!isProtected) {
+	const decision = await evaluateAccess({
+		pathname,
+		token: request.cookies.get(SESSION_TOKEN_COOKIE)?.value,
+		marker: request.cookies.get(SESSION_MARKER_COOKIE)?.value,
+		backendUrl: getApiBaseUrl(),
+		verifyToken: verifySessionToken,
+	});
+
+	if (decision.allow) {
 		return NextResponse.next();
 	}
 
-	const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-	const secret = process.env.SESSION_JWT_SECRET;
+	const loginUrl = request.nextUrl.clone();
+	loginUrl.pathname = LOGIN_PATH;
+	loginUrl.searchParams.set("callbackUrl", pathname);
+	const redirect = NextResponse.redirect(loginUrl);
 
-	if (secret) {
-		const claims = await verifySessionToken(token, secret);
-		if (!claims) {
-			return redirectToLogin(request);
-		}
-		return NextResponse.next();
+	// A rejected token is stale/forged — clear both cookies so the browser
+	// stops replaying it on every request.
+	if (decision.reason === "invalid-token") {
+		redirect.cookies.delete(SESSION_TOKEN_COOKIE);
+		redirect.cookies.delete(SESSION_MARKER_COOKIE);
 	}
 
-	// No secret configured.
-	if (process.env.NODE_ENV === "production") {
-		// Fail closed — never trust an unverifiable cookie in production.
-		console.error(
-			"[middleware] SESSION_JWT_SECRET is not set; refusing all protected traffic.",
-		);
-		return redirectToLogin(request);
-	}
-
-	// Non-production: legacy presence check for local dev / CI / demo.
-	if (!token) {
-		return redirectToLogin(request);
-	}
-	return NextResponse.next();
+	return redirect;
 }
 
 export const config = {
 	/*
-	 * Match all routes under /dashboard.
+	 * Match all routes under /dashboard and its /demo/dashboard mirror.
 	 * Exclude Next.js internals and static assets.
 	 */
-	matcher: ["/dashboard", "/dashboard/:path*"],
+	matcher: [
+		"/dashboard",
+		"/dashboard/:path*",
+		"/demo/dashboard",
+		"/demo/dashboard/:path*",
+	],
 };

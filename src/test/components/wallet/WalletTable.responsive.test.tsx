@@ -192,9 +192,7 @@ describe("WalletTable Responsive Layout", () => {
 
 		it("makes Add Wallet button full width on mobile", () => {
 			const onAddWallet = vi.fn();
-			const { container } = render(
-				<WalletTable wallets={allWallets} onAddWallet={onAddWallet} />,
-			);
+			render(<WalletTable wallets={allWallets} onAddWallet={onAddWallet} />);
 
 			const button = screen.getByRole("button", { name: /add wallet/i });
 			expect(button.className).toContain("w-full");
@@ -243,7 +241,7 @@ describe("WalletTable Responsive Layout", () => {
 
 			const links = screen.getAllByRole("link");
 			const detailLinks = links.filter((link) =>
-				link.getAttribute("href")?.includes("/demo/dashboard/wallets/w-"),
+				link.getAttribute("href")?.includes("/dashboard/wallets/w-"),
 			);
 
 			expect(detailLinks.length).toBeGreaterThan(0);
@@ -257,7 +255,7 @@ describe("WalletTable Responsive Layout", () => {
 
 			cardLinks?.forEach((link, index) => {
 				const href = link.getAttribute("href");
-				expect(href).toBe(`/demo/dashboard/wallets/${allWallets[index].id}`);
+				expect(href).toBe(`/dashboard/wallets/${allWallets[index].id}`);
 			});
 		});
 	});

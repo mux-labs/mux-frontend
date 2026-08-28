@@ -1,70 +1,16 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl } from "@/lib/api/config";
-import { signSessionToken } from "@/lib/auth/sessionToken";
-
-/** Cookie name — must match `SESSION_COOKIE_NAME` in AuthContext / middleware. */
-const SESSION_COOKIE_NAME = "mux_auth_session";
-const SESSION_TTL_SECONDS = 8 * 60 * 60;
-
-interface AuthUserLike {
-	name?: string;
-	email?: string;
-	role?: string;
-}
-
-/**
- * Attaches the session cookie to a successful login response (issue #622).
- *
- * When `SESSION_JWT_SECRET` is configured the cookie carries a verifiable
- * HS256 JWT — either the token the backend returned, or one signed locally
- * from the resolved user. The middleware validates its signature + expiry.
- *
- * When no secret is configured (local dev / CI) we fall back to the legacy
- * marker cookie so the presence-check path in middleware keeps working.
- */
-async function attachSessionCookie(
-	response: NextResponse,
-	opts: { backendToken?: unknown; user?: AuthUserLike },
-) {
-	const secret = process.env.SESSION_JWT_SECRET;
-	const isProd = process.env.NODE_ENV === "production";
-
-	let value: string;
-	if (secret) {
-		value =
-			typeof opts.backendToken === "string" && opts.backendToken.length > 0
-				? opts.backendToken
-				: await signSessionToken(
-						{
-							sub: opts.user?.email ?? "unknown",
-							role: opts.user?.role,
-						},
-						secret,
-						SESSION_TTL_SECONDS,
-					);
-	} else {
-		// Legacy marker cookie (non-production only path in middleware).
-		value = "1";
-	}
-
-	response.cookies.set({
-		name: SESSION_COOKIE_NAME,
-		value,
-		httpOnly: true,
-		sameSite: "lax",
-		secure: isProd,
-		path: "/",
-		maxAge: SESSION_TTL_SECONDS,
-	});
-}
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 
 /**
  * POST /api/auth/login
  *
  * Proxies login credentials to the configured backend API
- * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls
- * back to a mock response so local development works without a running API
- * server. On success, sets the `mux_auth_session` cookie (see above).
+ * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls back to a mock
+ * response so local development works without a running API server.
+ *
+ * The mock fallback is disabled in production builds (`NODE_ENV=production`)
+ * — see `isMockFallbackAllowed()` — so a misconfigured deployment fails
+ * loudly instead of accepting any credentials.
  */
 export async function POST(request: Request) {
 	let body: Record<string, unknown>;
@@ -92,7 +38,10 @@ export async function POST(request: Request) {
 		try {
 			const upstream = await fetch(`${backendUrl}/auth/login`, {
 				method: "POST",
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+					...getUpstreamAuthHeaders(),
+				},
 				body: JSON.stringify({ email, password }),
 			});
 
@@ -103,15 +52,10 @@ export async function POST(request: Request) {
 			}
 
 			const response = NextResponse.json(data, { status: 200 });
-			const record = data as {
-				user?: AuthUserLike;
-				token?: unknown;
-				accessToken?: unknown;
-			};
-			await attachSessionCookie(response, {
-				backendToken: record.token ?? record.accessToken,
-				user: record.user,
-			});
+			const token = extractSessionToken(data);
+			if (token) {
+				withSessionCookie(response, token);
+			}
 			return response;
 		} catch {
 			return NextResponse.json(
@@ -121,8 +65,30 @@ export async function POST(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return NextResponse.json(
+			{
+				error: "backend_unavailable",
+				message:
+					"No auth backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+			},
+			{ status: 503 },
+		);
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	// Accepts any well-formed credentials; used for local dev / CI.
+	if (!canUseMockFallback()) {
+		return NextResponse.json(
+			{
+				error:
+					"Authentication backend is not configured. Set NEXT_PUBLIC_API_URL — " +
+					"mock sign-in is not available in production.",
+			},
+			{ status: 503 },
+		);
+	}
+
 	const namePart = email.split("@")[0] ?? "User";
 	const name = namePart
 		.split(/[._-]/)

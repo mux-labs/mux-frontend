@@ -1,7 +1,12 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { GET, PATCH } from "./route";
 
 describe("/api/wallets/[id]", () => {
+	afterEach(() => {
+		vi.unstubAllEnvs();
+		vi.unstubAllGlobals();
+	});
+
 	it("returns a wallet when the id exists", async () => {
 		const response = await GET(
 			new Request("http://localhost/api/wallets/wallet-001"),
@@ -81,5 +86,42 @@ describe("/api/wallets/[id]", () => {
 			{ params: { id: "wallet-002" } },
 		);
 		expect(response.status).toBe(400);
+	});
+
+	describe("production without a configured backend", () => {
+		it("returns 503 instead of serving mock wallet data on GET", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+			vi.stubEnv("NODE_ENV", "production");
+
+			const response = await GET(
+				new Request("http://localhost/api/wallets/wallet-001"),
+				{ params: { id: "wallet-001" } },
+			);
+
+			expect(response.status).toBe(503);
+			const body = await response.json();
+			expect(body.error).toBe("backend_unavailable");
+		});
+
+		it("returns 503 instead of mutating mock wallet data on PATCH", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+			vi.stubEnv("NODE_ENV", "production");
+
+			const response = await PATCH(
+				new Request("http://localhost/api/wallets/wallet-001", {
+					method: "PATCH",
+					body: JSON.stringify({ label: "Treasury" }),
+				}),
+				{ params: { id: "wallet-001" } },
+			);
+
+			expect(response.status).toBe(503);
+			const body = await response.json();
+			expect(body.error).toBe("backend_unavailable");
+		});
 	});
 });

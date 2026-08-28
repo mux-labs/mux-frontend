@@ -50,7 +50,7 @@ End users do not interact with this dashboard — it is purely for developers in
 ### Installation
 
 ```bash
-git clone https://github.com/muxlabs/mux-frontend.git
+git clone https://github.com/mux-labs/mux-frontend.git
 cd mux-frontend
 pnpm install
 pnpm run dev
@@ -65,31 +65,62 @@ values for testnet/mainnet-connected work.
 
 | Variable | Required | Default | Description |
 | --- | --- | --- | --- |
-| `NEXT_PUBLIC_API_URL` | No | _(none)_ | Base URL for the Mux backend API used by client-side requests, e.g. `https://api.muxprotocol.com` for mainnet or a testnet-specific URL. When unset, API routes such as `/api/auth/login` fall back to an in-repo mock so `pnpm run dev` and CI work without a live backend. |
+| `NEXT_PUBLIC_API_URL` | No | _(none)_ | Base URL for the Mux backend API used by client-side requests, e.g. `https://api.muxprotocol.com` for mainnet or a testnet-specific URL. When unset, API routes such as `/api/auth/login` and `/api/wallets` fall back to an in-repo mock so `pnpm run dev` and CI work without a live backend — but only when `NODE_ENV` is not `production` (see the production note below). |
 | `NEXT_PUBLIC_MUX_API_URL` | No | `https://api.muxprotocol.com` | Legacy alias for the API base URL, checked after `NEXT_PUBLIC_API_URL` (see `src/lib/api/config.ts`). Kept for backward compatibility with older deploys. |
 | `NEXT_PUBLIC_API_BASE` | No | _(none)_ | Third fallback in the API base URL resolution chain, checked after the two vars above. |
 | `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Public-facing URL of this application, used for building absolute links (e.g. callback URLs). |
-| `NEXT_PUBLIC_MUX_API_KEY` | No | _(none)_ | Client-visible API key sent with requests to the Mux Protocol API. Do not put secrets here — anything prefixed `NEXT_PUBLIC_` is bundled into client JS. |
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
-| `SESSION_JWT_SECRET` | No | _(none)_ | Server-only HMAC secret for signing/verifying the session JWT in `src/middleware.ts` (issue #622). When unset, protected `/dashboard` routes **fail closed** in a production build; outside production the middleware falls back to a cookie-presence check so local dev / CI / the `/demo` tree still work. Generate with `openssl rand -base64 32`. |
-| `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key, used for requests made from Next.js API routes / server components. Never exposed to the browser. |
-| `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
-| `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
+| `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key. Used exclusively by Next.js API routes (`src/app/api/**`) to authenticate upstream requests to the backend. Never exposed to the browser — do not prefix it with `NEXT_PUBLIC_`. |
+| `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY` and sent alongside it on every upstream request. |
 
-**Testnet vs. mainnet:** this frontend does not hardcode a network — it
-is entirely driven by which backend `NEXT_PUBLIC_API_URL` (or its
-aliases above) points at. Point it at a testnet-configured Mux backend
-for staging/testnet work, and at the production backend for mainnet.
-The CI workflow (`.github/workflows/ci.yml`) sets a placeholder
-`NEXT_PUBLIC_API_URL` only so `next build` can run without secrets; it
-does not reflect a real environment.
+There is no client-visible Mux API key. Project credentials only ever
+live in `MUX_API_KEY`/`MUX_API_SECRET` and are attached server-side, in
+Next.js API routes, to requests made to the backend — the browser talks
+only to this app's own same-origin `/api/*` routes and never holds a Mux
+credential.
+
+**Testnet vs. mainnet:** which *backend* this frontend talks to is driven
+entirely by `NEXT_PUBLIC_API_URL` (or its aliases above) — point it at a
+testnet-configured Mux backend for staging/testnet work, and at the
+production backend for mainnet. Separately, the dashboard has an in-app
+Testnet/Mainnet switcher (`NetworkContext`, in the top nav) that scopes
+which network's wallets are fetched *within* that backend — `useWallets`
+sends it as a `?network=` query param on `/api/wallets`, so wallets are
+never double-filtered by both a server-side scope and an independent
+client-side one. The env var picks the backend; the in-app switcher picks
+the network within it. The CI workflow (`.github/workflows/ci.yml`) sets a
+placeholder `NEXT_PUBLIC_API_URL` only so `next build` can run without
+secrets; it does not reflect a real environment.
+
+**Production defaults:** when `NODE_ENV=production`, unset vars with a
+documented default (e.g. `NEXT_PUBLIC_MUX_API_URL` →
+`https://api.muxprotocol.com`) are applied automatically by `getEnv()`,
+so a production deploy with a forgotten env var talks to the real
+backend instead of silently serving mock data. Local dev and tests are
+unaffected — leaving everything unset there still uses the in-repo
+mocks.
 
 `NODE_ENV` (standard Next.js variable, not defined in `.env.example`)
 also gates some behavior: analytics/tracking hooks
 (`useAnalytics.ts`, `useAnalyticsMetrics.ts`, `useAnalyticsTracking.ts`,
 `recoveryAnalyticsTracking.ts`, `spendingLimitsTracking.ts`) log to the
-console outside of `production`, and `src/lib/env.ts` throws on missing
-*required* vars only when `NODE_ENV=production`.
+console outside of `production`; `src/lib/env.ts` throws on missing
+*required* vars only when `NODE_ENV=production`; and the mock/demo
+fallbacks in API routes and data hooks
+(`src/lib/api/runtimeMode.ts`, `useNotifications.ts`, `useRecovery.ts`)
+are disabled when `NODE_ENV=production` so mock data is never served in a
+production build.
+
+**Production never silently falls back to mock data.** `/api/auth/login`,
+`/api/auth/refresh`, `/api/wallets`, and `/api/wallets/[id]` all fall back
+to in-repo mock data (fake wallets, a hardcoded mock bearer/refresh token)
+when no backend URL is configured — that's what makes `pnpm run dev`, CI,
+and the `/demo` routes work with no live backend. In a production build
+(`NODE_ENV=production`) that fallback is disabled: if `NEXT_PUBLIC_API_URL`
+(or its aliases) is missing, those routes return `503 backend_unavailable`
+instead of serving fabricated wallets/analytics or accepting the mock
+token as valid auth. See `isMockFallbackAllowed()` in
+`src/lib/api/config.ts`.
 
 See [`docs/frontend-env-vars.md`](docs/frontend-env-vars.md) for the full
 reference, including which file reads each variable and a manual
@@ -97,31 +128,31 @@ verification checklist.
 
 ### Auth and API client behavior
 
-This repo now includes a minimal auth flow and API client support for dev mode:
-
 * `src/lib/api.js` adds request header support with `x-request-id` and automatic session refresh on `401`
-* `src/lib/session.js` persists auth state in `localStorage` and clears stale sessions gracefully
+* `src/lib/session.js` persists auth state and clears stale sessions gracefully
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
-* **Session validation (issue #622):** `POST /api/auth/login` sets an `HttpOnly`
-  `mux_auth_session` cookie — an HS256 JWT signed with `SESSION_JWT_SECRET`
-  (or the token `mux-backend` returned). `src/middleware.ts` verifies that
-  JWT's signature and `exp` on every `/dashboard` request rather than
-  trusting cookie presence, and `POST /api/auth/logout` clears it. With no
-  secret configured the middleware fails closed in production and falls back
-  to a presence check elsewhere.
-* **`AuthGuard` (issue #623):** `DashboardLayout` wraps its children in
-  `AuthGuard` for the real `/dashboard/*` tree (`requireAuth` defaults to
-  `true`); the `/demo/dashboard/*` tree passes `requireAuth={false}` and
-  renders mock data with no session.
-* **TanStack Query (issue #619):** `src/lib/reactQuery/ReactQueryProvider.tsx`
-  mounts a real `QueryClient` at the app root. `RecentActivityFeed` reads
-  through `useQuery`; the send-draft step (`useSendDraft`) is a `useMutation`.
-* **Send flow (issue #616):** `POST /api/send/draft` validates a
-  `{ destination, amount }` draft and returns a fee/arrival preview —
-  proxied to `mux-backend` when configured, a local mock preview only
-  outside production, and `501` (never a fabricated success) in a
-  production build with no backend URL set.
+* `src/app/api/requests/today/route.ts` and `POST /api/transactions` (used by the wallet "Send" flow) follow the
+  same pattern as the routes above: they proxy to `NEXT_PUBLIC_API_URL` (or its aliases) when configured, and fall
+  back to mock data/an in-memory mock transaction otherwise — never a hardcoded value in production
+* Receive-address QR codes (`src/components/wallet/QrCode.tsx`) and the QR download action
+  (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
+  package; no backend call is involved
+
+**Server-verified sessions (#621).** When `NEXT_PUBLIC_API_URL` is set,
+`POST /api/auth/login` proxies to the backend and stores the backend-issued
+session token in an **HttpOnly `mux_auth_token` cookie**. The Next.js
+middleware verifies that token against `GET {backend}/auth/session` on every
+`/dashboard` request — the old client-set `mux_auth_session` marker cookie is
+only trusted in mock mode (no backend). `signOut()` calls
+`POST /api/auth/logout` to clear the HttpOnly cookie. See
+[`docs/auth-local-setup.md`](docs/auth-local-setup.md).
+
+**No silent mock success in production.** API routes that fall back to
+in-repo mock data (`/api/auth/login`, `/api/notifications`, …) do so only
+outside production. A production build with no backend configured returns
+`503` instead of mock data, so a misconfiguration is visible rather than
+masked. The shared rule lives in `src/lib/api/runtimeMode.ts`.
 
 ### Smoke tests
 
@@ -131,8 +162,8 @@ Run unit/component smoke tests with:
 npm test
 ```
 
-Run Playwright end-to-end smoke tests (login + wallet monitoring, desktop
-and mobile viewports) with:
+Run Playwright end-to-end smoke tests (login, wallet monitoring, and
+wallet send/receive, desktop and mobile viewports) with:
 
 ```bash
 pnpm exec playwright install --with-deps chromium

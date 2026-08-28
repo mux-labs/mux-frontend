@@ -4,6 +4,7 @@ This document explains the new API hooks added to the project:
 
 - `useApiKeys()` — a client hook that fetches API keys and exposes `data`, `loading`, `error`, and `refetch`.
 - `useRevokeApiKey()` — a client hook that provides `revoke(id)` and `loading`/`error` state while revoking.
+- `useWallets({ network, demo })` — a client hook that fetches wallets, scoped server-side to one network.
 
 Files:
 
@@ -11,6 +12,45 @@ Files:
 - `src/hooks/useRevokeApiKey.ts` — mutation for revoking a key
 - `src/lib/api.ts` — small API wrapper using `src/mock-data/api-keys.ts`
 - `src/mock-data/api-keys.ts` — mock store with `getApiKeys()` and `revokeApiKey()` persistence via `localStorage` or in-memory fallback
+
+## `useWallets`
+
+`src/hooks/useWallets.ts` fetches `/api/wallets`, forwarding `network`
+(`"testnet"` | `"mainnet"` | `"all"`) as a `?network=` query param — the
+**backend** is the one place that scopes the result set, not the caller.
+
+```tsx
+import { useNetwork } from "@/context/NetworkContext";
+import { useWallets } from "@/hooks/useWallets";
+
+const { network } = useNetwork(); // the in-app Testnet/Mainnet switcher
+const { wallets, loading, error, refetch } = useWallets({ network });
+```
+
+Because the fetch is already network-scoped, **do not** additionally
+re-filter the returned `wallets` by network client-side (e.g. with the
+standalone `useNetworkFilter()` hook / `NetworkFilter` component) unless
+you are deliberately fetching `network: "all"` and want an in-page filter
+on top of that unscoped result. Layering a second, independently-driven
+network filter on top of an already network-scoped fetch is exactly the
+double-filtering bug that was removed from `/dashboard/wallets` — it can
+only ever agree with the server-side scope or contradict it (e.g. show a
+false "no wallets on this network" empty state when the two disagree).
+
+Pass `demo: true` for routes with no authenticated session (the `/demo/*`
+tree) to source wallets from `src/mock-data/wallets.ts` directly instead
+of hitting the auth-gated backend.
+
+### Production vs. mock data
+
+`useWallets` itself has no mock branch — it always calls `/api/wallets`
+(or the configured backend directly). The mock/demo split lives in the
+route handler, `src/app/api/wallets/route.ts`: it proxies to
+`NEXT_PUBLIC_API_URL` when set, and otherwise falls back to
+`src/mock-data/wallets.ts` — but **only** when `NODE_ENV !== "production"`
+(`isMockFallbackAllowed()` in `src/lib/api/config.ts`). In a production
+build with no backend configured, the route returns `503
+backend_unavailable` rather than silently serving fabricated wallets.
 
 Usage example (client component):
 
@@ -51,49 +91,49 @@ If tests fail in CI due to path alias (`@/`) resolution, add appropriate `vitest
 
 ---
 
-## TanStack Query (`ReactQueryProvider`) — issue #619
+## Production vs demo/mock split
 
-`src/lib/reactQuery/ReactQueryProvider.tsx` mounts a real
-`@tanstack/react-query` `QueryClient` (server: one per request; browser: a
-lazily-created singleton) at the app root in `src/app/layout.tsx`. Defaults:
-`staleTime` 30s, `retry: 1` for queries, `retry: 0` for mutations (a
-transfer must never be silently repeated).
+Data hooks and their API routes follow one rule, centralised in
+`src/lib/api/runtimeMode.ts`:
 
-Any client component under the provider can use `useQuery` / `useMutation`:
+| Situation | Behavior |
+| --- | --- |
+| Backend configured (`NEXT_PUBLIC_API_URL` / aliases) | Always call the real backend. |
+| No backend + **not** production | Fall back to in-repo mock data (`src/mock-data/`). |
+| No backend + **production** build | Surface an error (HTTP 503 / thrown). Mock data is **never** served in production, so an outage or misconfig is visible instead of silently masked. |
 
-- `src/components/dashboard/RecentActivityFeed.tsx` — reads the activity feed
-  through `useQuery(["dashboard", "recent-activity"])`.
-- `src/hooks/useSendDraft.ts` — `useMutation` for the send-draft step (below).
+### `useNotifications()` — #617
 
-In tests, wrap the component under test with `ReactQueryTestProvider` from
-`src/test/reactQueryWrapper.tsx` (retries disabled).
+`src/hooks/useNotifications.ts`. Exposes `notifications`, `unreadCount`,
+`loading`, `error`, `refetch`, and `markAllRead`.
 
----
+- List + mark-all-read both go through `/api/notifications`
+  (`GET` and `PATCH { markAll: true }`), which proxies to
+  `GET|PATCH {backend}/notifications[/read]` when a backend is set.
+- `markAllRead()` updates local state optimistically **and** persists to the
+  server. If persistence fails it triggers a reconciling `refetch()` rather
+  than letting the optimistic state drift.
+- In production with no backend, `/api/notifications` returns `503` — the
+  panel shows its error state with a retry.
 
-## Send flow draft — `useSendDraft` + `POST /api/send/draft` (issue #616)
+### Notifications bell — #618
 
-`SendDraftScreen` captures `{ destination, amount }` and calls
-`useSendDraft().mutate(...)`, which posts to `POST /api/send/draft`.
+`src/components/layouts/TopNav.tsx` mounts
+`src/components/notifications/NotificationsPanel.tsx` from the bell button.
+The red dot renders only when `unreadCount > 0` (showing the count, capped at
+`9+`); closing the panel calls `refetch()` so the badge reflects a
+mark-all-read performed inside the panel.
 
-Route behavior (`src/app/api/send/draft/route.ts`):
+### `useRecovery(walletId)` — #620
 
-| Condition | Result |
-|---|---|
-| `NEXT_PUBLIC_API_URL` (or alias) set | Proxied to `${backend}/send/draft`; upstream status/body passed through; network failure ⇒ `502` |
-| No backend URL, **non-production** | Local mock preview (`{ valid: true, mock: true, fee, estimatedArrival }`) |
-| No backend URL, **production build** | `501` — **never** a fabricated success |
-| Missing/empty destination or amount, non-positive amount | `400` |
+`src/hooks/useRecovery.ts`.
 
-`useSendDraft({ demo: true })` resolves the preview locally without touching
-the network — used by the `/demo` tree, which has no authenticated session.
-Production callers must not pass `demo`.
-
-Custody note: no secrets are involved on the client — the draft step only
-sends a destination address and amount, and the signed send itself is a
-`mux-backend` concern.
-
-Tests:
-
-- `src/app/api/send/draft/route.test.ts`
-- `src/components/wallet/__tests__/SendDraftScreen.test.tsx`
-- `src/lib/reactQuery/__tests__/ReactQueryProvider.test.tsx`
+- `walletId !== null` → real per-wallet status fetch via `useRecoveryStatus`
+  / `fetchRecoveryStatus`.
+- `walletId === null`:
+  - **production** — resolves straight to `idle` (no wallet selected yet =
+    nothing to fetch); `confirmRecovery()` rejects with
+    "Select a wallet before initiating recovery." No simulated delay, no
+    fake success.
+  - **non-production** — keeps a short simulated bootstrap so the demo
+    dashboards render a loading skeleton without a live backend.

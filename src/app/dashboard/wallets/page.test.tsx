@@ -143,17 +143,13 @@ describe("WalletsPage (/dashboard/wallets)", () => {
 			mockFetchFail(500);
 			renderWalletsPage();
 			await waitFor(() =>
-				expect(
-					screen.getByText(/failed to load wallets/i),
-				).toBeInTheDocument(),
+				expect(screen.getByText(/failed to load wallets/i)).toBeInTheDocument(),
 			);
 			expect(
 				screen.getByRole("button", { name: /retry/i }),
 			).toBeInTheDocument();
 			expect(screen.queryByRole("table")).not.toBeInTheDocument();
-			expect(
-				screen.queryByText(/no wallets found/i),
-			).not.toBeInTheDocument();
+			expect(screen.queryByText(/no wallets found/i)).not.toBeInTheDocument();
 		});
 
 		it("renders a friendly rate-limit message when wallets return 429", async () => {
@@ -167,7 +163,9 @@ describe("WalletsPage (/dashboard/wallets)", () => {
 			expect(
 				screen.getByText(/making wallet requests too quickly/i),
 			).toBeInTheDocument();
-			expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+			expect(
+				screen.getByRole("button", { name: /retry/i }),
+			).toBeInTheDocument();
 		});
 
 		it("re-triggers the fetch when Retry is clicked and recovers", async () => {
@@ -184,9 +182,7 @@ describe("WalletsPage (/dashboard/wallets)", () => {
 			renderWalletsPage();
 
 			await waitFor(() =>
-				expect(
-					screen.getByText(/failed to load wallets/i),
-				).toBeInTheDocument(),
+				expect(screen.getByText(/failed to load wallets/i)).toBeInTheDocument(),
 			);
 
 			await user.click(screen.getByRole("button", { name: /retry/i }));
@@ -225,197 +221,75 @@ describe("WalletsPage (/dashboard/wallets)", () => {
 	});
 
 	// ---------------------------------------------------------------------------
-	// #423 – Network filter
+	// Network scoping — single source of truth, no double filtering
+	//
+	// This page used to also render a page-local "all/testnet/mainnet"
+	// NetworkFilter widget (#423) that re-filtered wallets client-side on
+	// top of data useWallets({ network }) had *already* scoped server-side
+	// to the globally-selected network. Since that fetch is never actually
+	// scoped to "all", the second filter could only ever agree with the
+	// server-side scoping or contradict it — e.g. picking "testnet" in the
+	// local widget while the global switcher was on "mainnet" produced a
+	// false "no wallets on this network" empty state instead of the
+	// mainnet wallets that were already loaded. The fix removes the
+	// redundant client-side filter; the global network switcher (see
+	// TopNav / NetworkContext) is the only network control left.
 	// ---------------------------------------------------------------------------
-	describe("network filter (#423)", () => {
-		it("renders the network filter buttons after wallets load", async () => {
-			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
+	describe("network scoping (no double filtering)", () => {
+		it("scopes the wallets fetch to the active network from the global switcher", async () => {
+			const fetchMock = vi.fn((url: string) => {
+				const requestedNetwork = new URL(
+					url,
+					"http://localhost",
+				).searchParams.get("network");
+				const data = [mockMainnetWallet, mockTestnetWallet].filter(
+					(wallet) => wallet.network === requestedNetwork,
+				);
+				return Promise.resolve({ ok: true, json: () => Promise.resolve(data) });
+			});
+			vi.stubGlobal("fetch", fetchMock);
 			renderWalletsPage();
 
 			await waitFor(() =>
-				expect(screen.getByRole("group", { name: /network filter/i })).toBeInTheDocument(),
+				expect(screen.getByRole("table")).toBeInTheDocument(),
 			);
-			expect(
-				screen.getByRole("button", { name: /filter by all networks/i }),
-			).toBeInTheDocument();
-			expect(
-				screen.getByRole("button", { name: /filter by testnet/i }),
-			).toBeInTheDocument();
-			expect(
-				screen.getByRole("button", { name: /filter by mainnet/i }),
-			).toBeInTheDocument();
+
+			// NetworkContext defaults to "mainnet" with no stored preference —
+			// the fetch is scoped there, and only that wallet is rendered.
+			expect(fetchMock.mock.calls[0][0]).toContain("network=mainnet");
+			expect(screen.getAllByRole("row")).toHaveLength(2); // header + 1 wallet
 		});
 
-		it("shows all wallets when 'All Networks' is selected (default)", async () => {
-			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
+		it("shows testnet wallets (not a stale empty state) when the global network is testnet", async () => {
+			localStorage.setItem("mux_network", "testnet");
+			mockFetchOk([mockTestnetWallet]);
 			renderWalletsPage();
 
 			await waitFor(() =>
 				expect(screen.getByRole("table")).toBeInTheDocument(),
 			);
-
-			// All Networks is selected by default
 			expect(
-				screen.getByRole("button", { name: /filter by all networks/i }),
-			).toHaveAttribute("aria-pressed", "true");
-
-			// Both wallets should be in the table
-			const rows = screen.getAllByRole("row");
-			expect(rows.length).toBeGreaterThanOrEqual(3); // header + 2 wallets
-		});
-
-		it("shows only mainnet wallets when Mainnet filter is selected", async () => {
-			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
-			const user = userEvent.setup();
-			renderWalletsPage();
-
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
-
-			await user.click(
-				screen.getByRole("button", { name: /filter by mainnet/i }),
-			);
-
-			// Mainnet button should now be active
-			expect(
-				screen.getByRole("button", { name: /filter by mainnet/i }),
-			).toHaveAttribute("aria-pressed", "true");
-
-			// Only mainnet wallet row should appear (header + 1 data row)
-			const rows = screen.getAllByRole("row");
-			expect(rows).toHaveLength(2);
-		});
-
-		it("shows only testnet wallets when Testnet filter is selected", async () => {
-			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
-			const user = userEvent.setup();
-			renderWalletsPage();
-
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
-
-			await user.click(
-				screen.getByRole("button", { name: /filter by testnet/i }),
-			);
-
-			expect(
-				screen.getByRole("button", { name: /filter by testnet/i }),
-			).toHaveAttribute("aria-pressed", "true");
-
-			// Only testnet wallet row (header + 1 data row)
-			const rows = screen.getAllByRole("row");
-			expect(rows).toHaveLength(2);
-		});
-
-		it("restores all wallets when switching back to 'All Networks'", async () => {
-			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
-			const user = userEvent.setup();
-			renderWalletsPage();
-
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
-
-			// Filter to mainnet
-			await user.click(
-				screen.getByRole("button", { name: /filter by mainnet/i }),
-			);
-			expect(screen.getAllByRole("row")).toHaveLength(2);
-
-			// Switch back to all
-			await user.click(
-				screen.getByRole("button", { name: /filter by all networks/i }),
-			);
-
-			expect(
-				screen.getByRole("button", { name: /filter by all networks/i }),
-			).toHaveAttribute("aria-pressed", "true");
-			// Both wallets visible again
-			const rows = screen.getAllByRole("row");
-			expect(rows.length).toBeGreaterThanOrEqual(3);
-		});
-
-		it("shows a network-specific empty state when no wallets match the selected filter", async () => {
-			// Only mainnet wallets in the response
-			mockFetchOk([mockMainnetWallet]);
-			const user = userEvent.setup();
-			renderWalletsPage();
-
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
-
-			// Select testnet — no wallets match
-			await user.click(
-				screen.getByRole("button", { name: /filter by testnet/i }),
-			);
-
-			await waitFor(() =>
-				expect(
-					screen.getByText(/no wallets on this network/i),
-				).toBeInTheDocument(),
-			);
-			expect(screen.queryByRole("table")).not.toBeInTheDocument();
-		});
-
-		it("the 'Show all networks' action in the network empty state resets the filter", async () => {
-			mockFetchOk([mockMainnetWallet]);
-			const user = userEvent.setup();
-			renderWalletsPage();
-
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
-
-			// Filter to testnet to get empty state
-			await user.click(
-				screen.getByRole("button", { name: /filter by testnet/i }),
-			);
-
-			await waitFor(() =>
-				expect(
-					screen.getByText(/no wallets on this network/i),
-				).toBeInTheDocument(),
-			);
-
-			// Click 'Show all networks' action
-			await user.click(
-				screen.getByRole("button", { name: /show all networks/i }),
-			);
-
-			// Should return to the table with all wallets
-			await waitFor(() =>
-				expect(screen.getByRole("table")).toBeInTheDocument(),
-			);
+				within(screen.getByRole("table")).getAllByRole("row"),
+			).toHaveLength(2);
 			expect(
 				screen.queryByText(/no wallets on this network/i),
 			).not.toBeInTheDocument();
 		});
 
-		it("does not show the network filter while wallets are still loading", () => {
-			mockFetchOk([mockMainnetWallet]);
-			renderWalletsPage();
-
-			// Loading state: skeleton visible, network filter hidden
-			expect(screen.getAllByTestId("skeleton").length).toBeGreaterThan(0);
-			expect(
-				screen.queryByRole("group", { name: /network filter/i }),
-			).not.toBeInTheDocument();
-		});
-
-		it("disables the network filter buttons when the fetch fails and no wallets are cached", async () => {
-			mockFetchFail(500);
+		it("does not render a second, independent network filter control", async () => {
+			mockFetchOk([mockMainnetWallet, mockTestnetWallet]);
 			renderWalletsPage();
 
 			await waitFor(() =>
-				expect(screen.getByText(/failed to load wallets/i)).toBeInTheDocument(),
+				expect(screen.getByRole("table")).toBeInTheDocument(),
 			);
 
-			const filterGroup = screen.getByRole("group", { name: /network filter/i });
-			const buttons = within(filterGroup).getAllByRole("button");
-			buttons.forEach((btn) => expect(btn).toBeDisabled());
+			expect(
+				screen.queryByRole("group", { name: /network filter/i }),
+			).not.toBeInTheDocument();
+			expect(
+				screen.queryByRole("button", { name: /filter by all networks/i }),
+			).not.toBeInTheDocument();
 		});
 	});
 });

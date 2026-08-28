@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, isMockFallbackAllowed } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 
 /**
  * POST /api/auth/login
@@ -38,7 +38,10 @@ export async function POST(request: Request) {
 		try {
 			const upstream = await fetch(`${backendUrl}/auth/login`, {
 				method: "POST",
-				headers: { "content-type": "application/json" },
+				headers: {
+					"content-type": "application/json",
+					...getUpstreamAuthHeaders(),
+				},
 				body: JSON.stringify({ email, password }),
 			});
 

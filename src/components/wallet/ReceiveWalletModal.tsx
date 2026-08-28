@@ -1,81 +1,25 @@
 "use client";
 
-import { AlertCircle, Check, Copy, QrCode, X } from "lucide-react";
+import {
+	AlertCircle,
+	Check,
+	Copy,
+	QrCode as QrCodeIcon,
+	X,
+} from "lucide-react";
 import { useEffect, useId, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 import type { Wallet } from "@/types/wallet";
 import { isValidStellarAddress } from "@/utils/addressValidation";
 import { createFocusTrapHandler } from "@/utils/keyboardNavigation";
+import { QRDownloadButton } from "./QRDownloadButton";
+import { QrCode } from "./QrCode";
 
 interface ReceiveWalletModalProps {
 	isOpen: boolean;
 	wallet: Wallet | null;
 	onClose: () => void;
-}
-
-function hashAddress(address: string): number {
-	let hash = 0;
-
-	for (let i = 0; i < address.length; i += 1) {
-		hash = (hash * 31 + address.charCodeAt(i)) >>> 0;
-	}
-
-	return hash;
-}
-
-function isFinderModule(row: number, col: number, size: number): boolean {
-	const inTopLeft = row < 7 && col < 7;
-	const inTopRight = row < 7 && col >= size - 7;
-	const inBottomLeft = row >= size - 7 && col < 7;
-	return inTopLeft || inTopRight || inBottomLeft;
-}
-
-function QrStub({ address }: { address: string }) {
-	const size = 21;
-	const seed = hashAddress(address);
-
-	return (
-		<div
-			aria-hidden="true"
-			className="w-full max-w-[18rem] rounded-3xl border border-zinc-200 bg-white p-4 shadow-inner dark:border-zinc-800 dark:bg-zinc-950"
-		>
-			<div
-				className="grid aspect-square w-full gap-[3px] rounded-2xl bg-zinc-50 p-3 dark:bg-zinc-900"
-				style={{
-					gridTemplateColumns: `repeat(${size}, minmax(0, 1fr))`,
-				}}
-			>
-				{Array.from({ length: size }).flatMap((_, row) =>
-					Array.from({ length: size }).map((__, col) => {
-						const finder = isFinderModule(row, col, size);
-						const dark =
-							finder ||
-							((seed + row * 17 + col * 31) % 5 === 0 &&
-								(row + col + seed) % 2 === 0);
-
-						const roundedClass =
-							finder &&
-							row < 7 &&
-							(col < 7 || col >= size - 7 || row >= size - 7)
-								? "rounded-[2px]"
-								: "rounded-[1px]";
-
-						return (
-							<div
-								key={`${row}-${col}`}
-								className={`aspect-square ${roundedClass} ${
-									dark
-										? "bg-zinc-950 dark:bg-zinc-50"
-										: "bg-zinc-100 dark:bg-zinc-800"
-								}`}
-							/>
-						);
-					}),
-				)}
-			</div>
-		</div>
-	);
 }
 
 export default function ReceiveWalletModal({
@@ -128,7 +72,7 @@ export default function ReceiveWalletModal({
 				<div className="flex items-center justify-between border-b border-zinc-200 px-6 py-4 dark:border-zinc-800">
 					<div className="flex items-center gap-3">
 						<div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-zinc-100 dark:bg-zinc-900">
-							<QrCode className="h-5 w-5 text-zinc-700 dark:text-zinc-300" />
+							<QrCodeIcon className="h-5 w-5 text-zinc-700 dark:text-zinc-300" />
 						</div>
 						<div>
 							<h2
@@ -138,7 +82,7 @@ export default function ReceiveWalletModal({
 								Receive funds
 							</h2>
 							<p className="text-sm text-zinc-500 dark:text-zinc-400">
-								Scan the QR stub or copy the wallet address.
+								Scan the QR code or copy the wallet address.
 							</p>
 						</div>
 					</div>
@@ -178,7 +122,7 @@ export default function ReceiveWalletModal({
 					) : (
 						<div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,0.9fr)]">
 							<div className="space-y-4">
-								<QrStub address={address} />
+								<QrCode value={address} size={240} className="mx-auto" />
 								<div className="space-y-2">
 									<p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
 										Wallet address
@@ -226,11 +170,11 @@ export default function ReceiveWalletModal({
 							<div className="space-y-4 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-zinc-800 dark:bg-zinc-900/60">
 								<div className="space-y-1">
 									<p className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-										Receive stub
+										Save this QR code
 									</p>
 									<p className="text-sm text-zinc-600 dark:text-zinc-300">
-										This placeholder is wired for the wallet detail flow and
-										will be replaced with a real QR renderer later.
+										Download the QR code as an SVG file to share the receive
+										address offline.
 									</p>
 								</div>
 
@@ -244,16 +188,10 @@ export default function ReceiveWalletModal({
 									</div>
 								)}
 
-								<div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-4 text-sm text-zinc-600 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300">
-									<div className="mb-2 flex items-center gap-2 font-medium text-zinc-900 dark:text-zinc-50">
-										<QrCode className="h-4 w-4" aria-hidden="true" />
-										QR stub
-									</div>
-									<p>
-										Use the address above until the production QR generator is
-										connected.
-									</p>
-								</div>
+								<QRDownloadButton
+									address={address}
+									className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:hover:bg-zinc-900"
+								/>
 							</div>
 						</div>
 					)}

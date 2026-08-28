@@ -1,11 +1,11 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { SendWalletModal } from "@/components/wallet/SendWalletModal";
 import type { Wallet } from "@/types/wallet";
 
 const VALID_DESTINATION =
-	"GCFONE23AB7Y6C5YZOMKUKGETPIAJA752ZPMORQO5VKA6LHXHC7Y3YPE";
+	"GBDEVU63Y6NTHJQQZIKVTC23NWLQVP3WJ2RI2OTSJTNYOIGICST6DUXR";
 
 const fundedWallet: Wallet = {
 	id: "w-1",
@@ -30,6 +30,18 @@ function setup(overrides?: Partial<Parameters<typeof SendWalletModal>[0]>) {
 }
 
 describe("SendWalletModal", () => {
+	beforeEach(() => {
+		global.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 201,
+			json: () => Promise.resolve({ hash: "a".repeat(64), status: "pending" }),
+		}) as unknown as typeof fetch;
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("renders when isOpen is true", () => {
 		setup();
 		expect(screen.getByRole("dialog")).toBeInTheDocument();
@@ -228,7 +240,7 @@ describe("SendWalletModal", () => {
 			expect(onClose).not.toHaveBeenCalled();
 		});
 
-		it("closes and resets form on valid submission", async () => {
+		it("submits the transaction to the API and closes on success", async () => {
 			const user = userEvent.setup();
 			const { onClose } = setup();
 
@@ -244,6 +256,44 @@ describe("SendWalletModal", () => {
 			await waitFor(() => {
 				expect(onClose).toHaveBeenCalledOnce();
 			});
+
+			expect(global.fetch).toHaveBeenCalledWith(
+				"/api/transactions",
+				expect.objectContaining({
+					method: "POST",
+					body: JSON.stringify({
+						from: fundedWallet.address,
+						to: VALID_DESTINATION,
+						amountXlm: "50",
+						network: fundedWallet.network,
+					}),
+				}),
+			);
+		});
+
+		it("shows an error and keeps the modal open when the API call fails", async () => {
+			global.fetch = vi.fn().mockResolvedValue({
+				ok: false,
+				status: 422,
+				json: () => Promise.resolve({ error: "Insufficient balance" }),
+			}) as unknown as typeof fetch;
+
+			const user = userEvent.setup();
+			const { onClose } = setup();
+
+			await user.type(
+				screen.getByLabelText(/destination address/i),
+				VALID_DESTINATION,
+			);
+			await user.type(screen.getByLabelText(/amount/i), "50");
+			await user.click(
+				screen.getByRole("button", { name: /submit send transaction/i }),
+			);
+
+			await waitFor(() => {
+				expect(screen.getByText("Insufficient balance")).toBeInTheDocument();
+			});
+			expect(onClose).not.toHaveBeenCalled();
 		});
 	});
 

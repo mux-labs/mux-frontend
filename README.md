@@ -69,11 +69,15 @@ values for testnet/mainnet-connected work.
 | `NEXT_PUBLIC_MUX_API_URL` | No | `https://api.muxprotocol.com` | Legacy alias for the API base URL, checked after `NEXT_PUBLIC_API_URL` (see `src/lib/api/config.ts`). Kept for backward compatibility with older deploys. |
 | `NEXT_PUBLIC_API_BASE` | No | _(none)_ | Third fallback in the API base URL resolution chain, checked after the two vars above. |
 | `NEXT_PUBLIC_APP_URL` | No | `http://localhost:3000` | Public-facing URL of this application, used for building absolute links (e.g. callback URLs). |
-| `NEXT_PUBLIC_MUX_API_KEY` | No | _(none)_ | Client-visible API key sent with requests to the Mux Protocol API. Do not put secrets here — anything prefixed `NEXT_PUBLIC_` is bundled into client JS. |
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
-| `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key, used for requests made from Next.js API routes / server components. Never exposed to the browser. |
-| `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY`. |
-| `DATABASE_URL` | No | _(none)_ | Server-only database connection string, if this deployment persists data outside the backend API. |
+| `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key. Used exclusively by Next.js API routes (`src/app/api/**`) to authenticate upstream requests to the backend. Never exposed to the browser — do not prefix it with `NEXT_PUBLIC_`. |
+| `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY` and sent alongside it on every upstream request. |
+
+There is no client-visible Mux API key. Project credentials only ever
+live in `MUX_API_KEY`/`MUX_API_SECRET` and are attached server-side, in
+Next.js API routes, to requests made to the backend — the browser talks
+only to this app's own same-origin `/api/*` routes and never holds a Mux
+credential.
 
 **Testnet vs. mainnet:** which *backend* this frontend talks to is driven
 entirely by `NEXT_PUBLIC_API_URL` (or its aliases above) — point it at a
@@ -87,6 +91,14 @@ client-side one. The env var picks the backend; the in-app switcher picks
 the network within it. The CI workflow (`.github/workflows/ci.yml`) sets a
 placeholder `NEXT_PUBLIC_API_URL` only so `next build` can run without
 secrets; it does not reflect a real environment.
+
+**Production defaults:** when `NODE_ENV=production`, unset vars with a
+documented default (e.g. `NEXT_PUBLIC_MUX_API_URL` →
+`https://api.muxprotocol.com`) are applied automatically by `getEnv()`,
+so a production deploy with a forgotten env var talks to the real
+backend instead of silently serving mock data. Local dev and tests are
+unaffected — leaving everything unset there still uses the in-repo
+mocks.
 
 `NODE_ENV` (standard Next.js variable, not defined in `.env.example`)
 also gates some behavior: analytics/tracking hooks
@@ -118,6 +130,12 @@ This repo now includes a minimal auth flow and API client support for dev mode:
 * `src/lib/session.js` persists auth state in `localStorage` and clears stale sessions gracefully
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
+* `src/app/api/requests/today/route.ts` and `POST /api/transactions` (used by the wallet "Send" flow) follow the
+  same pattern as the routes above: they proxy to `NEXT_PUBLIC_API_URL` (or its aliases) when configured, and fall
+  back to mock data/an in-memory mock transaction otherwise — never a hardcoded value in production
+* Receive-address QR codes (`src/components/wallet/QrCode.tsx`) and the QR download action
+  (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
+  package; no backend call is involved
 
 ### Smoke tests
 
@@ -127,8 +145,8 @@ Run unit/component smoke tests with:
 npm test
 ```
 
-Run Playwright end-to-end smoke tests (login + wallet monitoring, desktop
-and mobile viewports) with:
+Run Playwright end-to-end smoke tests (login, wallet monitoring, and
+wallet send/receive, desktop and mobile viewports) with:
 
 ```bash
 pnpm exec playwright install --with-deps chromium

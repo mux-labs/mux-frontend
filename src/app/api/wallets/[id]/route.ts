@@ -1,9 +1,5 @@
 import { NextResponse } from "next/server";
-import {
-	getApiBaseUrl,
-	getApiKey,
-	isMockFallbackAllowed,
-} from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
 import { dummyWallets } from "@/mock-data/wallets";
 
 /** 503 returned instead of mock data when no backend is configured in production. */
@@ -29,11 +25,10 @@ type RouteContext = {
 };
 
 function backendHeaders(request: Request) {
-	const apiKey = getApiKey();
 	const authorization = request.headers.get("authorization");
 	return {
 		"content-type": "application/json",
-		...(apiKey ? { "x-api-key": apiKey } : {}),
+		...getUpstreamAuthHeaders(),
 		...(authorization ? { authorization } : {}),
 	};
 }

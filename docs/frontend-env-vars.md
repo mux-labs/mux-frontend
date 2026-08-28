@@ -28,7 +28,8 @@ in a `NEXT_PUBLIC_*` variable.
   `src/app/api/auth/login/route.ts` to decide whether to proxy to a real
   backend or fall back to the mock login response, and in
   `src/lib/api/config.ts::getApiBaseUrl()` as the first candidate for all
-  other API calls (e.g. `useWallets`).
+  other API calls (e.g. `useWallets`, `GET /api/requests/today`, and
+  `POST /api/transactions` for the wallet "Send" flow).
 - **`NEXT_PUBLIC_MUX_API_URL`** — second candidate in the same
   `getApiBaseUrl()` fallback chain; defaults to
   `https://api.muxprotocol.com` when nothing else is set. Predates
@@ -37,21 +38,26 @@ in a `NEXT_PUBLIC_*` variable.
   chain, for deploys that used this older name.
 - **`NEXT_PUBLIC_APP_URL`** — this app's own public URL; defaults to
   `http://localhost:3000`.
-- **`NEXT_PUBLIC_MUX_API_KEY`** — read by `getApiKey()` in
-  `src/lib/api/config.ts`; attached to outgoing API requests where a
-  client-visible key is acceptable.
 - **`NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`** — only relevant if
   WalletConnect-based wallet flows are enabled.
+
+There is intentionally no client-visible Mux API key. A project API key
+is a real credential, and anything under `NEXT_PUBLIC_*` is inlined into
+the browser bundle for every visitor to read — see #636. `ApiContext.tsx`
+(a client component) never reads `MUX_API_KEY`/`MUX_API_SECRET`; it only
+constructs an unauthenticated client that talks to this app's own
+same-origin `/api/*` routes.
 
 ### Server-only
 
 These never reach the browser and are safe for secrets.
 
-- **`MUX_API_KEY`** / **`MUX_API_SECRET`** — credentials for server-side
-  calls to the Mux Protocol API (Next.js route handlers / server
-  components only).
-- **`DATABASE_URL`** — connection string, if this deployment persists any
-  data outside the backend API.
+- **`MUX_API_KEY`** / **`MUX_API_SECRET`** — read by
+  `getUpstreamAuthHeaders()` in `src/lib/api/config.ts` and attached
+  (`x-api-key` / `x-api-secret`) to every upstream request a Next.js API
+  route makes to the Mux backend. Only ever read inside `src/app/api/**`
+  route handlers or other server-only modules — never import
+  `getApiKey()`/`getApiSecret()` from a client component.
 
 ### Implicit
 
@@ -59,8 +65,21 @@ These never reach the browser and are safe for secrets.
   console logging in the analytics/tracking hooks
   (`useAnalytics.ts`, `useAnalyticsMetrics.ts`, `useAnalyticsTracking.ts`,
   `recoveryAnalyticsTracking.ts`, `spendingLimitsTracking.ts`) outside of
-  `production`, and makes `validateEnv()` in `src/lib/env.ts` throw
-  (instead of warn) on missing *required* vars when set to `production`.
+  `production`, makes `validateEnv()` in `src/lib/env.ts` throw
+  (instead of warn) on missing *required* vars when set to `production`,
+  and controls whether `getEnv()` merges in documented defaults (see
+  "Production defaults" below — it only does so when `NODE_ENV=production`).
+
+### Production defaults
+
+`getEnv()` merges each var's documented `defaultValue` (from the schema
+in `src/lib/env.ts`) into whatever is set, but only when
+`NODE_ENV=production`. Concretely: if a production deploy forgets to set
+`NEXT_PUBLIC_API_URL`/`NEXT_PUBLIC_MUX_API_URL`, it now resolves to the
+documented default `https://api.muxprotocol.com` instead of silently
+falling through every API route's mock branch (#637). Local dev and test
+runs are untouched — `NODE_ENV` isn't `production`, so leaving vars unset
+still exercises the in-repo mocks described throughout this doc.
 
 ## Testnet vs. mainnet
 

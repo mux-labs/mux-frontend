@@ -11,8 +11,27 @@ export function getApiBaseUrl(): string {
 	return baseUrl.replace(/\/+$/, "");
 }
 
+/**
+ * Server-only Mux Protocol credentials. These must never be read from a
+ * NEXT_PUBLIC_* var or passed into a client component — see MUX_API_KEY /
+ * MUX_API_SECRET in src/lib/env.ts.
+ */
 export function getApiKey(): string | undefined {
-	return getEnv().NEXT_PUBLIC_MUX_API_KEY;
+	return getEnv().MUX_API_KEY;
+}
+
+export function getApiSecret(): string | undefined {
+	return getEnv().MUX_API_SECRET;
+}
+
+/** Auth headers for server-side requests to the upstream Mux backend. */
+export function getUpstreamAuthHeaders(): Record<string, string> {
+	const apiKey = getApiKey();
+	const apiSecret = getApiSecret();
+	return {
+		...(apiKey ? { "x-api-key": apiKey } : {}),
+		...(apiSecret ? { "x-api-secret": apiSecret } : {}),
+	};
 }
 
 /**

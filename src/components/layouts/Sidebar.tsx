@@ -5,6 +5,7 @@ import {
 	CogIcon,
 	HomeIcon,
 	KeyIcon,
+	ListBulletIcon,
 	ShieldCheckIcon,
 	UsersIcon,
 	WalletIcon,
@@ -21,6 +22,11 @@ const navigation = [
 	{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
 	{ name: "Analytics", href: "/dashboard/analytics", icon: ChartBarIcon },
 	{ name: "Wallets", href: "/dashboard/wallets", icon: WalletIcon },
+	{
+		name: "Transactions",
+		href: "/transactions-table",
+		icon: ListBulletIcon,
+	},
 	{ name: "Users", href: "/dashboard/users", icon: UsersIcon },
 	{ name: "API Keys", href: "/dashboard/api-keys", icon: KeyIcon },
 	{

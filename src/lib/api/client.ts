@@ -8,6 +8,7 @@ export class ApiClient {
 	constructor(
 		private baseUrl: string,
 		private apiKey?: string,
+		private authToken?: string,
 	) {}
 
 	private buildHeaders(headers?: HeadersInit) {
@@ -15,6 +16,7 @@ export class ApiClient {
 			...((headers as Record<string, string>) || {}),
 		};
 		if (this.apiKey) h["x-api-key"] = this.apiKey;
+		if (this.authToken) h.authorization = h.authorization ?? `Bearer ${this.authToken}`;
 		h["content-type"] = h["content-type"] ?? "application/json";
 		return h;
 	}

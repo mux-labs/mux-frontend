@@ -159,7 +159,7 @@ masked. The shared rule lives in `src/lib/api/runtimeMode.ts`.
 Run unit/component smoke tests with:
 
 ```bash
-npm test
+pnpm test
 ```
 
 Run Playwright end-to-end smoke tests (login, wallet monitoring, and

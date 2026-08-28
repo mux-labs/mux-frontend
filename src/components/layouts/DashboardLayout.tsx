@@ -9,17 +9,32 @@ import {
 	useState,
 } from "react";
 import { NetworkProvider } from "@/context/NetworkContext";
+import { AuthGuard } from "./AuthGuard";
 import { Sidebar } from "./Sidebar";
 import { TopNav } from "./TopNav";
 
 interface DashboardLayoutProps {
 	children: React.ReactNode;
+	/**
+	 * Gate the layout behind {@link AuthGuard} (issue #623). Defaults to
+	 * `true` for the real `/dashboard/*` tree. The parallel `/demo/dashboard/*`
+	 * tree renders mock data with no authenticated session and passes
+	 * `requireAuth={false}` — this is the explicit production vs demo split.
+	 */
+	requireAuth?: boolean;
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout({
+	children,
+	requireAuth = true,
+}: DashboardLayoutProps) {
 	const pathname = usePathname();
 
-	return <DashboardLayoutShell key={pathname}>{children}</DashboardLayoutShell>;
+	const shell = (
+		<DashboardLayoutShell key={pathname}>{children}</DashboardLayoutShell>
+	);
+
+	return requireAuth ? <AuthGuard>{shell}</AuthGuard> : shell;
 }
 
 function DashboardLayoutShell({ children }: DashboardLayoutProps) {

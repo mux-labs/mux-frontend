@@ -1,11 +1,18 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fetchRecentActivity } from "@/lib/api";
+import { ReactQueryTestProvider } from "@/test/reactQueryWrapper";
 import { RecentActivityFeed } from "./RecentActivityFeed";
 
 vi.mock("@/lib/api", () => ({
 	fetchRecentActivity: vi.fn(),
 }));
+
+// RecentActivityFeed now reads through TanStack Query (#619), so every
+// render needs a QueryClient in context.
+function render(ui: Parameters<typeof rtlRender>[0]) {
+	return rtlRender(<ReactQueryTestProvider>{ui}</ReactQueryTestProvider>);
+}
 
 const mockFetchRecentActivity = vi.mocked(fetchRecentActivity);
 
@@ -49,8 +56,12 @@ describe("RecentActivityFeed", () => {
 		render(<RecentActivityFeed />);
 
 		await waitFor(() => {
-			expect(screen.getByText(/wallet created/i)).toBeInTheDocument();
-			expect(screen.getByText(/transaction/i)).toBeInTheDocument();
+			expect(
+				screen.getByText(/New wallet created on mainnet/i),
+			).toBeInTheDocument();
+			expect(
+				screen.getByText(/Transaction of 150 XLM completed/i),
+			).toBeInTheDocument();
 		});
 	});
 
@@ -68,7 +79,9 @@ describe("RecentActivityFeed", () => {
 		render(<RecentActivityFeed />);
 
 		expect(
-			await screen.findByText("Failed to load recent activity. Please try again."),
+			await screen.findByText(
+				"Failed to load recent activity. Please try again.",
+			),
 		).toBeInTheDocument();
 	});
 });

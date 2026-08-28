@@ -16,6 +16,17 @@ import { NetworkProvider } from "@/context/NetworkContext";
 import { Sidebar } from "../Sidebar";
 import { TopNav } from "../TopNav";
 
+vi.mock("@/hooks/useNotifications", () => ({
+	useNotifications: () => ({
+		notifications: [],
+		unreadCount: 0,
+		loading: false,
+		error: null,
+		refetch: vi.fn(),
+		markAllRead: vi.fn(),
+	}),
+}));
+
 /** Seed sessionStorage with a valid authenticated session. */
 function seedSession() {
 	const record = {

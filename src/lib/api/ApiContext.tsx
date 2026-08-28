@@ -1,12 +1,19 @@
 "use client";
 
 import React, { createContext, useContext } from "react";
-import { getApiKey } from "./config";
 import ApiClient from "./client";
 import createApiClient from "./index";
 
 const ApiContext = createContext<ApiClient | null>(null);
 
+/**
+ * Server-only Mux credentials (MUX_API_KEY / MUX_API_SECRET) must never be
+ * read here — this is a client component and anything it touches ships to
+ * the browser. `apiKey` is only for a caller-supplied, non-secret,
+ * per-session token; leave it unset to make unauthenticated requests
+ * through the same-origin /api/* routes, which attach real credentials
+ * server-side.
+ */
 export function ApiProvider({
 	children,
 	apiKey,
@@ -14,7 +21,7 @@ export function ApiProvider({
 	children: React.ReactNode;
 	apiKey?: string;
 }) {
-	const client = createApiClient(undefined, apiKey ?? getApiKey());
+	const client = createApiClient(undefined, apiKey);
 	return <ApiContext.Provider value={client}>{children}</ApiContext.Provider>;
 }
 

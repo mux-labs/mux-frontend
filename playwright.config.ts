@@ -32,7 +32,12 @@ export default defineConfig({
 	},
 	webServer: {
 		command: "pnpm run dev",
-		url: "http://localhost:3000",
+		// Probes `/login` rather than `/` for readiness: `/` pulls in
+		// `APIKeyModal.tsx`, which currently has a pre-existing compile
+		// error unrelated to these specs, and would otherwise make the
+		// webServer never come up. `/login` is a stable, always-compiling
+		// route every spec already depends on.
+		url: "http://localhost:3000/login",
 		reuseExistingServer: !process.env.CI,
 		timeout: 120_000,
 		env: {

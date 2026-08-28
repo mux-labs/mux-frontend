@@ -1,4 +1,4 @@
-import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
+import { getApiBaseUrl } from "@/lib/api/config";
 
 /**
  * Analytics tracking for the Wallet Detail UI.
@@ -62,7 +62,7 @@ export function trackWalletEvent(
 	payload: WalletEventPayload = {},
 ): void {
 	if (process.env.NODE_ENV === "development") {
-		// biome-ignore lint/suspicious/noConsoleLog: allowed in dev
+		// biome-ignore lint/suspicious/noConsole: allowed in dev
 		console.log(`[Analytics] ${eventName}`, payload);
 	}
 
@@ -79,15 +79,16 @@ export function trackWalletEvent(
 	}
 
 	// Otherwise forward to the Mux backend analytics endpoint, when configured.
+	// This runs in the browser, so it must never attach Mux credentials
+	// (MUX_API_KEY/MUX_API_SECRET are server-only) — the endpoint accepts
+	// unauthenticated event pings.
 	const baseUrl = getApiBaseUrl();
 	if (!baseUrl) return;
 
-	const apiKey = getApiKey();
 	fetch(`${baseUrl}/analytics/events`, {
 		method: "POST",
 		headers: {
 			"Content-Type": "application/json",
-			...(apiKey ? { "x-api-key": apiKey } : {}),
 		},
 		body: JSON.stringify({
 			event: eventName,

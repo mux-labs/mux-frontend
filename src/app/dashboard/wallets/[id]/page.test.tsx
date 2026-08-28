@@ -22,10 +22,9 @@ describe("WalletDetailPage", () => {
 		expect(
 			screen.getByText("Live balance, identity, and account activity"),
 		).toBeInTheDocument();
-		expect(screen.getByRole("link", { name: /back to wallets/i })).toHaveAttribute(
-			"href",
-			"/dashboard/wallets",
-		);
+		expect(
+			screen.getByRole("link", { name: /back to wallets/i }),
+		).toHaveAttribute("href", "/dashboard/wallets");
 		expect(screen.getByTestId("wallet-detail")).toHaveTextContent("wallet-001");
 	});
 });

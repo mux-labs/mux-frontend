@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { useRecoveryStatus } from "@/hooks/useRecoveryStatus";
 import { initiateRecovery as initiateRecoveryApi } from "@/services/recoveryApi";
+import type { RecoveryTimeline } from "@/types/recovery";
 
 export type RecoveryState =
 	| "loading"
@@ -54,6 +55,21 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 
 	useEffect(() => {
 		if (walletId !== null) return; // Real API path — skip stub
+
+		// Production vs demo/mock split (#620):
+		//
+		//  - Production: a `null` walletId just means "no wallet selected yet"
+		//    (e.g. the wallets list is still loading). There is nothing to
+		//    fetch without a wallet id, so resolve straight to `idle` — never
+		//    a simulated `setTimeout` delay. The real per-wallet status fetch
+		//    runs on the `walletId !== null` path via `useRecoveryStatus`.
+		//  - Non-production (demo/mock): keep a short simulated bootstrap so
+		//    the demo dashboards still render the loading skeleton without a
+		//    live backend.
+		if (process.env.NODE_ENV === "production") {
+			setStubLoaded(true);
+			return;
+		}
 
 		let cancelled = false;
 		const run = async () => {
@@ -147,6 +163,10 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 				if (!result.success) {
 					throw new Error(result.error ?? "Failed to initiate recovery.");
 				}
+			} else if (process.env.NODE_ENV === "production") {
+				// No wallet selected and no backend to call — never fake a
+				// success in production (#620).
+				throw new Error("Select a wallet before initiating recovery.");
 			} else {
 				// Demo mode stub — no backend to call.
 				await new Promise<void>((resolve) => setTimeout(resolve, 1500));

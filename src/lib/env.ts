@@ -36,18 +36,14 @@ const publicEnvVars: EnvVar[] = [
 		required: false,
 		description: "Legacy alias for the API base URL",
 	},
-	{
-		name: "NEXT_PUBLIC_MUX_API_KEY",
-		required: false,
-		description: "Public API key used by browser-side API requests",
-	},
 ];
 
 const serverEnvVars: EnvVar[] = [
 	{
-		name: "MUX_BACKEND_URL",
+		name: "SESSION_JWT_SECRET",
 		required: false,
-		description: "Server-only mux-backend base URL for production API routes",
+		description:
+			"HMAC secret used to sign/verify the session JWT in middleware. No default: when unset, protected routes fail closed in production builds (see src/middleware.ts).",
 	},
 	{
 		name: "MUX_API_KEY",
@@ -58,11 +54,6 @@ const serverEnvVars: EnvVar[] = [
 		name: "MUX_API_SECRET",
 		required: false,
 		description: "Mux Protocol API secret for server-side requests",
-	},
-	{
-		name: "DATABASE_URL",
-		required: false,
-		description: "Database connection string",
 	},
 	{
 		name: "NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID",
@@ -129,18 +120,25 @@ export function validateEnv(
 /**
  * Validates environment and returns a config object with typed values.
  * Safe to call on both client and server.
+ *
+ * Documented defaults (e.g. NEXT_PUBLIC_MUX_API_URL) are merged in only for
+ * NODE_ENV=production, so a deployed build never silently falls back to
+ * mock data just because an operator forgot to set a var. Local dev/test
+ * keep the current opt-in behavior (unset = mock fallback in API routes).
  */
-export function getEnv() {
-	if (typeof process === "undefined" || !process.env) {
-		return getDefaultPublicEnv();
-	}
-	return process.env;
-}
+export function getEnv(): Record<string, string | undefined> {
+	const source =
+		typeof process === "undefined" || !process.env ? {} : process.env;
 
-function getDefaultPublicEnv(): Record<string, string | undefined> {
-	const result: Record<string, string | undefined> = {};
-	for (const envVar of publicEnvVars) {
-		result[envVar.name] = envVar.defaultValue;
+	if (source.NODE_ENV !== "production") {
+		return source;
+	}
+
+	const result: Record<string, string | undefined> = { ...source };
+	for (const envVar of allEnvVars) {
+		if (!result[envVar.name] && envVar.defaultValue !== undefined) {
+			result[envVar.name] = envVar.defaultValue;
+		}
 	}
 	return result;
 }

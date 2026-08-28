@@ -1,41 +1,34 @@
 "use client";
 
-import {
-	AlertCircle,
-	ArrowUpRight,
-	Clock,
-	Key,
-	Wallet,
-} from "lucide-react";
-import { useEffect, useState } from "react";
-import { EmptyState } from "@/components/ui/EmptyState";
-import { CardSkeleton } from "@/components/ui/Skeleton";
+import { useQuery } from "@tanstack/react-query";
+import { AlertCircle, ArrowUpRight, Clock, Key, Wallet } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { fetchRecentActivity, type ActivityItem } from "@/lib/api";
+import { EmptyState } from "@/components/ui/EmptyState";
+import { CardSkeleton } from "@/components/ui/Skeleton";
+import { type ActivityItem, fetchRecentActivity } from "@/lib/api";
 
 export function RecentActivityFeed() {
-	const [activities, setActivities] = useState<ActivityItem[]>([]);
-	const [isLoading, setIsLoading] = useState(true);
-	const [error, setError] = useState<string | null>(null);
+	// TanStack Query (#619): the recent-activity feed is read through
+	// `useQuery`, which fetches `/api/activity` — proxied to `mux-backend`
+	// when configured, mock data otherwise.
+	const {
+		data,
+		isPending: isLoading,
+		isError,
+		refetch,
+	} = useQuery({
+		queryKey: ["dashboard", "recent-activity"],
+		queryFn: () => fetchRecentActivity(),
+	});
 
-	const fetchActivities = async () => {
-		try {
-			setIsLoading(true);
-			setError(null);
-
-			setActivities(await fetchRecentActivity());
-		} catch (err) {
-			setError("Failed to load recent activity. Please try again.");
-			console.error("Error fetching activities:", err);
-		} finally {
-			setIsLoading(false);
-		}
+	const activities: ActivityItem[] = data ?? [];
+	const error = isError
+		? "Failed to load recent activity. Please try again."
+		: null;
+	const fetchActivities = () => {
+		void refetch();
 	};
-
-	useEffect(() => {
-		fetchActivities();
-	}, []);
 
 	const formatTimeAgo = (timestamp: string) => {
 		const date = new Date(timestamp);

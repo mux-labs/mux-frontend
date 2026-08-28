@@ -80,12 +80,16 @@ export function useNotifications(): UseNotificationsResult {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ markAll: true }),
-		}).catch(() => {
-			// Persistence failures are non-critical; the optimistic local
-			// update stands and the next refetch will reconcile with the
-			// backend's actual state.
-		});
-	}, []);
+		})
+			.then((res) => {
+				if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+			})
+			.catch(() => {
+				// Persistence failed — reconcile with the backend's actual state
+				// rather than leaving the optimistic update to drift silently.
+				refetch();
+			});
+	}, [refetch]);
 
 	const unreadCount = notifications.filter((n) => !n.read).length;
 

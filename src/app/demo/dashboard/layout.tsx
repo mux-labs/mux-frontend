@@ -12,5 +12,7 @@ export default function DashboardDemoLayout({
 }: Readonly<{
 	children: React.ReactNode;
 }>) {
-	return <DashboardLayout>{children}</DashboardLayout>;
+	// Demo tree renders mock data with no authenticated session — never
+	// gate it behind AuthGuard (issue #623).
+	return <DashboardLayout requireAuth={false}>{children}</DashboardLayout>;
 }

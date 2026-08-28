@@ -1,29 +1,43 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AddWalletModal } from "@/components/wallet/AddWalletModal";
-import { NetworkFilter } from "@/components/wallet/NetworkFilter";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { ErrorState } from "@/components/ui/ErrorState";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { WalletTableSkeleton } from "@/components/ui/Skeleton";
+import { AddWalletModal } from "@/components/wallet/AddWalletModal";
 import { WalletTable } from "@/components/wallet/WalletTable";
 import { useNetwork } from "@/context/NetworkContext";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
-import { useNetworkFilter } from "@/hooks/useNetworkFilter";
 import { invalidateWalletsCache, useWallets } from "@/hooks/useWallets";
 import type { Wallet } from "@/types/wallet";
 
 export default function WalletsPage() {
+	// `network` (from the global TopNav switcher) is the single source of
+	// truth for which network's wallets are shown on this page. useWallets
+	// sends it as a `?network=` query param, so the backend already returns
+	// only wallets for the active network — there is no separate "all
+	// networks" view to additionally filter for here. (Previously this page
+	// also ran a second, independent "all/testnet/mainnet" client-side
+	// filter on top of that already-scoped data via useNetworkFilter +
+	// NetworkFilter, which — since the fetch is never actually scoped to
+	// "all" — could only ever agree with the server-side scoping or
+	// contradict it (e.g. selecting "testnet" while the global switcher was
+	// on "mainnet" produced a false "no wallets on this network" empty
+	// state instead of just showing the mainnet wallets that were already
+	// loaded). See the ticket for the removed double-filtering bug.)
 	const { network } = useNetwork();
-	const { wallets: fetchedWallets, loading, error, refetch } = useWallets({
+	const {
+		wallets: fetchedWallets,
+		loading,
+		error,
+		refetch,
+	} = useWallets({
 		network,
 	});
 	const [addedWallets, setAddedWallets] = useState<Wallet[]>([]);
 	const [isAddOpen, setIsAddOpen] = useState(false);
 	const [showArchived, setShowArchived] = useState(false);
-	const { selectedNetwork, setSelectedNetwork, filterByNetwork } =
-		useNetworkFilter();
 	useAnalyticsTracking("wallets");
 
 	// Combine optimistically-added wallets (scoped to current network) with fetched ones
@@ -35,23 +49,14 @@ export default function WalletsPage() {
 		[addedWallets, fetchedWallets, network],
 	);
 
-	// Apply network filter then archived filter
-	const networkFilteredWallets = useMemo(
-		() => filterByNetwork(wallets),
-		[filterByNetwork, wallets],
-	);
-
 	const archivedCount = useMemo(
-		() => networkFilteredWallets.filter((w) => w.archived).length,
-		[networkFilteredWallets],
+		() => wallets.filter((w) => w.archived).length,
+		[wallets],
 	);
 
 	const visibleWallets = useMemo(
-		() =>
-			showArchived
-				? networkFilteredWallets
-				: networkFilteredWallets.filter((w) => !w.archived),
-		[networkFilteredWallets, showArchived],
+		() => (showArchived ? wallets : wallets.filter((w) => !w.archived)),
+		[wallets, showArchived],
 	);
 
 	const openAddWallet = () => setIsAddOpen(true);
@@ -85,15 +90,6 @@ export default function WalletsPage() {
 				)}
 			</div>
 
-			{/* #423: Network filter — client-side filter on top of the network-scoped fetch */}
-			{!loading && (
-				<NetworkFilter
-					selectedNetwork={selectedNetwork}
-					onNetworkChange={setSelectedNetwork}
-					disabled={!!error && wallets.length === 0}
-				/>
-			)}
-
 			{loading ? (
 				<WalletTableSkeleton />
 			) : error && wallets.length === 0 ? (
@@ -112,15 +108,6 @@ export default function WalletsPage() {
 				/>
 			) : visibleWallets.length > 0 ? (
 				<WalletTable wallets={visibleWallets} onAddWallet={openAddWallet} />
-			) : wallets.length > 0 && networkFilteredWallets.length === 0 ? (
-				<EmptyState
-					title="No wallets on this network"
-					description={`No wallets found for the selected network filter. Try selecting "All Networks".`}
-					action={{
-						label: "Show all networks",
-						onClick: () => setSelectedNetwork("all"),
-					}}
-				/>
 			) : wallets.length > 0 ? (
 				<EmptyState
 					title="No wallets to show"

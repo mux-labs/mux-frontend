@@ -50,7 +50,7 @@ describe("ReceiveWalletModal", () => {
 		expect(container.firstChild).toBeNull();
 	});
 
-	it("renders the QR stub and wallet address for a valid wallet", () => {
+	it("renders a real QR code and wallet address for a valid wallet", async () => {
 		render(
 			<ReceiveWalletModal
 				isOpen={true}
@@ -61,8 +61,29 @@ describe("ReceiveWalletModal", () => {
 
 		expect(screen.getByRole("dialog")).toBeInTheDocument();
 		expect(screen.getByText(/receive funds/i)).toBeInTheDocument();
-		expect(screen.getByText(/qr stub/i)).toBeInTheDocument();
 		expect(screen.getByText(VALID_ADDRESS)).toBeInTheDocument();
+
+		const qrImage = await screen.findByRole("img", {
+			name: `QR code for wallet address ${VALID_ADDRESS}`,
+		});
+		expect(qrImage).toHaveAttribute(
+			"src",
+			expect.stringMatching(/^data:image\/svg\+xml;base64,/),
+		);
+	});
+
+	it("offers a QR download action for a valid wallet", () => {
+		render(
+			<ReceiveWalletModal
+				isOpen={true}
+				wallet={ACTIVE_WALLET}
+				onClose={vi.fn()}
+			/>,
+		);
+
+		expect(
+			screen.getByRole("button", { name: /download receive address qr code/i }),
+		).toBeInTheDocument();
 	});
 
 	it("copies the wallet address to the clipboard", async () => {
@@ -99,7 +120,7 @@ describe("ReceiveWalletModal", () => {
 		expect(screen.getByRole("status")).toHaveTextContent(/inactive/i);
 	});
 
-	it("shows an invalid wallet state instead of the QR stub", () => {
+	it("shows an invalid wallet state instead of a QR code", () => {
 		render(
 			<ReceiveWalletModal
 				isOpen={true}
@@ -109,6 +130,6 @@ describe("ReceiveWalletModal", () => {
 		);
 
 		expect(screen.getByRole("alert")).toHaveTextContent(/not valid yet/i);
-		expect(screen.queryByText(/qr stub/i)).not.toBeInTheDocument();
+		expect(screen.queryByRole("img")).not.toBeInTheDocument();
 	});
 });

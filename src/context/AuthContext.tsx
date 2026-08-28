@@ -52,7 +52,14 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 /** sessionStorage key for the user record (client-side rehydration). */
 export const SESSION_STORAGE_KEY = "mux_auth_user";
 
-/** Cookie name read by the Next.js middleware for server-side route protection. */
+/**
+ * Legacy client-set marker cookie (value "1").
+ *
+ * Since #621 this is only trusted by the middleware in **mock mode** (no
+ * `NEXT_PUBLIC_API_URL` configured). When a backend is configured, route
+ * protection requires the HttpOnly, backend-verified `mux_auth_token` cookie
+ * set by `/api/auth/login` — see `src/lib/auth/routeAccess.ts`.
+ */
 export const SESSION_COOKIE_NAME = "mux_auth_session";
 
 /** Default session lifetime: 8 hours. */
@@ -169,6 +176,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const currentUser = user;
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		clearSessionCookie();
+		// The backend-issued `mux_auth_token` cookie is HttpOnly, so it can only
+		// be cleared server-side (#621). Fire-and-forget — the client-side
+		// cleanup below stands regardless of whether this request succeeds.
+		try {
+			void fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+		} catch {
+			// `fetch` unavailable (e.g. some non-browser test envs) — ignore.
+		}
 		// Drop cached wallet data so the next session (or a different user on
 		// the same device) never sees a stale, pre-logout list before refetching.
 		invalidateWalletsCache();

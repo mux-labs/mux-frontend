@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as recoveryApi from "@/services/recoveryApi";
 import { useRecovery } from "../useRecovery";
 
@@ -8,6 +8,7 @@ vi.mock("@/services/recoveryApi");
 
 const mockFetchRecoveryStatus = vi.mocked(recoveryApi.fetchRecoveryStatus);
 const mockPollRecoveryStatus = vi.mocked(recoveryApi.pollRecoveryStatus);
+const mockInitiateRecovery = vi.mocked(recoveryApi.initiateRecovery);
 
 const mockTimeline = {
 	id: "recovery-1",
@@ -24,6 +25,11 @@ function stubSuccess() {
 		timestamp: Date.now(),
 	});
 	mockPollRecoveryStatus.mockReturnValue(vi.fn());
+	mockInitiateRecovery.mockResolvedValue({
+		success: true,
+		data: { recoveryId: "recovery-1" },
+		timestamp: Date.now(),
+	});
 }
 
 function stubError(message = "API error") {
@@ -275,5 +281,43 @@ describe("useRecovery — real API mode (walletId provided) #455 #457 #459", () 
 		await waitFor(() => expect(result.current.state).toBe("idle"), {
 			timeout: 3000,
 		});
+	});
+});
+
+// ─── Production, no wallet selected (#620) ────────────────────────────────────
+// The `walletId === null` path must NOT fall back to a simulated setTimeout
+// delay in production — that was a demo stub masquerading as a status fetch.
+describe("useRecovery — production, no walletId (#620)", () => {
+	beforeEach(() => {
+		vi.stubEnv("NODE_ENV", "production");
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("resolves to idle without a simulated delay", async () => {
+		const { result } = renderHook(() => useRecovery(null));
+		// No fake 1200ms bootstrap — should settle almost immediately.
+		await waitFor(() => expect(result.current.state).toBe("idle"), {
+			timeout: 200,
+		});
+	});
+
+	it("does not fake a recovery success when confirming with no wallet", async () => {
+		const { result } = renderHook(() => useRecovery(null));
+		await waitFor(() => expect(result.current.state).toBe("idle"), {
+			timeout: 200,
+		});
+
+		act(() => {
+			result.current.initiateRecovery();
+		});
+		await act(async () => {
+			await result.current.confirmRecovery();
+		});
+
+		expect(result.current.state).toBe("error");
+		expect(result.current.errorMessage).toMatch(/select a wallet/i);
 	});
 });

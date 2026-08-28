@@ -7,6 +7,19 @@ import { NetworkProvider } from "@/context/NetworkContext";
 // next/navigation is used by TopNav; mock it
 vi.mock("next/navigation", () => ({
 	usePathname: () => "/demo/dashboard/wallets",
+	useRouter: () => ({ replace: vi.fn(), push: vi.fn(), prefetch: vi.fn() }),
+}));
+
+// TopNav mounts the notifications bell/panel; keep it inert for these tests
+vi.mock("@/hooks/useNotifications", () => ({
+	useNotifications: () => ({
+		notifications: [],
+		unreadCount: 0,
+		loading: false,
+		error: null,
+		refetch: vi.fn(),
+		markAllRead: vi.fn(),
+	}),
 }));
 
 function renderTopNav() {

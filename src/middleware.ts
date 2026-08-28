@@ -30,7 +30,7 @@ import {
  * developer console is publicly reachable with mock wallets and fake
  * analytics in production builds.
  */
-const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
+const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard", "/recovery"];
 
 /** Path unauthenticated users are redirected to. */
 const LOGIN_PATH = "/login";
@@ -85,5 +85,7 @@ export const config = {
 		"/dashboard/:path*",
 		"/demo/dashboard",
 		"/demo/dashboard/:path*",
+		"/recovery",
+		"/recovery/:path*",
 	],
 };

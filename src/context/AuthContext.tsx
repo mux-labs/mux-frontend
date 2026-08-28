@@ -62,7 +62,11 @@ interface AuthContextValue {
 	 * @param tokens - Optional bearer-token block from the login response;
 	 *   persisted to `sessionStorage` for `src/lib/api.js` (#628).
 	 */
-	signIn: (user: AuthUser, ttlMs?: number, tokens?: SessionTokens | null) => void;
+	signIn: (
+		user: AuthUser,
+		ttlMs?: number,
+		tokens?: SessionTokens | null,
+	) => void;
 	/** Clear the session and sign the user out. */
 	signOut: () => void;
 }

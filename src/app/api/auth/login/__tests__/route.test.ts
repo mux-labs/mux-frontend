@@ -77,7 +77,9 @@ describe("POST /api/auth/login (#325)", () => {
 			expect(res.status).toBe(503);
 			const body = await res.json();
 			expect(body.error).toBe("backend_unavailable");
-			expect(body.message).toMatch(/not configured|not available in production/i);
+			expect(body.message).toMatch(
+				/not configured|not available in production/i,
+			);
 		});
 	});
 
@@ -91,7 +93,11 @@ describe("POST /api/auth/login (#325)", () => {
 					status: 200,
 					json: () =>
 						Promise.resolve({
-							user: { name: "Jane", email: "jane@example.com", role: "developer" },
+							user: {
+								name: "Jane",
+								email: "jane@example.com",
+								role: "developer",
+							},
 							token: "backend-session-token-abc",
 						}),
 				}),
@@ -116,7 +122,11 @@ describe("POST /api/auth/login (#325)", () => {
 					status: 200,
 					json: () =>
 						Promise.resolve({
-							user: { name: "Jane", email: "jane@example.com", role: "developer" },
+							user: {
+								name: "Jane",
+								email: "jane@example.com",
+								role: "developer",
+							},
 						}),
 				}),
 			);

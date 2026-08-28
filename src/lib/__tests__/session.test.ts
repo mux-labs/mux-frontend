@@ -7,14 +7,14 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	loadSession,
-	saveSession,
 	clearSession,
-	isSessionValid,
-	createSession,
 	createDemoSession,
 	createExpiredDemoSession,
+	createSession,
+	isSessionValid,
+	loadSession,
 	STORAGE_KEY,
+	saveSession,
 } from "../session";
 
 describe("session.js — sessionStorage security migration", () => {
@@ -101,9 +101,9 @@ describe("session.js — sessionStorage security migration", () => {
 
 		it("passes an explicit expiresAt through unchanged", () => {
 			const at = Date.now() + 5_000;
-			expect(createSession({ accessToken: "a", expiresAt: at })!.expiresAt).toBe(
-				at,
-			);
+			expect(
+				createSession({ accessToken: "a", expiresAt: at })!.expiresAt,
+			).toBe(at);
 		});
 
 		it("returns null when there is no access token", () => {

@@ -8,6 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { OfflineBanner } from "@/components/ui/OfflineBanner";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { AuthGuard } from "./AuthGuard";
 import { Sidebar } from "./Sidebar";
@@ -122,6 +123,7 @@ function DashboardLayoutShell({ children }: DashboardLayoutProps) {
 				<div className="flex flex-col flex-1 min-w-0">
 					{/* TopNav */}
 					<TopNav onMenuClick={toggleSidebar} />
+					<OfflineBanner />
 
 					{/* Main */}
 					<main id="main-content" className="flex-1">

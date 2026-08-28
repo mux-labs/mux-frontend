@@ -1,8 +1,9 @@
 "use client";
 
-import { AlertCircle, SendHorizonal, X } from "lucide-react";
+import { AlertCircle, SendHorizonal, WifiOff, X } from "lucide-react";
 import { useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import type { Wallet } from "@/types/wallet";
 import { isValidStellarAddress } from "@/utils/addressValidation";
 import { fetchWithAuth } from "@/utils/fetchWithAuth";
@@ -75,6 +76,7 @@ export function SendWalletModal({
 	}>({});
 	const [submitting, setSubmitting] = useState(false);
 	const [submitError, setSubmitError] = useState<string | null>(null);
+	const isOffline = useOfflineStatus();
 
 	const maxBalance = wallet ? parseBalance(wallet.balance) : null;
 
@@ -99,6 +101,13 @@ export function SendWalletModal({
 		const newErrors = validateSendForm(destination, amount, maxBalance);
 		setErrors(newErrors);
 		if (Object.keys(newErrors).length > 0) return;
+
+		if (isOffline) {
+			setSubmitError(
+				"You're offline. Sending is paused until your connection is back.",
+			);
+			return;
+		}
 
 		setSubmitting(true);
 		setSubmitError(null);
@@ -274,6 +283,17 @@ export function SendWalletModal({
 							)}
 						</div>
 
+						{isOffline && (
+							<p
+								role="status"
+								className="flex items-center gap-1.5 text-sm text-amber-700"
+							>
+								<WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+								You're offline. Sending is paused until your connection is
+								back.
+							</p>
+						)}
+
 						{submitError && (
 							<p
 								role="alert"
@@ -297,7 +317,7 @@ export function SendWalletModal({
 						<Button
 							type="submit"
 							aria-label="Submit send transaction"
-							disabled={submitting}
+							disabled={submitting || isOffline}
 						>
 							<SendHorizonal className="h-4 w-4" aria-hidden="true" />
 							{submitting ? "Sending…" : "Send"}

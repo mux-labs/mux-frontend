@@ -57,8 +57,11 @@ export function getCachedExplorerBaseUrl(
 
 /**
  * Generates a full explorer URL using the cached base URL.
- * Drop-in companion to `getExplorerUrl` from `explorerUrl.ts` — identical
- * output, zero re-computation of the base on repeated calls.
+ * `getExplorerUrl` in `explorerUrl.ts` delegates its base-URL lookup here, so
+ * this is the single source of truth for explorer base URLs — every caller
+ * (including links rendered next to the TopNav network toggle) always
+ * resolves through the same network-keyed cache, with zero re-computation of
+ * the base on repeated calls.
  *
  * @param identifier - Stellar address or transaction hash.
  * @param network    - `"mainnet"` or `"testnet"`.

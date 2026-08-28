@@ -4,6 +4,17 @@ import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { ApiProvider } from "@/lib/api/ApiContext";
 import { ReactQueryProvider } from "@/lib/reactQuery/ReactQueryProvider";
+import { DARK_MODE_STORAGE_KEY } from "@/lib/theme";
+
+/**
+ * Applies the persisted (or OS-level) dark mode preference to <html> before
+ * first paint. Runs synchronously, ahead of React hydration, so there is no
+ * flash of the wrong theme — `useDarkMode` (src/hooks/useDarkMode.ts) then
+ * only needs to stay in sync with whatever this already applied.
+ */
+const themeInitScript = `(function(){try{var s=localStorage.getItem(${JSON.stringify(
+	DARK_MODE_STORAGE_KEY,
+)});var d=s!==null?s==="true":window.matchMedia("(prefers-color-scheme: dark)").matches;if(d)document.documentElement.classList.add("dark");}catch(e){}})();`;
 
 const inter = Inter({
 	variable: "--font-sans",
@@ -80,6 +91,10 @@ export default function RootLayout({
 }>) {
 	return (
 		<html lang="en">
+			<head>
+				{/* biome-ignore lint/security/noDangerouslySetInnerHtml: static, non-user-controlled theme-init script; must run before hydration to prevent a flash of the wrong theme */}
+				<script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+			</head>
 			<body
 				className={`${inter.variable} ${jetbrainsMono.variable} antialiased`}
 			>

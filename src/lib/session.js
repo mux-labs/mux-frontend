@@ -89,6 +89,35 @@ function isSessionValid(session) {
 	);
 }
 
+/**
+ * Builds a persisted session record from the token block returned by
+ * `POST /api/auth/login` (or `/api/auth/refresh`). Used by the auth layer so
+ * `src/lib/api.js` can attach `Authorization: Bearer <accessToken>` and
+ * silently refresh on 401 (#628).
+ *
+ * Tokens are kept in `sessionStorage` only (tab-scoped, cleared on close) —
+ * never `localStorage`, and never a `NEXT_PUBLIC_*` var.
+ *
+ * @param {{accessToken?: string, refreshToken?: string, expiresIn?: number,
+ *          expiresAt?: number}} tokens
+ * @returns {{accessToken: string, refreshToken: string|null, expiresAt: number}|null}
+ */
+function createSession(tokens) {
+	if (!tokens || typeof tokens.accessToken !== "string") return null;
+
+	const expiresAt =
+		typeof tokens.expiresAt === "number"
+			? tokens.expiresAt
+			: Date.now() + Number(tokens.expiresIn ?? 30) * 1000;
+
+	return {
+		accessToken: tokens.accessToken,
+		refreshToken:
+			typeof tokens.refreshToken === "string" ? tokens.refreshToken : null,
+		expiresAt,
+	};
+}
+
 function createDemoSession() {
 	return {
 		accessToken: "mock-access-token",
@@ -111,6 +140,7 @@ module.exports = {
 	saveSession,
 	clearSession,
 	isSessionValid,
+	createSession,
 	createDemoSession,
 	createExpiredDemoSession,
 };

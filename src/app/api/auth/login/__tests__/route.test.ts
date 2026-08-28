@@ -65,16 +65,19 @@ describe("POST /api/auth/login (#325)", () => {
 		});
 	});
 
-	describe("mock fallback is disabled in production (#621)", () => {
+	describe("mock fallback is disabled in production (#621/#625)", () => {
 		it("returns 503 instead of a mock user when NODE_ENV=production and no backend", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
 			vi.stubEnv("NODE_ENV", "production");
 			const res = await POST(
 				makeRequest({ email: "jane@example.com", password: "secret123" }),
 			);
 			expect(res.status).toBe(503);
 			const body = await res.json();
-			expect(body.error).toMatch(/not configured/i);
+			expect(body.error).toBe("backend_unavailable");
+			expect(body.message).toMatch(/not configured|not available in production/i);
 		});
 	});
 

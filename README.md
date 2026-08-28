@@ -139,13 +139,29 @@ verification checklist.
   (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
   package; no backend call is involved
 
-**Server-verified sessions (#621).** When `NEXT_PUBLIC_API_URL` is set,
-`POST /api/auth/login` proxies to the backend and stores the backend-issued
-session token in an **HttpOnly `mux_auth_token` cookie**. The Next.js
-middleware verifies that token against `GET {backend}/auth/session` on every
-`/dashboard` request — the old client-set `mux_auth_session` marker cookie is
-only trusted in mock mode (no backend). `signOut()` calls
-`POST /api/auth/logout` to clear the HttpOnly cookie. See
+**Server-verified sessions (#621–#628).** When `NEXT_PUBLIC_API_URL` is set:
+
+* `POST /api/auth/login` proxies to `{backend}/auth/login` and writes the
+  backend-issued session token to an **HttpOnly, `SameSite=Lax`, `Secure`
+  (in production) `mux_auth_token` cookie** set from the route's `Set-Cookie`
+  response — never `document.cookie` (#627).
+* `POST /api/auth/refresh` proxies to `{backend}/auth/refresh`, forwarding the
+  caller's `Authorization` header / session cookie, and rotates the
+  `mux_auth_token` cookie from the response (#626). Without a backend it only
+  mints the mock token outside production.
+* The Next.js middleware verifies the token against `GET {backend}/auth/session`
+  on every `/dashboard` request — the client-set `mux_auth_session` marker
+  cookie is only trusted in mock mode (no backend), and now carries `; Secure`
+  on HTTPS.
+* Any bearer-token block in the login response is persisted to
+  `sessionStorage` (never `localStorage`) via `src/lib/session.js` so
+  `src/lib/api.js` can attach `Authorization` headers and refresh on `401`
+  (#628).
+* `signOut()` calls `POST /api/auth/logout` to clear the HttpOnly cookie and
+  the stored bearer session.
+
+A production build with no backend refuses mock sign-in / refresh with
+`503 backend_unavailable` (#625). See
 [`docs/auth-local-setup.md`](docs/auth-local-setup.md).
 
 **No silent mock success in production.** API routes that fall back to

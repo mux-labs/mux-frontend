@@ -31,18 +31,32 @@ interface TouchedFields {
 // API call — #325: wire to backend via POST /api/auth/login
 // ---------------------------------------------------------------------------
 
+interface AuthResult {
+	user: { name: string; email: string; role: string };
+	/**
+	 * Bearer-token block, when the login response includes one (mock mode
+	 * always does; a real backend may rely solely on its HttpOnly cookie).
+	 * Persisted to `sessionStorage` by `signIn` for `src/lib/api.js` (#628).
+	 */
+	session?: {
+		accessToken: string;
+		refreshToken?: string;
+		expiresIn?: number;
+	} | null;
+}
+
 /**
- * Sends login credentials to the backend and returns the authenticated user.
+ * Sends login credentials to `/api/auth/login` and returns the authenticated
+ * user plus any bearer-token block.
  *
  * @param email - The user's email address.
  * @param password - The user's password (plaintext; HTTPS in production).
- * @returns The authenticated user record `{ name, email, role }`.
  * @throws {Error} When the response is not OK or the user payload is missing.
  */
 async function authenticateUser(
 	email: string,
 	password: string,
-): Promise<{ name: string; email: string; role: string }> {
+): Promise<AuthResult> {
 	const res = await fetch("/api/auth/login", {
 		method: "POST",
 		headers: { "content-type": "application/json" },
@@ -53,19 +67,18 @@ async function authenticateUser(
 
 	if (!res.ok) {
 		throw new Error(
-			(data as { error?: string }).error ||
+			(data as { error?: string; message?: string }).message ||
+				(data as { error?: string }).error ||
 				"Sign in failed. Please check your credentials and try again.",
 		);
 	}
 
-	const user = (
-		data as { user?: { name: string; email: string; role: string } }
-	).user;
+	const { user, session } = data as AuthResult;
 	if (!user) {
 		throw new Error("Unexpected response from authentication server.");
 	}
 
-	return user;
+	return { user, session: session ?? null };
 }
 
 // ---------------------------------------------------------------------------
@@ -309,8 +322,11 @@ function LoginPageContent() {
 		trackAuthEvent("login_attempt", { email: fields.email });
 
 		try {
-			const user = await authenticateUser(fields.email, fields.password);
-			signIn(user);
+			const { user, session } = await authenticateUser(
+				fields.email,
+				fields.password,
+			);
+			signIn(user, undefined, session);
 			trackAuthEvent("login_success", {
 				email: user.email,
 				role: user.role,

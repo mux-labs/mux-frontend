@@ -21,7 +21,8 @@ import { useApiKeys } from "@/hooks/useApiKeys";
 import { useRevokeApiKey } from "@/hooks/useRevokeApiKey";
 import { createApiKey } from "@/lib/api/index";
 import { cn } from "@/lib/utils";
-import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
+// Import from canonical types modules, not from mock-data (#707).
+import type { ApiKey, CreatedApiKey } from "@/types/api-key";
 
 interface ApiKeysTableProps {
 	/** Override keys list for focused component tests and storybook. */

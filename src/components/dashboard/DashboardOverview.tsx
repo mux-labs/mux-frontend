@@ -6,7 +6,9 @@ import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { CardSkeleton } from "@/components/ui/Skeleton";
 import { fetchOverview } from "@/lib/api";
-import type { OverviewData } from "@/mock-data/overview";
+// Import OverviewData from the canonical types module, not from mock-data,
+// so the component typechecks correctly against the live backend shape (#706).
+import type { OverviewData } from "@/types/overview";
 
 export function DashboardOverview() {
 	const [stats, setStats] = useState<OverviewData | null>(null);

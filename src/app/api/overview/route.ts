@@ -9,18 +9,17 @@ import { mockOverview } from "@/mock-data/overview";
  * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls
  * back to mock data so local development / demo works without a running API.
  */
-export async function GET(request: Request) {
+export async function GET(request?: Request) {
 	const backendUrl = getApiBaseUrl();
 
 	if (backendUrl) {
 		try {
+			const authHeader = request?.headers.get("authorization");
 			const upstream = await fetch(`${backendUrl}/overview`, {
 				headers: {
 					"content-type": "application/json",
 					...getUpstreamAuthHeaders(),
-					...(request.headers.get("authorization")
-						? { authorization: request.headers.get("authorization") as string }
-						: {}),
+					...(authHeader ? { authorization: authHeader } : {}),
 				},
 				cache: "no-store",
 			});

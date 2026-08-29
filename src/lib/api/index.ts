@@ -1,5 +1,8 @@
-import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
-import type { OverviewData } from "@/mock-data/overview";
+// Import from canonical types modules, not from mock-data, so these
+// functions typecheck correctly against the live backend response shapes
+// (#706, #707).
+import type { ApiKey, CreatedApiKey } from "@/types/api-key";
+import type { OverviewData } from "@/types/overview";
 import ApiClient from "./client";
 import { getApiBaseUrl } from "./config";
 

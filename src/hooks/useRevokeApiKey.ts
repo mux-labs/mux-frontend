@@ -2,7 +2,9 @@
 
 import { useCallback, useState } from "react";
 import { revokeKey } from "@/lib/api/index";
-import type { ApiKey } from "@/mock-data/api-keys";
+// Import from the canonical types module, not from mock-data, so the hook
+// typechecks correctly against the live backend response shape (#707).
+import type { ApiKey } from "@/types/api-key";
 
 export function useRevokeApiKey() {
 	const [loading, setLoading] = useState(false);

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchApiKeys } from "@/lib/api/index";
-import type { ApiKey } from "@/mock-data/api-keys";
+// Import from the canonical types module, not from mock-data (#707).
+import type { ApiKey } from "@/types/api-key";
 
 export function useApiKeys(enabled = true) {
 	const [data, setData] = useState<ApiKey[] | null>(null);

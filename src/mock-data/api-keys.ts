@@ -6,23 +6,15 @@
  * so local dev/CI keeps working without a running API server. In any
  * environment with a backend configured, create/revoke/list are served by
  * the real mux-backend API instead.
+ *
+ * The canonical ApiKey / CreatedApiKey types live in src/types/api-key.ts.
+ * They are re-exported here for backward compatibility (#707).
  */
-export interface ApiKey {
-	id: string;
-	name: string;
-	/** Masked key shown in the table (e.g. "sk_live_51M0...") */
-	key: string;
-	status: "Active" | "Revoked";
-	createdAt: string;
-}
 
-export interface CreatedApiKey extends ApiKey {
-	/**
-	 * Full secret returned only by the create flow. Never persist this in table
-	 * state after the modal is closed.
-	 */
-	secret: string;
-}
+// Re-export canonical types so existing imports from "@/mock-data/api-keys"
+// continue to work without change.
+export type { ApiKey, CreatedApiKey } from "@/types/api-key";
+import type { ApiKey, CreatedApiKey } from "@/types/api-key";
 
 export const mockApiKeys: ApiKey[] = [
 	{

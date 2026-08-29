@@ -4,12 +4,25 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
-import type { CreatedApiKey } from "@/mock-data/api-keys";
+// Import from the canonical types module, not from mock-data (#708).
+import type { CreatedApiKey } from "@/types/api-key";
 
 interface APIKeyModalProps {
 	isOpen: boolean;
 	onClose: () => void;
+	/**
+	 * Called when the user clicks "Generate Key".
+	 *
+	 * In production this must be wired to the backend create endpoint.
+	 * The modal has NO local fallback secret generator — secrets are always
+	 * issued by the backend and displayed exactly once (#708).
+	 *
+	 * In demo / Storybook contexts pass a mock implementation that returns a
+	 * fake CreatedApiKey.  When omitted entirely the modal will surface an
+	 * error message asking the developer to wire the prop.
+	 */
 	onCreateKey?: (name: string) => Promise<CreatedApiKey>;
+	/** Called after a key is successfully created, e.g. to refresh the table. */
 	onKeyCreated?: (key: CreatedApiKey) => void;
 }
 
@@ -23,21 +36,12 @@ export default function APIKeyModal({
 	const [createdKey, setCreatedKey] = useState<CreatedApiKey | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	/**
+	 * The user must check this box before "Done" is enabled.  Enforcing this
+	 * client-side mirrors the backend's create-once semantics: the secret is
+	 * shown once, the user acknowledges it, and the modal is dismissed (#708).
+	 */
 	const [acknowledged, setAcknowledged] = useState(false);
-
-	const fallbackCreateKey = async (keyName: string): Promise<CreatedApiKey> => {
-		const secret = `mux_live_${Math.random().toString(36).slice(2)}${Math.random()
-			.toString(36)
-			.slice(2)}`;
-		return {
-			id: `key-${Date.now()}`,
-			name: keyName,
-			key: `${secret.slice(0, 8)}••••${secret.slice(-4)}`,
-			secret,
-			status: "Active",
-			createdAt: new Date().toISOString(),
-		};
-	};
 
 	const handleCreate = async () => {
 		const trimmedName = name.trim();
@@ -46,11 +50,22 @@ export default function APIKeyModal({
 			return;
 		}
 
+		if (!onCreateKey) {
+			// Guard: this modal must be wired to a real (or demo) key-creation
+			// function.  A missing prop is a developer integration error, not a
+			// runtime user error — surface it clearly rather than silently
+			// generating a fake secret (#708).
+			setError(
+				"API key creation is not configured. Please wire the onCreateKey prop to your key creation handler.",
+			);
+			return;
+		}
+
 		setIsSubmitting(true);
 		setError(null);
 
 		try {
-			const key = await (onCreateKey ?? fallbackCreateKey)(trimmedName);
+			const key = await onCreateKey(trimmedName);
 			setCreatedKey(key);
 			onKeyCreated?.(key);
 		} catch (err) {
@@ -71,30 +86,6 @@ export default function APIKeyModal({
 		onClose();
 	};
 
-	const generateApiKey = async () => {
-		const trimmedName = keyName.trim();
-		if (!trimmedName) {
-			setError("Key name is required.");
-			return;
-		}
-
-		setError(null);
-		setIsSubmitting(true);
-		await Promise.resolve();
-
-		const newKey = createApiKey();
-		setApiKey(newKey);
-		setIsSubmitting(false);
-		onKeyCreated?.({ name: trimmedName, value: newKey, key: newKey });
-	};
-
-	const copyToClipboard = async () => {
-		if (!apiKey) return;
-		await navigator.clipboard.writeText(apiKey);
-		setCopied(true);
-		window.setTimeout(() => setCopied(false), 2000);
-	};
-
 	if (!isOpen) return null;
 
 	return (
@@ -105,6 +96,7 @@ export default function APIKeyModal({
 				aria-labelledby="create-api-key-title"
 				className="bg-white dark:bg-zinc-900 rounded-lg shadow-lg max-w-md w-full"
 			>
+				{/* Header */}
 				<div className="flex items-start justify-between gap-4 border-b border-zinc-200 p-6 dark:border-zinc-800">
 					<h2
 						id="create-api-key-title"
@@ -122,54 +114,32 @@ export default function APIKeyModal({
 					</button>
 				</div>
 
+				{/* Body */}
 				<div className="p-6 space-y-6">
-					{!createdKey && (
-						<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
-							<div className="flex gap-3">
-								<div className="text-amber-600 dark:text-amber-500 text-xl leading-none mt-0.5">
-									⚠️
-								</div>
-								<div>
-									<h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">
-										Save your API key
-									</h3>
-									<p className="text-sm text-amber-800 dark:text-amber-300">
-										This key will only be displayed once. Make sure to copy and
-										store it somewhere safe. You won't be able to see it again.
-									</p>
+					{createdKey ? (
+						/* ── Secret reveal step (#708) ── */
+						<div className="space-y-4">
+							<div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+								<div className="flex gap-3">
+									<span
+										className="text-amber-600 dark:text-amber-500 text-xl leading-none mt-0.5"
+										aria-hidden="true"
+									>
+										⚠️
+									</span>
+									<div>
+										<h3 className="font-semibold text-amber-900 dark:text-amber-200 mb-1">
+											Copy this secret now
+										</h3>
+										<p className="text-sm text-amber-800 dark:text-amber-300">
+											This key will only be displayed once. Store it somewhere
+											safe — you won't be able to see it again after closing
+											this dialog.
+										</p>
+									</div>
 								</div>
 							</div>
-						</div>
-						<div>
-							<h2
-								id={titleId}
-								className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
-							>
-								{isRevealStep ? "Save your API key" : "Create API Key"}
-							</h2>
-							<p
-								id={descriptionId}
-								className="text-sm text-zinc-500 dark:text-zinc-400"
-							>
-								{isRevealStep
-									? "This key will only be shown once."
-									: "Name the key before generating a secret."}
-							</p>
-						</div>
-					</div>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						onClick={handleClose}
-						aria-label="Close dialog"
-					>
-						<X className="h-4 w-4" aria-hidden="true" />
-					</Button>
-				</div>
 
-					{createdKey ? (
-						<div className="space-y-4">
 							<div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
 								<p className="text-sm font-medium text-green-900 dark:text-green-200">
 									✓ API Key successfully created
@@ -194,12 +164,8 @@ export default function APIKeyModal({
 										data-testid="copy-generated-key"
 									/>
 								</div>
-								{copied && (
-									<p role="status" className="mt-2 text-sm text-green-700 dark:text-green-400">
-										API key copied to clipboard
-									</p>
-								)}
 							</div>
+
 							<label className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400">
 								<input
 									type="checkbox"
@@ -215,6 +181,7 @@ export default function APIKeyModal({
 							</label>
 						</div>
 					) : (
+						/* ── Name input step ── */
 						<div className="space-y-4">
 							<p className="text-zinc-600 dark:text-zinc-400">
 								Name this key so you can identify it later. The full secret is
@@ -231,6 +198,11 @@ export default function APIKeyModal({
 									id="api-key-name"
 									value={name}
 									onChange={(event) => setName(event.target.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Enter") {
+											void handleCreate();
+										}
+									}}
 									placeholder="Production server"
 									className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-100"
 								/>
@@ -247,6 +219,7 @@ export default function APIKeyModal({
 					)}
 				</div>
 
+				{/* Footer */}
 				<div className="border-t border-zinc-200 dark:border-zinc-800 p-6 flex gap-3 justify-end">
 					{createdKey ? (
 						<Button
@@ -259,7 +232,7 @@ export default function APIKeyModal({
 					) : (
 						<>
 							<Button variant="outline" onClick={handleClose}>
-								Close
+								Cancel
 							</Button>
 							<Button
 								onClick={handleCreate}

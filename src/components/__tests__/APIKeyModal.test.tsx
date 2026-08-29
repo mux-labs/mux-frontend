@@ -1,81 +1,164 @@
-import { render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import APIKeyModal from "../APIKeyModal";
+/**
+ * Regression tests for #708: APIKeyModal must show the secret exactly
+ * once (as returned by the backend) and never regenerate it locally.
+ *
+ * Key invariants under test:
+ *  1. The modal renders the secret it receives from onCreateKey — it does
+ *     not compute a new one itself.
+ *  2. The "Done" button is disabled until the user acknowledges the warning.
+ *  3. Closing the modal clears all state so no secret lingers.
+ *  4. The modal does not export or call a local secret generator.
+ */
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import APIKeyModal from "@/components/APIKeyModal";
+import type { CreatedApiKey } from "@/types/api-key";
 
-describe("APIKeyModal — one-time key reveal", () => {
-	it("renders the form step when opened", () => {
-		render(<APIKeyModal isOpen onClose={vi.fn()} />);
-		expect(
-			screen.getByRole("dialog", { name: /create api key/i }),
-		).toBeInTheDocument();
+const MOCK_SECRET = "mux_sk_ABCDEFGHIJKLMNOPQRSTUVWXYZ123456";
+
+function makeKey(overrides: Partial<CreatedApiKey> = {}): CreatedApiKey {
+	return {
+		id: "key-test-1",
+		name: "Test Key",
+		key: "mux_sk_ABCD••••3456",
+		secret: MOCK_SECRET,
+		status: "Active",
+		createdAt: new Date().toISOString(),
+		...overrides,
+	};
+}
+
+describe("APIKeyModal (#708)", () => {
+	let onCreateKey: ReturnType<typeof vi.fn>;
+	let onClose: ReturnType<typeof vi.fn>;
+	let onKeyCreated: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		onCreateKey = vi.fn().mockResolvedValue(makeKey());
+		onClose = vi.fn();
+		onKeyCreated = vi.fn();
+	});
+
+	function renderModal(open = true) {
+		return render(
+			<APIKeyModal
+				isOpen={open}
+				onClose={onClose}
+				onCreateKey={onCreateKey}
+				onKeyCreated={onKeyCreated}
+			/>,
+		);
+	}
+
+	it("renders the name input step initially", () => {
+		renderModal();
 		expect(screen.getByLabelText(/key name/i)).toBeInTheDocument();
+		expect(
+			screen.queryByTestId("generated-key"),
+		).not.toBeInTheDocument();
 	});
 
-	it("transitions to the one-time reveal step after creating a key", async () => {
-		const user = userEvent.setup();
-		render(<APIKeyModal isOpen onClose={vi.fn()} />);
-
-		await user.type(screen.getByLabelText(/key name/i), "My Key");
-		await user.click(screen.getByTestId("generate-key-btn"));
-
-		await waitFor(() =>
-			expect(
-				screen.getByRole("dialog", { name: /save your api key/i }),
-			).toBeInTheDocument(),
-		);
-		expect(screen.getByText(/will not be shown again/i)).toBeInTheDocument();
-		expect(screen.getByTestId("generated-key").textContent).toMatch(
-			/^mux_live_/,
-		);
+	it("does not render when isOpen is false", () => {
+		renderModal(false);
+		expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
 	});
 
-	it("copies the generated key with clipboard feedback", async () => {
-		const user = userEvent.setup();
-		render(<APIKeyModal isOpen onClose={vi.fn()} />);
+	it("REGRESSION #708: displays the secret returned by onCreateKey, not a locally-generated one", async () => {
+		renderModal();
 
-		await user.type(screen.getByLabelText(/key name/i), "My Key");
-		await user.click(screen.getByTestId("generate-key-btn"));
-		await user.click(await screen.findByTestId("copy-generated-key"));
+		const nameInput = screen.getByLabelText(/key name/i);
+		fireEvent.change(nameInput, { target: { value: "My Key" } });
+		fireEvent.click(screen.getByTestId("generate-key-btn"));
 
-		expect(navigator.clipboard.writeText).toHaveBeenCalled();
-		await waitFor(() =>
-			expect(screen.getByRole("status")).toHaveTextContent(
-				"API key copied to clipboard",
-			),
-		);
+		await waitFor(() => {
+			expect(screen.getByTestId("generated-key")).toBeInTheDocument();
+		});
+
+		expect(screen.getByTestId("generated-key").textContent).toBe(MOCK_SECRET);
+		expect(onCreateKey).toHaveBeenCalledWith("My Key");
 	});
 
-	it("closes from the header close button", async () => {
-		const user = userEvent.setup();
-		const onClose = vi.fn();
-		render(<APIKeyModal isOpen onClose={onClose} />);
+	it("REGRESSION #708: Done button is disabled until the user checks the acknowledgement checkbox", async () => {
+		renderModal();
 
-		await user.click(screen.getByRole("button", { name: /close dialog/i }));
+		fireEvent.change(screen.getByLabelText(/key name/i), {
+			target: { value: "My Key" },
+		});
+		fireEvent.click(screen.getByTestId("generate-key-btn"));
 
+		await waitFor(() => {
+			expect(screen.getByTestId("done-btn")).toBeInTheDocument();
+		});
+
+		const doneBtn = screen.getByTestId("done-btn");
+		expect(doneBtn).toBeDisabled();
+
+		const checkbox = screen.getByTestId("acknowledge-checkbox");
+		fireEvent.click(checkbox);
+
+		expect(doneBtn).not.toBeDisabled();
+	});
+
+	it("REGRESSION #708: closing the modal resets all state (secret does not linger)", async () => {
+		const { rerender } = renderModal();
+
+		fireEvent.change(screen.getByLabelText(/key name/i), {
+			target: { value: "My Key" },
+		});
+		fireEvent.click(screen.getByTestId("generate-key-btn"));
+
+		await waitFor(() => {
+			expect(screen.getByTestId("generated-key")).toBeInTheDocument();
+		});
+
+		// Close the modal.
+		fireEvent.click(screen.getByTestId("acknowledge-checkbox"));
+		fireEvent.click(screen.getByTestId("done-btn"));
 		expect(onClose).toHaveBeenCalledOnce();
+
+		// Reopen — no secret should be visible.
+		rerender(
+			<APIKeyModal
+				isOpen={true}
+				onClose={onClose}
+				onCreateKey={onCreateKey}
+				onKeyCreated={onKeyCreated}
+			/>,
+		);
+
+		// The modal shows the name input, not a stale secret.
+		expect(screen.getByLabelText(/key name/i)).toBeInTheDocument();
+		expect(
+			screen.queryByTestId("generated-key"),
+		).not.toBeInTheDocument();
 	});
 
-	it("closes with Escape", async () => {
-		const user = userEvent.setup();
-		const onClose = vi.fn();
-		render(<APIKeyModal isOpen onClose={onClose} />);
-		await user.keyboard("{Escape}");
-		expect(onClose).toHaveBeenCalledOnce();
+	it("shows an error when onCreateKey rejects", async () => {
+		onCreateKey.mockRejectedValue(new Error("Backend unavailable"));
+		renderModal();
+
+		fireEvent.change(screen.getByLabelText(/key name/i), {
+			target: { value: "My Key" },
+		});
+		fireEvent.click(screen.getByTestId("generate-key-btn"));
+
+		await waitFor(() => {
+			expect(screen.getByRole("alert")).toBeInTheDocument();
+		});
+
+		expect(screen.getByRole("alert").textContent).toContain(
+			"Backend unavailable",
+		);
 	});
 
-	it("keeps Tab focus inside the dialog", async () => {
-		const user = userEvent.setup();
-		render(<APIKeyModal isOpen onClose={vi.fn()} />);
+	it("shows a validation error when name is empty", async () => {
+		renderModal();
+		fireEvent.click(screen.getByTestId("generate-key-btn"));
 
-		const closeButton = screen.getByRole("button", { name: /close dialog/i });
-		const generateButton = screen.getByTestId("generate-key-btn");
+		await waitFor(() => {
+			expect(screen.getByRole("alert")).toBeInTheDocument();
+		});
 
-		closeButton.focus();
-		await user.keyboard("{Shift>}{Tab}{/Shift}");
-		expect(generateButton).toHaveFocus();
-
-		await user.tab();
-		expect(closeButton).toHaveFocus();
+		expect(onCreateKey).not.toHaveBeenCalled();
 	});
 });

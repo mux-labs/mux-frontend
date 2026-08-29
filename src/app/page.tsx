@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
+import { createApiKey } from "@/lib/api/index";
 
 export default function Home() {
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -80,7 +81,11 @@ export default function Home() {
 				</div>
 			</main>
 
-			<APIKeyModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+			<APIKeyModal
+				isOpen={isModalOpen}
+				onClose={() => setIsModalOpen(false)}
+				onCreateKey={createApiKey}
+			/>
 		</div>
 	);
 }

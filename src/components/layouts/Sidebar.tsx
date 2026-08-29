@@ -5,6 +5,7 @@ import {
 	CogIcon,
 	HomeIcon,
 	KeyIcon,
+	ListBulletIcon,
 	ShieldCheckIcon,
 	UsersIcon,
 	WalletIcon,
@@ -19,7 +20,16 @@ import { shellLabels } from "@/lib/i18n/shellLabels";
 import { prefetchWallets } from "@/lib/walletsPrefetchCache";
 
 const navigation = [
-	{ name: shellLabels.nav.dashboard, href: "/dashboard", icon: HomeIcon },
+	{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
+	{ name: "Analytics", href: "/dashboard/analytics", icon: ChartBarIcon },
+	{ name: "Wallets", href: "/dashboard/wallets", icon: WalletIcon },
+	{
+		name: "Transactions",
+		href: "/transactions-table",
+		icon: ListBulletIcon,
+	},
+	{ name: "Users", href: "/dashboard/users", icon: UsersIcon },
+	{ name: "API Keys", href: "/dashboard/api-keys", icon: KeyIcon },
 	{
 		name: shellLabels.nav.analytics,
 		href: "/dashboard/analytics",

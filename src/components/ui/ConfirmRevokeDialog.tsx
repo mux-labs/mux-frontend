@@ -8,6 +8,10 @@ export interface ConfirmRevokeDialogProps {
 	open: boolean;
 	keyLabel?: string;
 	isPending?: boolean;
+	/** Disables only the confirm action (Cancel stays usable), e.g. while offline. */
+	disableConfirm?: boolean;
+	/** Shown under the actions when `disableConfirm` is true. */
+	confirmDisabledReason?: string;
 	onConfirm: () => void;
 	onCancel: () => void;
 	className?: string;
@@ -21,6 +25,8 @@ export function ConfirmRevokeDialog({
 	open,
 	keyLabel,
 	isPending = false,
+	disableConfirm = false,
+	confirmDisabledReason,
 	onConfirm,
 	onCancel,
 	className,
@@ -72,6 +78,11 @@ export function ConfirmRevokeDialog({
 						: "This will immediately revoke the key. Any requests using it will start failing."}{" "}
 					This action cannot be undone.
 				</p>
+				{confirmDisabledReason && disableConfirm && !isPending && (
+					<p className="mt-3 text-xs text-amber-700">
+						{confirmDisabledReason}
+					</p>
+				)}
 				<div className="mt-4 flex justify-end gap-2">
 					<Button variant="outline" onClick={onCancel} disabled={isPending}>
 						Cancel
@@ -80,7 +91,7 @@ export function ConfirmRevokeDialog({
 						ref={confirmRef}
 						variant="destructive"
 						onClick={onConfirm}
-						disabled={isPending}
+						disabled={isPending || disableConfirm}
 					>
 						{isPending ? "Revoking…" : "Revoke key"}
 					</Button>

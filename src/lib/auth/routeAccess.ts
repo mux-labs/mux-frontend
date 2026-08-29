@@ -23,7 +23,7 @@
  */
 
 /** Route prefixes that require authentication. */
-export const PROTECTED_PREFIXES = ["/dashboard"];
+export const PROTECTED_PREFIXES = ["/dashboard", "/recovery"];
 
 /** HttpOnly cookie holding the backend-issued opaque session token. */
 export const SESSION_TOKEN_COOKIE = "mux_auth_token";

@@ -1,6 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AddWalletModal } from "./AddWalletModal";
 
 const VALID_ADDRESS =
@@ -8,6 +8,34 @@ const VALID_ADDRESS =
 
 const ANOTHER_VALID_ADDRESS =
 	"GCFONE23AB7Y6C5YZOMKUKGETPIAJA752ZPMORQO5VKA6LHXHC7Y3YPE";
+
+// AddWalletModal persists to POST /api/wallets (see #675) — stub fetch so
+// existing form/validation tests exercise the real success path without a
+// live backend.
+function mockCreateWalletFetch() {
+	return vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+		const body = JSON.parse(String(init?.body ?? "{}"));
+		return new Response(
+			JSON.stringify({
+				id: "wallet-test-id",
+				address: body.address,
+				network: body.network,
+				label: body.label,
+				status: "pending",
+				createdAt: new Date().toISOString(),
+			}),
+			{ status: 201, headers: { "content-type": "application/json" } },
+		);
+	});
+}
+
+beforeEach(() => {
+	vi.stubGlobal("fetch", mockCreateWalletFetch());
+});
+
+afterEach(() => {
+	vi.unstubAllGlobals();
+});
 
 function renderModal(
 	props?: Partial<React.ComponentProps<typeof AddWalletModal>>,
@@ -448,5 +476,58 @@ describe("AddWalletModal close behaviour", () => {
 		const { onClose } = renderModal();
 		await user.keyboard("{Escape}");
 		expect(onClose).toHaveBeenCalledOnce();
+	});
+});
+
+// ─── Backend persistence (#675) ────────────────────────────────────────────────
+
+describe("AddWalletModal persistence", () => {
+	it("POSTs the new wallet to /api/wallets instead of only updating local state", async () => {
+		const user = userEvent.setup();
+		renderModal();
+
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.type(screen.getByLabelText(/label/i), "My Main Wallet");
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+
+		await waitFor(() =>
+			expect(
+				screen.getByText(/wallet added successfully/i),
+			).toBeInTheDocument(),
+		);
+
+		expect(fetch).toHaveBeenCalledWith(
+			"/api/wallets",
+			expect.objectContaining({ method: "POST" }),
+		);
+		const [, init] = (fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		const sentBody = JSON.parse(init.body as string);
+		expect(sentBody).toMatchObject({
+			address: VALID_ADDRESS,
+			network: "mainnet",
+			label: "My Main Wallet",
+		});
+	});
+
+	it("shows an error and does not call onAdd when persistence fails", async () => {
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(
+				async () =>
+					new Response(JSON.stringify({ message: "Server unavailable" }), {
+						status: 500,
+					}),
+			),
+		);
+		const user = userEvent.setup();
+		const { onAdd } = renderModal();
+
+		await user.type(screen.getByLabelText(/stellar address/i), VALID_ADDRESS);
+		await user.click(screen.getByRole("button", { name: /add wallet/i }));
+
+		expect(await screen.findByText(/server unavailable/i)).toBeInTheDocument();
+		expect(onAdd).not.toHaveBeenCalled();
+		// Form stays open so the user can retry.
+		expect(screen.getByLabelText(/stellar address/i)).toBeInTheDocument();
 	});
 });

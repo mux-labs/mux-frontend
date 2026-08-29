@@ -8,6 +8,11 @@ import {
 	useState,
 } from "react";
 import { invalidateWalletsCache } from "@/hooks/useWallets";
+import {
+	clearSession as clearBearerSession,
+	createSession as createBearerSession,
+	saveSession as saveBearerSession,
+} from "@/lib/session";
 import { resetWalletsPrefetchCache } from "@/lib/walletsPrefetchCache";
 import {
 	trackAuthEvent,
@@ -30,6 +35,19 @@ interface SessionRecord {
 	expiresAt: number;
 }
 
+/**
+ * Bearer-token block returned by `POST /api/auth/login` (mock mode always
+ * returns one; a real backend returns one when it doesn't rely solely on the
+ * HttpOnly cookie). Persisted to `sessionStorage` via `src/lib/session.js` so
+ * `src/lib/api.js` can attach `Authorization` headers and refresh on 401.
+ */
+export interface SessionTokens {
+	accessToken: string;
+	refreshToken?: string;
+	/** Seconds until the access token expires. */
+	expiresIn?: number;
+}
+
 interface AuthContextValue {
 	/** The currently authenticated user, or null if not signed in. */
 	user: AuthUser | null;
@@ -41,8 +59,14 @@ interface AuthContextValue {
 	 * Persist the authenticated user and start a session.
 	 * @param user - The authenticated user object returned by the API.
 	 * @param ttlMs - Session lifetime in milliseconds. Defaults to 8 hours.
+	 * @param tokens - Optional bearer-token block from the login response;
+	 *   persisted to `sessionStorage` for `src/lib/api.js` (#628).
 	 */
-	signIn: (user: AuthUser, ttlMs?: number) => void;
+	signIn: (
+		user: AuthUser,
+		ttlMs?: number,
+		tokens?: SessionTokens | null,
+	) => void;
 	/** Clear the session and sign the user out. */
 	signOut: () => void;
 }
@@ -81,32 +105,41 @@ const DEFAULT_TTL_MS = 8 * 60 * 60 * 1000;
 //   can recognise authenticated users without breaking deep-links.
 //
 // Secure flag:
-//   Omitted here so localhost development works without HTTPS.  The
-//   production deployment MUST set "; Secure" on the cookie (e.g. via
-//   a server-set Set-Cookie header from the login API route) so the
-//   cookie is only transmitted over TLS.
+//   Added automatically whenever the page is served over HTTPS (i.e. every
+//   real deployment) so the marker cookie is never transmitted in cleartext.
+//   Omitted on plain-HTTP `localhost` so `pnpm dev` keeps working (#627).
 //
 // HttpOnly:
-//   This cookie is set client-side via `document.cookie` so it cannot
-//   be HttpOnly (HttpOnly cookies can only be set by the server).
-//   If stronger protection is needed, the login API route should set
-//   an HttpOnly session cookie via `Set-Cookie` response header.
+//   The authoritative session token is the HttpOnly, backend-verified
+//   `mux_auth_token` cookie set server-side by `/api/auth/login` (see
+//   `src/app/api/auth/login/route.ts`). This client-set marker cookie
+//   intentionally cannot be HttpOnly and carries no secret — it only lets
+//   the middleware's non-production presence check recognise a session.
 //
 // Path=/ restricts the cookie to all paths; no Domain attribute means
 // it is host-only (not sent to subdomains), which is the most restrictive
 // and safest default.
 // ---------------------------------------------------------------------------
 
+/** True when the current page is served over HTTPS (so `; Secure` is safe). */
+function isSecureContext(): boolean {
+	return (
+		typeof window !== "undefined" && window.location?.protocol === "https:"
+	);
+}
+
 function setSessionCookie(ttlMs: number): void {
 	const maxAge = Math.floor(ttlMs / 1000);
-	// SameSite=Lax is safe for same-origin navigation; Secure is omitted here
-	// so it works on localhost — add "; Secure" in production via a server-set
-	// Set-Cookie header.  See the CSRF / SameSite notes above for full details.
-	document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; max-age=${maxAge}; SameSite=Lax`;
+	// SameSite=Lax is safe for same-origin navigation; `; Secure` is appended
+	// on HTTPS so production never sends the cookie over cleartext, while
+	// plain-HTTP localhost still works. See the CSRF / SameSite notes above.
+	const secure = isSecureContext() ? "; Secure" : "";
+	document.cookie = `${SESSION_COOKIE_NAME}=1; path=/; max-age=${maxAge}; SameSite=Lax${secure}`;
 }
 
 function clearSessionCookie(): void {
-	document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax`;
+	const secure = isSecureContext() ? "; Secure" : "";
+	document.cookie = `${SESSION_COOKIE_NAME}=; path=/; max-age=0; SameSite=Lax${secure}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -162,20 +195,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
-	const signIn = useCallback((authUser: AuthUser, ttlMs = DEFAULT_TTL_MS) => {
-		const record: SessionRecord = {
-			user: authUser,
-			expiresAt: Date.now() + ttlMs,
-		};
-		sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(record));
-		setSessionCookie(ttlMs);
-		setUser(authUser);
-	}, []);
+	const signIn = useCallback(
+		(
+			authUser: AuthUser,
+			ttlMs = DEFAULT_TTL_MS,
+			tokens?: SessionTokens | null,
+		) => {
+			const record: SessionRecord = {
+				user: authUser,
+				expiresAt: Date.now() + ttlMs,
+			};
+			sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(record));
+			setSessionCookie(ttlMs);
+
+			// Persist bearer tokens for `src/lib/api.js` (#628). When the login
+			// response carries no token block (e.g. a backend that relies solely
+			// on the HttpOnly cookie), `createBearerSession` returns null and we
+			// simply skip this — `apiFetch` then falls back to cookie auth.
+			const bearerSession = createBearerSession(tokens ?? undefined);
+			if (bearerSession) {
+				saveBearerSession(bearerSession);
+			}
+
+			setUser(authUser);
+		},
+		[],
+	);
 
 	const signOut = useCallback(() => {
 		const currentUser = user;
 		sessionStorage.removeItem(SESSION_STORAGE_KEY);
 		clearSessionCookie();
+		// Drop the bearer-token session used by `src/lib/api.js` (#628).
+		clearBearerSession();
 		// The backend-issued `mux_auth_token` cookie is HttpOnly, so it can only
 		// be cleared server-side (#621). Fire-and-forget — the client-side
 		// cleanup below stands regardless of whether this request succeeds.

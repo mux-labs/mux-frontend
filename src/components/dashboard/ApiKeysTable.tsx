@@ -1,6 +1,6 @@
 "use client";
 
-import { Key, Shield, ShieldOff } from "lucide-react";
+import { Key, Shield, ShieldOff, WifiOff } from "lucide-react";
 import { useEffect, useState } from "react";
 import APIKeyModal from "@/components/APIKeyModal";
 import { Badge } from "@/components/ui/badge";
@@ -18,6 +18,7 @@ import {
 	TableRow,
 } from "@/components/ui/table";
 import { useApiKeys } from "@/hooks/useApiKeys";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import { useRevokeApiKey } from "@/hooks/useRevokeApiKey";
 import { createApiKey } from "@/lib/api/index";
 import { cn } from "@/lib/utils";
@@ -36,6 +37,7 @@ export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
 	const usesFetchedData = initialKeys === undefined;
 	const fetchedKeys = useApiKeys(usesFetchedData);
 	const revokeApiKey = useRevokeApiKey();
+	const isOffline = useOfflineStatus();
 	const [keys, setKeys] = useState<ApiKey[]>(initialKeys ?? []);
 	const [pendingRevokeId, setPendingRevokeId] = useState<string | null>(null);
 	const [isModalOpen, setIsModalOpen] = useState(false);
@@ -85,7 +87,7 @@ export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
 	};
 
 	const handleConfirmRevoke = async () => {
-		if (!pendingRevokeId) return;
+		if (!pendingRevokeId || isOffline) return;
 
 		if (!usesFetchedData) {
 			setKeys((currentKeys) =>
@@ -170,6 +172,8 @@ export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
 									size="sm"
 									className="h-8 rounded-lg px-3 text-zinc-500 hover:text-red-600 dark:hover:text-red-400"
 									onClick={() => setPendingRevokeId(apiKey.id)}
+									disabled={isOffline}
+									title={isOffline ? "Revoking is paused while offline" : undefined}
 									data-testid={`revoke-btn-${apiKey.id}`}
 								>
 									Revoke
@@ -192,6 +196,8 @@ export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
 				open={Boolean(pendingRevokeId && pendingKey)}
 				keyLabel={pendingKey?.name}
 				isPending={revokeApiKey.loading}
+				disableConfirm={isOffline}
+				confirmDisabledReason="You're offline. Revoking is paused until your connection is back."
 				onConfirm={handleConfirmRevoke}
 				onCancel={() => setPendingRevokeId(null)}
 			/>
@@ -218,13 +224,21 @@ export function ApiKeysTable({ initialKeys }: ApiKeysTableProps) {
 							</p>
 						</div>
 					</div>
-				) : error && !initialKeys ? (
-					<div
-						role="alert"
-						className="m-6 rounded-xl border border-red-200 bg-red-50 p-6 dark:border-red-800 dark:bg-red-900/20"
-					>
-						Create new key
-					</Button>
+					<div className="flex flex-col items-end gap-1.5">
+						<Button
+							onClick={() => setIsModalOpen(true)}
+							disabled={isOffline}
+							data-testid="create-key-btn"
+						>
+							Create new key
+						</Button>
+						{isOffline && (
+							<span className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+								<WifiOff className="size-3.5 shrink-0" aria-hidden="true" />
+								Paused while offline
+							</span>
+						)}
+					</div>
 				</div>
 
 				<div

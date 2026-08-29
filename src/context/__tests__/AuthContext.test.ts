@@ -14,6 +14,7 @@ import { act, renderHook, waitFor } from "@testing-library/react";
 import React from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import * as useWalletsModule from "@/hooks/useWallets";
+import { loadSession } from "@/lib/session";
 import * as walletsPrefetchCache from "@/lib/walletsPrefetchCache";
 import {
 	AuthProvider,
@@ -216,6 +217,63 @@ describe("AuthContext — session lifecycle (issue #46)", () => {
 
 		invalidateSpy.mockRestore();
 		resetPrefetchSpy.mockRestore();
+	});
+
+	it("signIn persists a bearer-token session for src/lib/api.js (#628)", async () => {
+		const { result } = renderHook(() => useAuth(), { wrapper });
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+		act(() => {
+			result.current.signIn(
+				{ name: "T", email: "t@example.com", role: "developer" },
+				undefined,
+				{
+					accessToken: "access-abc",
+					refreshToken: "refresh-xyz",
+					expiresIn: 900,
+				},
+			);
+		});
+
+		const bearer = loadSession();
+		expect(bearer).not.toBeNull();
+		expect(bearer.accessToken).toBe("access-abc");
+		expect(bearer.refreshToken).toBe("refresh-xyz");
+		expect(bearer.expiresAt).toBeGreaterThan(Date.now());
+	});
+
+	it("signIn without a token block does not write a bearer session", async () => {
+		const { result } = renderHook(() => useAuth(), { wrapper });
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+		act(() => {
+			result.current.signIn({
+				name: "T",
+				email: "t@example.com",
+				role: "developer",
+			});
+		});
+
+		expect(loadSession()).toBeNull();
+	});
+
+	it("signOut clears the bearer-token session (#628)", async () => {
+		const { result } = renderHook(() => useAuth(), { wrapper });
+		await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+		act(() => {
+			result.current.signIn(
+				{ name: "T", email: "t@example.com", role: "developer" },
+				undefined,
+				{ accessToken: "access-abc", refreshToken: "refresh-xyz" },
+			);
+		});
+		expect(loadSession()).not.toBeNull();
+
+		act(() => {
+			result.current.signOut();
+		});
+		expect(loadSession()).toBeNull();
 	});
 
 	it("isAuthenticated reflects signIn/signOut transitions", async () => {

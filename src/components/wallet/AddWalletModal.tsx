@@ -13,6 +13,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { TestnetHint } from "@/components/ui/TestnetHint";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { createWallet } from "@/hooks/useWallets";
 import type { Wallet, WalletNetwork } from "@/types/wallet";
 import {
 	truncateAddress,
@@ -40,10 +41,6 @@ export interface AddWalletModalProps {
 type Step = "form" | "submitting" | "success";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function generateId(): string {
-	return `wallet-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-}
 
 function validateLabel(value: string): { valid: boolean; error?: string } {
 	const trimmed = value.trim();
@@ -90,6 +87,7 @@ export function AddWalletModal({
 	const [addressError, setAddressError] = useState<string | undefined>();
 	const [labelError, setLabelError] = useState<string | undefined>();
 	const [addedWallet, setAddedWallet] = useState<Wallet | null>(null);
+	const [submitError, setSubmitError] = useState<string | undefined>();
 	const { copy, copied, error: copyError } = useCopyToClipboard();
 
 	const addressInputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +122,7 @@ export function AddWalletModal({
 		setAddressError(undefined);
 		setLabelError(undefined);
 		setAddedWallet(null);
+		setSubmitError(undefined);
 	}
 
 	function handleClose() {
@@ -186,23 +185,26 @@ export function AddWalletModal({
 		}
 
 		setStep("submitting");
-
-		// Simulate async persistence (replace with real API call)
-		await new Promise((resolve) => setTimeout(resolve, 800));
+		setSubmitError(undefined);
 
 		const trimmedLabel = label.trim();
-		const newWallet: Wallet = {
-			id: generateId(),
-			address: address.trim(),
-			label: trimmedLabel || undefined,
-			network,
-			status: "pending",
-			createdAt: new Date(),
-		};
 
-		setAddedWallet(newWallet);
-		setStep("success");
-		onAdd(newWallet);
+		try {
+			const newWallet = await createWallet({
+				address: address.trim(),
+				network,
+				label: trimmedLabel || undefined,
+			});
+
+			setAddedWallet(newWallet);
+			setStep("success");
+			onAdd(newWallet);
+		} catch (err) {
+			setSubmitError(
+				err instanceof Error ? err.message : "Failed to add wallet.",
+			);
+			setStep("form");
+		}
 	}
 
 	if (!isOpen) return null;
@@ -266,6 +268,11 @@ export function AddWalletModal({
 				<div className="px-6 py-5">
 					{step === "form" && (
 						<form id="add-wallet-form" onSubmit={handleSubmit} noValidate>
+							{submitError && (
+								<div className="mb-4">
+									<FieldError message={submitError} />
+								</div>
+							)}
 							<div className="space-y-5">
 								{/* Address field */}
 								<div>

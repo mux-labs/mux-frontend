@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { getApiBaseUrl } from "@/lib/api/config";
+import { loadSession } from "@/lib/session";
 import {
 	getWalletsPrefetchEntry,
 	prefetchWallets,
@@ -20,13 +21,20 @@ function filterWalletsByNetwork(
 		: wallets.filter((wallet) => wallet.network === network);
 }
 
-/** Reads the stored session token from localStorage (client-side only). */
+/**
+ * Reads the stored access token via the shared session store
+ * (`src/lib/session.js`), which is backed by `sessionStorage`.
+ *
+ * Previously this read `localStorage.getItem("mux-auth-session")` directly —
+ * a second, ad-hoc copy of the session key that never matched where
+ * `saveSession()` (used by `src/lib/api.js` and covered by
+ * `src/lib/__tests__/session.test.ts`) actually writes the session, so the
+ * token here was always `null` and wallet requests went out unauthenticated.
+ */
 function getStoredAccessToken(): string | null {
 	if (typeof window === "undefined") return null;
 	try {
-		const raw = localStorage.getItem("mux-auth-session");
-		if (!raw) return null;
-		const session = JSON.parse(raw) as { accessToken?: string };
+		const session = loadSession() as { accessToken?: string } | null;
 		return session?.accessToken ?? null;
 	} catch {
 		return null;
@@ -100,6 +108,48 @@ async function fetchWallets(network: WalletNetwork | "all") {
 
 	const data = (await res.json()) as Wallet[];
 	return normalizeWallets(data);
+}
+
+export interface CreateWalletInput {
+	address: string;
+	network: WalletNetwork;
+	label?: string;
+}
+
+/**
+ * Persists a new wallet to the backend (via `/api/wallets`), so wallets
+ * added through `AddWalletModal` survive a refresh instead of only living
+ * in optimistic client-side state.
+ */
+export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
+	const base = getApiBaseUrl();
+	const url = base ? `${base}/wallets` : "/api/wallets";
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	const token = getStoredAccessToken();
+	if (token) {
+		headers["Authorization"] = `Bearer ${token}`;
+	}
+
+	const res = await fetchWithAuth(url, {
+		method: "POST",
+		headers,
+		body: JSON.stringify(input),
+	});
+
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(
+			typeof data?.message === "string"
+				? data.message
+				: `Failed to add wallet (${res.status})`,
+		);
+	}
+
+	const [wallet] = normalizeWallets([await res.json()]);
+	return wallet;
 }
 
 export function invalidateWalletsCache(network?: WalletNetwork | "all") {

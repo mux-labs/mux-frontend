@@ -131,7 +131,13 @@ verification checklist.
 ### Auth and API client behavior
 
 * `src/lib/api.js` adds request header support with `x-request-id` and automatic session refresh on `401`
+* `src/utils/fetchWithAuth.ts` (used by `useWallets` / `useWallet` / the Send flow) mirrors that
+  behaviour: on a `401` it calls `POST /api/auth/refresh` once and retries the original request with the
+  rotated token, only clearing the session and redirecting to `/login` if the refresh itself fails (#630)
 * `src/lib/session.js` persists auth state and clears stale sessions gracefully
+* `src/hooks/useSessionGuard.ts` is the documented client-side stale-session guard; `AuthGuard`
+  (wrapped around every real `/dashboard/*` route by `DashboardLayout`) delegates its redirect to it, so
+  a middleware-cookie pass with a missing in-memory session still bounces to `/login` (#624)
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
 * `src/app/api/requests/today/route.ts` and `src/app/api/transactions/route.ts` (list via `GET`, the wallet
@@ -159,8 +165,10 @@ verification checklist.
   on HTTPS.
 * Any bearer-token block in the login response is persisted to
   `sessionStorage` (never `localStorage`) via `src/lib/session.js` so
-  `src/lib/api.js` can attach `Authorization` headers and refresh on `401`
-  (#628).
+  `src/lib/api.js` **and** `src/utils/fetchWithAuth.ts` can attach
+  `Authorization` headers and refresh on `401` (#628, #630). Both read the
+  same `mux-auth-session` key, so `useWallets` sends the token `AuthContext`
+  actually stored (#629).
 * `signOut()` calls `POST /api/auth/logout` to clear the HttpOnly cookie and
   the stored bearer session.
 

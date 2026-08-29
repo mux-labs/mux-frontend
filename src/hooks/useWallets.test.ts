@@ -199,6 +199,37 @@ describe("useWallets", () => {
 		);
 	});
 
+	// #629: the bearer session AuthContext writes on sign-in (via
+	// `createSession` → `saveSession`, key `mux-auth-session` in sessionStorage)
+	// must be exactly what `useWallets` reads back — no second, drifting key.
+	it("sends the token AuthContext persisted on sign-in", async () => {
+		const { createSession, saveSession: persist } = await import(
+			"@/lib/session"
+		);
+		// Same call shape AuthContext.signIn makes with a login token block.
+		persist(
+			createSession({
+				accessToken: "authcontext-token",
+				refreshToken: "r",
+				expiresIn: 900,
+			}),
+		);
+
+		const fetchMock = vi.fn().mockResolvedValue({
+			ok: true,
+			json: () => Promise.resolve([mockWallet]),
+		});
+		vi.stubGlobal("fetch", fetchMock);
+
+		const { result } = renderHook(() => useWallets());
+		await waitFor(() => expect(result.current.loading).toBe(false));
+
+		const [, init] = fetchMock.mock.calls[0];
+		expect((init.headers as Record<string, string>).Authorization).toBe(
+			"Bearer authcontext-token",
+		);
+	});
+
 	it("omits the Authorization header when a token exists only under the legacy localStorage key", async () => {
 		window.localStorage.setItem(
 			"mux-auth-session",

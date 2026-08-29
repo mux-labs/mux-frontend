@@ -10,10 +10,31 @@
 
 Client side: `signIn(user, ttlMs?, tokens?)` in `src/context/AuthContext.tsx`
 persists any `tokens` block to tab-scoped `sessionStorage` via
-`src/lib/session.js` (`createSession` → `saveSession`); `src/lib/api.js`
-(`apiFetch`) then sends `Authorization: Bearer <accessToken>` and calls
-`/api/auth/refresh` once on a `401`. `signOut()` clears it. No token is ever
-written to `localStorage` or a `NEXT_PUBLIC_*` var (#628).
+`src/lib/session.js` (`createSession` → `saveSession`, key `mux-auth-session`);
+`src/lib/api.js` (`apiFetch`) then sends `Authorization: Bearer <accessToken>`
+and calls `/api/auth/refresh` once on a `401`. `signOut()` clears it. No token
+is ever written to `localStorage` or a `NEXT_PUBLIC_*` var (#628).
+
+`src/utils/fetchWithAuth.ts` — the wrapper used by `useWallets`, `useWallet`
+and the wallet Send flow — follows the same `401` contract as `apiFetch`
+(#630): it reads the refresh token from the **same** `mux-auth-session` store
+(`loadSession()`, not an ad-hoc `localStorage` key — #629), `POST`s to
+`/api/auth/refresh`, persists any rotated `accessToken`, and retries the
+original request once with the new bearer token. Only if the refresh call
+fails — or the retried request is still a `401` — does it clear the session
+(`sessionStorage` user record + bearer session + `mux_auth_session` cookie)
+and `window.location.replace` to `/login?callbackUrl=…`.
+
+### Stale-session guard (#624)
+
+`src/hooks/useSessionGuard.ts` is the client-side complement to the middleware
+route protection: once `useAuth()` has finished rehydrating, an unauthenticated
+visitor is redirected to `/login?callbackUrl=<path>`. It is **not** a
+standalone opt-in per page — `src/components/layouts/AuthGuard.tsx` calls it,
+and `DashboardLayout` wraps every real `/dashboard/*` route in `AuthGuard`
+(`requireAuth` defaults to `true`; the `/demo/dashboard/*` tree passes
+`requireAuth={false}`). So the guard runs on the whole production dashboard
+tree, and the `/demo` tree — which has no session — is the explicit opt-out.
 
 ## Spending limits
 

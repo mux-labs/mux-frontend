@@ -66,6 +66,8 @@ describe("AuthGuard — auth loading skeleton on protected routes (#466)", () =>
 	});
 
 	it("shows skeleton and redirects when auth loaded but user is not authenticated", () => {
+		mockReplace.mockClear();
+		window.history.replaceState({}, "", "/dashboard/settings");
 		mockUseAuth.mockReturnValue({
 			isLoading: false,
 			isAuthenticated: false,
@@ -79,6 +81,10 @@ describe("AuthGuard — auth loading skeleton on protected routes (#466)", () =>
 
 		expect(screen.getByTestId("dashboard-auth-skeleton")).toBeDefined();
 		expect(screen.queryByTestId("protected-content")).toBeNull();
+		// Redirect is delegated to useSessionGuard (#624).
+		expect(mockReplace).toHaveBeenCalledWith(
+			"/login?callbackUrl=%2Fdashboard%2Fsettings",
+		);
 	});
 
 	it("DashboardSkeleton has correct aria attributes", () => {

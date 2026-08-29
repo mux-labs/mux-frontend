@@ -1,8 +1,7 @@
 "use client";
 
 import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useSessionGuard } from "@/hooks/useSessionGuard";
 
 // ---------------------------------------------------------------------------
 // DashboardSkeleton — shown while auth state rehydrates on protected routes
@@ -87,17 +86,16 @@ interface AuthGuardProps {
  * AuthGuard renders a loading skeleton while the auth state is rehydrating
  * from sessionStorage, then redirects unauthenticated users to the login page.
  * Authenticated users see the protected content immediately.
+ *
+ * The redirect itself is delegated to {@link useSessionGuard} (issue #624) so
+ * the documented client-side stale-session guard is actually on the production
+ * `/dashboard/*` path — `DashboardLayout` wraps every real dashboard route in
+ * this component — rather than being a second, unused implementation.
  */
 export function AuthGuard({ children }: AuthGuardProps) {
 	const { isLoading, isAuthenticated } = useAuth();
-	const router = useRouter();
 
-	useEffect(() => {
-		if (!isLoading && !isAuthenticated) {
-			const callbackUrl = encodeURIComponent(window.location.pathname);
-			router.replace(`/login?callbackUrl=${callbackUrl}`);
-		}
-	}, [isLoading, isAuthenticated, router]);
+	useSessionGuard();
 
 	if (isLoading) {
 		return <DashboardSkeleton />;

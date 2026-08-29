@@ -18,17 +18,15 @@ import { Skeleton } from "@/components/ui/Skeleton";
 import { Toast } from "@/components/ui/toast";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
 
-const STORAGE_KEY = "spending-limits";
 const DEFAULT_DAILY_LIMIT = 5000;
 const DEFAULT_TRANSACTION_LIMIT = 1000;
-const DEFAULT_TODAY_USAGE = 750;
 const MIN_LIMIT = 1;
 const MAX_LIMIT = 1000000;
 const TOAST_RESET_MS = 3000;
 
-type LoadSource = "api" | "cache" | "default";
+type LoadSource = "api" | "default";
 
-interface StoredSpendingLimits {
+interface SpendingLimitsShape {
 	dailyLimit: number;
 	transactionLimit: number;
 }
@@ -52,7 +50,7 @@ function useInputKeyNav(onSave: () => void) {
 	);
 }
 
-function isStoredSpendingLimits(value: unknown): value is StoredSpendingLimits {
+function isSpendingLimitsShape(value: unknown): value is SpendingLimitsShape {
 	return (
 		typeof value === "object" &&
 		value !== null &&
@@ -73,7 +71,7 @@ function isSpendingLimitsResponse(
 		(value as Record<string, unknown>).limits !== null &&
 		typeof (value as Record<string, unknown>).todayUsage === "number" &&
 		Number.isFinite((value as Record<string, unknown>).todayUsage) &&
-		isStoredSpendingLimits((value as Record<string, unknown>).limits)
+		isSpendingLimitsShape((value as Record<string, unknown>).limits)
 	);
 }
 
@@ -86,30 +84,7 @@ function validateLimit(value: string): string | null {
 	return null;
 }
 
-function readCachedLimits(): StoredSpendingLimits | null {
-	try {
-		const raw = window.localStorage.getItem(STORAGE_KEY);
-		if (!raw) return null;
-		const parsed = JSON.parse(raw) as unknown;
-		return isStoredSpendingLimits(parsed) ? parsed : null;
-	} catch {
-		return null;
-	}
-}
-
-function persistCachedLimits(limits: StoredSpendingLimits) {
-	try {
-		window.localStorage.setItem(STORAGE_KEY, JSON.stringify(limits));
-		return true;
-	} catch {
-		return false;
-	}
-}
-
 function resolveLoadMessage(source: LoadSource, message: string): string {
-	if (source === "cache") {
-		return `${message} Showing cached values.`;
-	}
 	if (source === "default") {
 		return `${message} Using default limits.`;
 	}
@@ -154,7 +129,7 @@ export function SpendingLimitsCard({
 	const [transactionLimit, setTransactionLimit] = useState(
 		String(DEFAULT_TRANSACTION_LIMIT),
 	);
-	const [todayUsage, setTodayUsage] = useState(DEFAULT_TODAY_USAGE);
+	const [todayUsage, setTodayUsage] = useState(0);
 	const [dailyError, setDailyError] = useState<string | null>(null);
 	const [txError, setTxError] = useState<string | null>(null);
 	const [loadError, setLoadError] = useState<string | null>(null);
@@ -199,18 +174,11 @@ export function SpendingLimitsCard({
 		setDailyLimit(String(response.limits.dailyLimit));
 		setTransactionLimit(String(response.limits.transactionLimit));
 		setTodayUsage(response.todayUsage);
-		persistCachedLimits(response.limits);
 	}, []);
 
 	const loadLimits = useCallback(async () => {
 		setIsRefreshing(true);
 		setLoadError(null);
-
-		const cached = readCachedLimits();
-		if (cached) {
-			setDailyLimit(String(cached.dailyLimit));
-			setTransactionLimit(String(cached.transactionLimit));
-		}
 
 		try {
 			const response = await fetch(apiPath, {
@@ -228,14 +196,15 @@ export function SpendingLimitsCard({
 
 			applyResponse(data);
 		} catch (err) {
+			// Spending limits are account state owned by the backend — there is
+			// no per-browser cache to fall back to (see #649). Show the error
+			// and a clearly-labelled default so the UI still renders.
 			const message =
 				err instanceof Error ? err.message : "Failed to load spending limits.";
-			setLoadError(resolveLoadMessage(cached ? "cache" : "default", message));
-			if (!cached) {
-				setDailyLimit(String(DEFAULT_DAILY_LIMIT));
-				setTransactionLimit(String(DEFAULT_TRANSACTION_LIMIT));
-				setTodayUsage(DEFAULT_TODAY_USAGE);
-			}
+			setLoadError(resolveLoadMessage("default", message));
+			setDailyLimit(String(DEFAULT_DAILY_LIMIT));
+			setTransactionLimit(String(DEFAULT_TRANSACTION_LIMIT));
+			setTodayUsage(0);
 		} finally {
 			setIsRefreshing(false);
 		}
@@ -275,7 +244,6 @@ export function SpendingLimitsCard({
 		};
 
 		setIsSaving(true);
-		persistCachedLimits(payload);
 
 		try {
 			const response = await fetch(apiPath, {
@@ -523,8 +491,8 @@ export function SpendingLimitsCard({
 							</p>
 						) : (
 							<p className="text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-								Changes are cached locally and synced to the spending-limits
-								API.
+								Changes are saved to your Mux account through the
+								spending-limits API.
 							</p>
 						)}
 						{loadError ? (

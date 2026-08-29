@@ -3,12 +3,24 @@
 ## Spending limits
 
 The production dashboard calls `/api/spending-limits`, which proxies `GET` and
-`PUT` requests to mux-backend at `MUX_BACKEND_URL`. It forwards the server API
+`PUT` requests to mux-backend at `MUX_BACKEND_URL` (resolved by
+`getBackendApiBaseUrl()` in `src/lib/api/config.ts`). It forwards the server API
 key and any caller `Authorization` header, and returns `503` when no backend is
-configured. It does not persist values in the frontend process.
+configured. It does not persist values in the frontend process, and
+`todayUsage` comes straight from the backend's real activity — the frontend
+never substitutes a constant.
+
+`SpendingLimitsCard` (`src/components/dashboard/SpendingLimitsCard.tsx`) reads
+and writes limits only through this API. It does **not** cache them in
+`localStorage`: spending limits are account state, and a per-browser copy would
+be wrong for a second device or a shared machine (#649). On a failed load it
+shows an explicit error plus clearly-labelled default limits.
 
 The `/demo/dashboard/spending-limits` page intentionally calls
-`/api/demo/spending-limits`, whose in-memory store is demo-only.
+`/api/demo/spending-limits`, whose in-memory store is demo-only. That route
+derives `todayUsage` from the mock transaction store via `computeTodayUsage()`
+(`src/lib/spending-limits/todayUsage.ts`) — the sum of completed transaction
+amounts on the most recent day — rather than returning a fixed number (#648).
 
 This document explains the new API hooks added to the project:
 

@@ -16,13 +16,17 @@ import { useAuth } from "@/context/AuthContext";
 import { useNetwork } from "@/context/NetworkContext";
 import { useDarkMode } from "@/hooks/useDarkMode";
 import { useNotifications } from "@/hooks/useNotifications";
+import { shellLabels } from "@/lib/i18n/shellLabels";
 import type { WalletNetwork } from "@/types/wallet";
 
 interface TopNavProps {
 	onMenuClick: () => void;
 }
 
-const networkLabel = { mainnet: "Mainnet", testnet: "Testnet" } as const;
+const networkLabel = {
+	mainnet: shellLabels.header.mainnet,
+	testnet: shellLabels.header.testnet,
+} as const;
 // Text colors darkened to -900 to meet WCAG AA (4.5:1) contrast against their badge backgrounds.
 const networkBadgeClass = {
 	mainnet: "bg-blue-100 text-blue-900",
@@ -53,14 +57,14 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 			return "Wallet Detail";
 		}
 		const titleMap: Record<string, string> = {
-			dashboard: "Dashboard",
-			analytics: "Analytics",
-			users: "Users",
+			dashboard: shellLabels.nav.dashboard,
+			analytics: shellLabels.nav.analytics,
+			users: shellLabels.nav.users,
 			documents: "Documents",
-			settings: "Settings",
-			wallets: "Wallets",
-			"api-keys": "API Keys",
-			"spending-limits": "Spending Limits",
+			settings: shellLabels.nav.settings,
+			wallets: shellLabels.nav.wallets,
+			"api-keys": shellLabels.nav.apiKeys,
+			"spending-limits": shellLabels.nav.spendingLimits,
 		};
 		return (
 			titleMap[segment] ?? segment.charAt(0).toUpperCase() + segment.slice(1)
@@ -156,7 +160,9 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 						className="hidden lg:ml-6 lg:flex lg:items-center"
 					>
 						<ol className="flex items-center space-x-2 text-sm">
-							<li className="text-gray-500">Home</li>
+							<li className="text-gray-500">
+								{shellLabels.header.breadcrumbHome}
+							</li>
 							<li className="text-gray-400">/</li>
 							<li className="flex items-center gap-1.5 font-medium text-gray-900">
 								{pageTitle}
@@ -189,7 +195,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
 						>
-							Testnet
+							{shellLabels.header.testnet}
 						</button>
 						<button
 							type="button"
@@ -202,7 +208,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 									: "text-gray-500 hover:text-gray-700 dark:text-zinc-400 dark:hover:text-zinc-200"
 							}`}
 						>
-							Mainnet
+							{shellLabels.header.mainnet}
 						</button>
 					</div>
 					<span className="sr-only" aria-live="polite">
@@ -377,7 +383,7 @@ export function TopNav({ onMenuClick }: TopNavProps) {
 										className="h-4 w-4 text-gray-400"
 										aria-hidden="true"
 									/>
-									Sign out
+									{shellLabels.header.logout}
 								</button>
 							</div>
 						)}

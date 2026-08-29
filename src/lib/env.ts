@@ -51,6 +51,12 @@ const serverEnvVars: EnvVar[] = [
 		description: "Mux Protocol API key for server-side requests",
 	},
 	{
+		name: "MUX_BACKEND_URL",
+		required: false,
+		description:
+			"Server-only base URL of mux-backend, used by /api/spending-limits to proxy GET/PUT. No default: when unset the route returns 503 instead of fabricating usage data (see src/lib/api/config.ts::getBackendApiBaseUrl()).",
+	},
+	{
 		name: "MUX_API_SECRET",
 		required: false,
 		description: "Mux Protocol API secret for server-side requests",

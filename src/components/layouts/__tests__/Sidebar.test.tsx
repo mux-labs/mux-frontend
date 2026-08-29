@@ -1,9 +1,11 @@
 /**
- * Tests for Sidebar — includes issue #469: active route highlighting
+ * Tests for Sidebar — includes issue #469 (active route highlighting) and
+ * issue #650 (nav copy sourced from the centralized shellLabels).
  */
 
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { shellLabels } from "@/lib/i18n/shellLabels";
 import { Sidebar } from "../Sidebar";
 
 // ---------------------------------------------------------------------------
@@ -11,9 +13,20 @@ import { Sidebar } from "../Sidebar";
 // ---------------------------------------------------------------------------
 
 const mockPathname = vi.fn(() => "/dashboard");
+const prefetchRoute = vi.fn();
+const prefetchWallets = vi.fn(() => Promise.resolve([]));
 
 vi.mock("next/navigation", () => ({
 	usePathname: () => mockPathname(),
+	useRouter: () => ({
+		prefetch: prefetchRoute,
+		push: vi.fn(),
+		replace: vi.fn(),
+	}),
+}));
+
+vi.mock("@/lib/walletsPrefetchCache", () => ({
+	prefetchWallets: () => prefetchWallets(),
 }));
 
 vi.mock("@/context/AuthContext", () => ({
@@ -57,8 +70,17 @@ describe("Sidebar navigation", () => {
 		expect(screen.queryByRole("link", { name: /Orders/i })).toBeNull();
 	});
 
+	it("labels every nav item from shellLabels (#650)", () => {
+		renderSidebar();
+		for (const label of Object.values(shellLabels.nav)) {
+			expect(
+				screen.getByRole("link", { name: new RegExp(`^${label}$`, "i") }),
+			).toBeInTheDocument();
+		}
+	});
+
 	it("prefetches the wallets route and data on hover", () => {
-		render(<Sidebar isOpen={true} onClose={() => {}} />);
+		renderSidebar();
 
 		const walletsLink = screen.getByRole("link", { name: /Wallets/i });
 		fireEvent.mouseEnter(walletsLink);
@@ -68,7 +90,7 @@ describe("Sidebar navigation", () => {
 	});
 
 	it("does not prefetch wallet data when hovering unrelated links", () => {
-		render(<Sidebar isOpen={true} onClose={() => {}} />);
+		renderSidebar();
 
 		const settingsLink = screen.getByRole("link", { name: /Settings/i });
 		fireEvent.mouseEnter(settingsLink);
@@ -78,7 +100,7 @@ describe("Sidebar navigation", () => {
 	});
 
 	it("does not issue a duplicate route prefetch on repeated hovers", () => {
-		render(<Sidebar isOpen={true} onClose={() => {}} />);
+		renderSidebar();
 
 		const walletsLink = screen.getByRole("link", { name: /Wallets/i });
 		fireEvent.mouseEnter(walletsLink);

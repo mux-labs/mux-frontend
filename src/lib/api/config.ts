@@ -54,3 +54,17 @@ export function isMockFallbackAllowed(): boolean {
 export function getServerApiKey(): string | undefined {
 	return getEnv().MUX_API_KEY;
 }
+
+/**
+ * Server-only base URL for the `mux-backend` service that owns persistent
+ * account state (spending limits, real usage counters).
+ *
+ * Unlike {@link getApiBaseUrl}, this is read from `MUX_BACKEND_URL` — a
+ * server-only var, never inlined into the browser bundle — so it can point
+ * at an internal backend host. Returns `""` when unset; callers
+ * (`/api/spending-limits`) must treat that as "backend not configured" and
+ * respond `503` rather than falling back to fabricated data.
+ */
+export function getBackendApiBaseUrl(): string {
+	return (getEnv().MUX_BACKEND_URL ?? "").replace(/\/+$/, "");
+}

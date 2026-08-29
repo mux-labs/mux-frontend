@@ -68,6 +68,37 @@ jobs:
       - name: Run unit/component tests
         run: pnpm test
 
+  e2e-tests:
+    name: E2E smoke tests (Playwright)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The specs drive a `pnpm run dev` server (see playwright.config.ts) and
+      # only need Chromium. `--with-deps` pulls the OS libraries the browser
+      # needs on the ubuntu runner.
+      - name: Install Playwright browser (Chromium)
+        run: pnpm exec playwright install --with-deps chromium
+
+      # NEXT_PUBLIC_API_URL is left empty on purpose: the specs run against the
+      # in-repo mock `/api/*` routes so they need no live backend or secrets.
+      - name: Run Playwright e2e smoke tests
+        run: pnpm run test:e2e
+        env:
+          NEXT_PUBLIC_API_URL: ""
+
   build:
     name: Build (${{ matrix.network }})
     needs: [typecheck, unit-tests]

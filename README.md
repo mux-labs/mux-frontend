@@ -72,6 +72,7 @@ values for testnet/mainnet-connected work.
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
 | `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key. Used exclusively by Next.js API routes (`src/app/api/**`) to authenticate upstream requests to the backend. Never exposed to the browser — do not prefix it with `NEXT_PUBLIC_`. |
 | `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY` and sent alongside it on every upstream request. |
+| `MUX_BACKEND_URL` | No | _(none)_ | Server-only base URL of `mux-backend`. Used by `/api/spending-limits` to proxy `GET`/`PUT` (spending limits and the real `todayUsage`). When unset the route returns `503` rather than fabricating usage — the frontend never persists spending limits itself (see `getBackendApiBaseUrl()` in `src/lib/api/config.ts`). |
 
 There is no client-visible Mux API key. Project credentials only ever
 live in `MUX_API_KEY`/`MUX_API_SECRET` and are attached server-side, in
@@ -169,6 +170,9 @@ wallet send/receive, desktop and mobile viewports) with:
 pnpm exec playwright install --with-deps chromium
 pnpm run test:e2e
 ```
+
+CI runs this same suite on every push and PR (the `e2e-tests` job in
+`.github/workflows/ci.yml`), alongside typecheck, Vitest, and build.
 
 See [`tests/e2e/README.md`](tests/e2e/README.md) for what's covered and a
 manual verification checklist.

@@ -15,20 +15,33 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback, useRef } from "react";
 import { useAuth } from "@/context/AuthContext";
+import { shellLabels } from "@/lib/i18n/shellLabels";
 import { prefetchWallets } from "@/lib/walletsPrefetchCache";
 
 const navigation = [
-	{ name: "Dashboard", href: "/dashboard", icon: HomeIcon },
-	{ name: "Analytics", href: "/dashboard/analytics", icon: ChartBarIcon },
-	{ name: "Wallets", href: "/dashboard/wallets", icon: WalletIcon },
-	{ name: "Users", href: "/dashboard/users", icon: UsersIcon },
-	{ name: "API Keys", href: "/dashboard/api-keys", icon: KeyIcon },
+	{ name: shellLabels.nav.dashboard, href: "/dashboard", icon: HomeIcon },
 	{
-		name: "Spending Limits",
+		name: shellLabels.nav.analytics,
+		href: "/dashboard/analytics",
+		icon: ChartBarIcon,
+	},
+	{
+		name: shellLabels.nav.wallets,
+		href: "/dashboard/wallets",
+		icon: WalletIcon,
+	},
+	{ name: shellLabels.nav.users, href: "/dashboard/users", icon: UsersIcon },
+	{ name: shellLabels.nav.apiKeys, href: "/dashboard/api-keys", icon: KeyIcon },
+	{
+		name: shellLabels.nav.spendingLimits,
 		href: "/dashboard/spending-limits",
 		icon: ShieldCheckIcon,
 	},
-	{ name: "Settings", href: "/dashboard/settings", icon: CogIcon },
+	{
+		name: shellLabels.nav.settings,
+		href: "/dashboard/settings",
+		icon: CogIcon,
+	},
 ];
 
 function isNavItemActive(pathname: string, itemHref: string): boolean {

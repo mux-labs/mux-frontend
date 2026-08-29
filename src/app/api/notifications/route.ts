@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import { canUseMockFallback } from "@/lib/api/runtimeMode";
 import {
 	getNotifications,
 	markAllNotificationsRead,

@@ -22,8 +22,15 @@
  * live edge runtime; `src/middleware.ts` is a thin wrapper around it.
  */
 
-/** Route prefixes that require authentication. */
-export const PROTECTED_PREFIXES = ["/dashboard"];
+/**
+ * Route prefixes that require authentication.
+ *
+ * `/demo/dashboard` renders the same full dashboard shell as `/dashboard`
+ * from local mock data, so it sits behind the same gate — the developer
+ * console must never be publicly reachable with mock wallets and fake
+ * analytics. Keep this in sync with `config.matcher` in `src/middleware.ts`.
+ */
+export const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 
 /** HttpOnly cookie holding the backend-issued opaque session token. */
 export const SESSION_TOKEN_COOKIE = "mux_auth_token";

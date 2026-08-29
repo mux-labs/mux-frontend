@@ -112,7 +112,8 @@ are disabled when `NODE_ENV=production` so mock data is never served in a
 production build.
 
 **Production never silently falls back to mock data.** `/api/auth/login`,
-`/api/auth/refresh`, `/api/wallets`, and `/api/wallets/[id]` all fall back
+`/api/auth/refresh`, `/api/wallets`, `/api/wallets/[id]`,
+`GET /api/transactions`, and `/api/notifications` all fall back
 to in-repo mock data (fake wallets, a hardcoded mock bearer/refresh token)
 when no backend URL is configured — that's what makes `pnpm run dev`, CI,
 and the `/demo` routes work with no live backend. In a production build
@@ -132,9 +133,11 @@ verification checklist.
 * `src/lib/session.js` persists auth state and clears stale sessions gracefully
 * `src/hooks/useWallets.ts` adds a wallet query hook that loads wallets from `/api/wallets`
 * `src/app/api/auth/refresh/route.ts`, `/api/wallets/route.ts`, and `/api/wallets/[id]/route.ts` simulate auth-protected backend behavior for local testing
-* `src/app/api/requests/today/route.ts` and `POST /api/transactions` (used by the wallet "Send" flow) follow the
-  same pattern as the routes above: they proxy to `NEXT_PUBLIC_API_URL` (or its aliases) when configured, and fall
-  back to mock data/an in-memory mock transaction otherwise — never a hardcoded value in production
+* `src/app/api/requests/today/route.ts` and `src/app/api/transactions/route.ts` (list via `GET`, the wallet
+  "Send" flow via `POST`) follow the same pattern as the routes above: they proxy to `NEXT_PUBLIC_API_URL`
+  (or its aliases) when configured, and fall back to mock data / an in-memory mock transaction otherwise.
+  `GET /api/transactions` filters the mock list by `?address=` (sender or recipient) and `?network=`, and
+  returns `503 backend_unavailable` in a production build with no backend rather than serving mock history
 * Receive-address QR codes (`src/components/wallet/QrCode.tsx`) and the QR download action
   (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
   package; no backend call is involved
@@ -143,8 +146,9 @@ verification checklist.
 `POST /api/auth/login` proxies to the backend and stores the backend-issued
 session token in an **HttpOnly `mux_auth_token` cookie**. The Next.js
 middleware verifies that token against `GET {backend}/auth/session` on every
-`/dashboard` request — the old client-set `mux_auth_session` marker cookie is
-only trusted in mock mode (no backend). `signOut()` calls
+`/dashboard` and `/demo/dashboard` request — the old client-set
+`mux_auth_session` marker cookie is only trusted in mock mode (no backend).
+An unauthenticated request is redirected to `/login?callbackUrl=<path>`. `signOut()` calls
 `POST /api/auth/logout` to clear the HttpOnly cookie. See
 [`docs/auth-local-setup.md`](docs/auth-local-setup.md).
 

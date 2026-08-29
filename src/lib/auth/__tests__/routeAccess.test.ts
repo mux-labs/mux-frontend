@@ -16,9 +16,14 @@ describe("isProtectedPath", () => {
 		expect(isProtectedPath("/dashboard/wallets")).toBe(true);
 	});
 
+	it("matches the /demo/dashboard mirror and its subpaths", () => {
+		expect(isProtectedPath("/demo/dashboard")).toBe(true);
+		expect(isProtectedPath("/demo/dashboard/wallets/w-001")).toBe(true);
+	});
+
 	it("does not match unrelated paths", () => {
 		expect(isProtectedPath("/login")).toBe(false);
-		expect(isProtectedPath("/demo/dashboard")).toBe(false);
+		expect(isProtectedPath("/demo")).toBe(false);
 		expect(isProtectedPath("/dashboardish")).toBe(false);
 	});
 });

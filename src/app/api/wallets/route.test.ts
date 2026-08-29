@@ -61,6 +61,47 @@ describe("GET /api/wallets", () => {
 			);
 		});
 
+		it("forwards the bearer token when no network filter is given", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			const fetchMock = vi.fn().mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve([{ id: "w1" }, { id: "w2" }]),
+			});
+			vi.stubGlobal("fetch", fetchMock);
+
+			const res = await GET(
+				makeRequest("http://localhost/api/wallets", "Bearer real-token"),
+			);
+
+			expect(res.status).toBe(200);
+			expect(fetchMock).toHaveBeenCalledWith(
+				"https://api.example.com/wallets?",
+				expect.objectContaining({
+					headers: expect.objectContaining({
+						authorization: "Bearer real-token",
+					}),
+				}),
+			);
+		});
+
+		it("propagates the upstream error status instead of falling back to mock wallets", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: false,
+					status: 403,
+					json: () => Promise.resolve({ error: "forbidden" }),
+				}),
+			);
+
+			const res = await GET(
+				makeRequest("http://localhost/api/wallets", "Bearer real-token"),
+			);
+			expect(res.status).toBe(403);
+			expect(await res.json()).toEqual({ error: "forbidden" });
+		});
+
 		it("returns 502 when the backend is unreachable", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
 			vi.stubGlobal(
@@ -112,11 +153,40 @@ describe("GET /api/wallets", () => {
 				),
 			);
 			const body = await res.json();
+			expect(body.length).toBeGreaterThan(0);
 			expect(
 				body.every(
 					(wallet: { network: string }) => wallet.network === "testnet",
 				),
 			).toBe(true);
+		});
+
+		it("returns wallets from every network when no network filter is given", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NODE_ENV", "test");
+
+			const res = await GET(
+				makeRequest("http://localhost/api/wallets", "Bearer mock-access-token"),
+			);
+			const body = (await res.json()) as { network: string }[];
+			const networks = new Set(body.map((wallet) => wallet.network));
+			expect(networks.has("mainnet")).toBe(true);
+			expect(networks.has("testnet")).toBe(true);
+		});
+
+		it("ignores an unrecognised network value instead of returning nothing", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NODE_ENV", "test");
+
+			const res = await GET(
+				makeRequest(
+					"http://localhost/api/wallets?network=regtest",
+					"Bearer mock-access-token",
+				),
+			);
+			const body = await res.json();
+			expect(Array.isArray(body)).toBe(true);
+			expect(body.length).toBeGreaterThan(0);
 		});
 	});
 

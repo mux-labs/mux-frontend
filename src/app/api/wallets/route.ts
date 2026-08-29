@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import {
+	getApiBaseUrl,
+	getUpstreamAuthHeaders,
+	isMockFallbackAllowed,
+} from "@/lib/api/config";
 import { dummyWallets } from "@/mock-data/wallets";
 
 const VALID_ACCESS_TOKEN = "mock-access-token";

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import { getApiBaseUrl, getApiKey } from "@/lib/api/config";
+import { canUseMockFallback } from "@/lib/api/runtimeMode";
 import { mockTransactions } from "@/mock-data/transactions";
 import type { Transaction, TransactionNetwork } from "@/types/transaction";
 import { isValidStellarAddress } from "@/utils/addressValidation";
@@ -21,6 +22,11 @@ function backendHeaders(request: Request) {
  * (NEXT_PUBLIC_API_URL or legacy aliases), forwarding query params such as
  * `address` and `network`. If no backend URL is set, falls back to mock
  * data filtered locally so local development / demo still honors filters.
+ *
+ * The mock fallback never runs in a production build (`NODE_ENV=production`):
+ * a missing backend URL there is a misconfiguration, so we return a 503
+ * instead of silently serving fabricated transaction history. See
+ * `canUseMockFallback()`.
  */
 export async function GET(request: Request) {
 	const { searchParams } = new URL(request.url);
@@ -51,7 +57,18 @@ export async function GET(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
+	if (!canUseMockFallback()) {
+		return NextResponse.json(
+			{
+				error: "backend_unavailable",
+				message:
+					"No transactions backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+			},
+			{ status: 503 },
+		);
+	}
+
 	const address = searchParams.get("address")?.trim();
 	const network = searchParams.get("network");
 

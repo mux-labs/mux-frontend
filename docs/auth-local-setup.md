@@ -173,13 +173,14 @@ On every page load, `AuthProvider` runs a `useEffect` that:
 
 ### Server-side (middleware)
 
-`src/middleware.ts` checks for the `mux_auth_session` cookie on every request
-to protected prefixes. If the cookie is absent, the user is redirected to
-`/login?callbackUrl=<original-path>`.
+`src/middleware.ts` delegates to `evaluateAccess()` in
+`src/lib/auth/routeAccess.ts` on every request to a protected prefix. When
+access is denied the user is redirected to `/login?callbackUrl=<original-path>`;
+a rejected `mux_auth_token` is also cleared from the browser on that redirect.
 
 ```ts
-// src/middleware.ts
-const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
+// src/lib/auth/routeAccess.ts
+export const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 ```
 
 `/demo/dashboard` renders the same full dashboard shell as `/dashboard`
@@ -187,8 +188,9 @@ const PROTECTED_PREFIXES = ["/dashboard", "/demo/dashboard"];
 developer console must never be publicly reachable with mock wallets and
 fake analytics in a production build.
 
-Add new protected route prefixes to this array **and** to the `config.matcher`
-list at the bottom of `src/middleware.ts` as the app grows.
+Add new protected route prefixes to `PROTECTED_PREFIXES` in
+`src/lib/auth/routeAccess.ts` **and** to the `config.matcher` list at the
+bottom of `src/middleware.ts` as the app grows.
 
 `DashboardLayout` wraps its children in `AuthGuard` for the real
 `/dashboard/*` tree (`requireAuth` defaults to `true`; the demo tree passes
@@ -269,7 +271,8 @@ Tests for the login page and auth context live in:
 src/app/login/__tests__/LoginPage.test.tsx
 src/context/__tests__/AuthContext.test.ts
 src/lib/auth/__tests__/sessionToken.test.ts   # JWT sign/verify (#622)
-src/__tests__/middleware.test.ts               # route protection (#622)
+src/lib/auth/__tests__/routeAccess.test.ts     # access-decision logic (#621)
+src/__tests__/middleware.test.ts               # route protection + callbackUrl (#652)
 src/app/api/auth/login/__tests__/route.test.ts # sets the session cookie
 src/app/api/auth/logout/route.test.ts          # clears the session cookie
 src/components/layouts/__tests__/AuthGuard.test.tsx

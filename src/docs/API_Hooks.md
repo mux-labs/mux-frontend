@@ -126,6 +126,23 @@ Data hooks and their API routes follow one rule, centralised in
 - In production with no backend, `/api/notifications` returns `503` — the
   panel shows its error state with a retry.
 
+### `GET /api/transactions` — #654
+
+`src/app/api/transactions/route.ts`.
+
+- Proxies to `GET {backend}/transactions?<query>` when a backend is set,
+  forwarding the caller's `Authorization` header (and the server `x-api-key`
+  when `MUX_API_KEY` is set). Upstream error statuses are passed through;
+  an unreachable backend returns `502`.
+- With no backend (non-production), filters `src/mock-data/transactions.ts`
+  locally: `?address=` matches either the sender or the recipient, and
+  `?network=mainnet|testnet` narrows by network. Both filters combine; an
+  unrecognised `network` value is ignored rather than emptying the list.
+- With no backend in a **production** build the route returns
+  `503 backend_unavailable` — fabricated transaction history is never
+  served in production (`canUseMockFallback()` in
+  `src/lib/api/runtimeMode.ts`).
+
 ### Notifications bell — #618
 
 `src/components/layouts/TopNav.tsx` mounts

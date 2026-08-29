@@ -102,6 +102,48 @@ async function fetchWallets(network: WalletNetwork | "all") {
 	return normalizeWallets(data);
 }
 
+export interface CreateWalletInput {
+	address: string;
+	network: WalletNetwork;
+	label?: string;
+}
+
+/**
+ * Persists a new wallet to the backend (via `/api/wallets`), so wallets
+ * added through `AddWalletModal` survive a refresh instead of only living
+ * in optimistic client-side state.
+ */
+export async function createWallet(input: CreateWalletInput): Promise<Wallet> {
+	const base = getApiBaseUrl();
+	const url = base ? `${base}/wallets` : "/api/wallets";
+
+	const headers: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	const token = getStoredAccessToken();
+	if (token) {
+		headers["Authorization"] = `Bearer ${token}`;
+	}
+
+	const res = await fetchWithAuth(url, {
+		method: "POST",
+		headers,
+		body: JSON.stringify(input),
+	});
+
+	if (!res.ok) {
+		const data = await res.json().catch(() => ({}));
+		throw new Error(
+			typeof data?.message === "string"
+				? data.message
+				: `Failed to add wallet (${res.status})`,
+		);
+	}
+
+	const [wallet] = normalizeWallets([await res.json()]);
+	return wallet;
+}
+
 export function invalidateWalletsCache(network?: WalletNetwork | "all") {
 	if (!network || network === "all") {
 		walletsCache.clear();

@@ -8,6 +8,7 @@ import {
 	useRef,
 	useState,
 } from "react";
+import { CommandPalette } from "@/components/command-palette/CommandPalette";
 import { NetworkProvider } from "@/context/NetworkContext";
 import { AuthGuard } from "./AuthGuard";
 import { Sidebar } from "./Sidebar";
@@ -132,6 +133,8 @@ function DashboardLayoutShell({ children }: DashboardLayoutProps) {
 						</div>
 					</main>
 				</div>
+
+				<CommandPalette />
 			</div>
 		</NetworkProvider>
 	);

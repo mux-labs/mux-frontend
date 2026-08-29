@@ -123,19 +123,32 @@ query param.
 
 ## Production never silently serves mock data
 
-`/api/auth/login`, `/api/auth/refresh`, `/api/wallets`, and
-`/api/wallets/[id]` fall back to in-repo mock responses (fake wallets, a
-hardcoded mock bearer/refresh token) whenever no backend URL is
-configured — that's what lets `pnpm run dev`, CI, and the `/demo` routes
-run with no live backend. `isMockFallbackAllowed()`
+`/api/auth/login`, `/api/auth/refresh`, `/api/wallets`,
+`/api/wallets/[id]`, `/api/overview`, and `/api/api-keys` (`GET`/`POST`/
+`PATCH`) fall back to in-repo mock responses (fake wallets, dashboard
+stats, API keys, and a hardcoded mock bearer/refresh token) whenever no
+backend URL is configured — that's what lets `pnpm run dev`, CI, and the
+`/demo` routes run with no live backend. `isMockFallbackAllowed()`
 (`src/lib/api/config.ts`) disables that fallback whenever
 `NODE_ENV=production`: those routes return `503 backend_unavailable`
 instead. This matters because the mock fallback accepts a hardcoded
 bearer token (`mock-access-token`) and refresh token
-(`mock-refresh-token`) as valid — without the guard, a production
-deployment that forgot to set `NEXT_PUBLIC_API_URL` would silently serve
-fabricated wallets/analytics and accept those hardcoded tokens as a real
-authenticated session.
+(`mock-refresh-token`) as valid, and `/api/api-keys` would otherwise
+create/list/revoke against a `localStorage`-backed mock store — without
+the guard, a production deployment that forgot to set
+`NEXT_PUBLIC_API_URL` would silently serve fabricated wallets/analytics/API
+keys and accept those hardcoded tokens as a real authenticated session.
+
+`APIKeyModal`'s own client-side key generator (used only when a caller
+renders it without an `onCreateKey` handler, e.g. Storybook) follows the
+same rule: it throws instead of fabricating a secret whenever
+`isMockFallbackAllowed()` is `false`.
+
+The wallets sidebar prefetch (`src/lib/walletsPrefetchCache.ts`) attaches
+the caller's session token to its request and keys its in-memory cache
+entry by that token, so a prefetch started under one session can never be
+served to a different session that signs in afterward on the same
+tab/device within the cache's 30s TTL.
 
 ## CI
 
@@ -161,10 +174,10 @@ job sets `MUX_BACKEND_URL`, so `/api/spending-limits` returns `503` in CI
       surfaces a startup error only for vars marked `required` in
       `src/lib/env.ts` (none currently are, by design).
 - [ ] `NODE_ENV=production` with `NEXT_PUBLIC_API_URL` (and its aliases)
-      unset → `/api/wallets`, `/api/wallets/[id]`, `/api/auth/login`, and
-      `/api/auth/refresh` all return `503 { error: "backend_unavailable" }`
-      instead of mock data, and the hardcoded mock bearer/refresh tokens
-      are rejected.
+      unset → `/api/wallets`, `/api/wallets/[id]`, `/api/auth/login`,
+      `/api/auth/refresh`, `/api/overview`, and `/api/api-keys` all return
+      `503 { error: "backend_unavailable" }` instead of mock data, and the
+      hardcoded mock bearer/refresh tokens are rejected.
 - [ ] Switching the in-app Testnet/Mainnet control on `/dashboard/wallets`
       re-fetches `/api/wallets?network=<selected>` and shows only that
       network's wallets — with no separate "all networks" filter control

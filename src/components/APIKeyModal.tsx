@@ -5,7 +5,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
 import { useOfflineStatus } from "@/hooks/useOfflineStatus";
-import type { CreatedApiKey } from "@/mock-data/api-keys";
+import { isMockFallbackAllowed } from "@/lib/api/config";
+import type { CreatedApiKey } from "@/types/apiKey";
 
 interface APIKeyModalProps {
 	isOpen: boolean;
@@ -27,7 +28,19 @@ export default function APIKeyModal({
 	const [acknowledged, setAcknowledged] = useState(false);
 	const isOffline = useOfflineStatus();
 
+	/**
+	 * Only used when the caller renders this modal without an `onCreateKey`
+	 * handler (e.g. Storybook / a standalone demo). This must never fabricate
+	 * a secret in a real production deployment — that would silently hand the
+	 * user a key that was never created on (or recognized by) the backend.
+	 */
 	const fallbackCreateKey = async (keyName: string): Promise<CreatedApiKey> => {
+		if (!isMockFallbackAllowed()) {
+			throw new Error(
+				"API key creation is unavailable: no backend is configured for this production deployment.",
+			);
+		}
+
 		const secret = `mux_live_${Math.random().toString(36).slice(2)}${Math.random()
 			.toString(36)
 			.slice(2)}`;

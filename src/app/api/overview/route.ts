@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import {
+	getApiBaseUrl,
+	getUpstreamAuthHeaders,
+	isMockFallbackAllowed,
+} from "@/lib/api/config";
 import { mockOverview } from "@/mock-data/overview";
 
 /**
@@ -7,7 +11,10 @@ import { mockOverview } from "@/mock-data/overview";
  *
  * Proxies dashboard overview stats to the configured backend
  * (NEXT_PUBLIC_API_URL or legacy aliases). If no backend URL is set, falls
- * back to mock data so local development / demo works without a running API.
+ * back to mock data so local development / demo works without a running API
+ * — but only outside production. A production build with no backend
+ * configured returns `503` instead of fabricated stats, mirroring
+ * `/api/wallets` and `/api/activity` (see `isMockFallbackAllowed()`).
  */
 export async function GET(request: Request) {
 	const backendUrl = getApiBaseUrl();
@@ -40,6 +47,17 @@ export async function GET(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return NextResponse.json(
+			{
+				error: "backend_unavailable",
+				message:
+					"No overview backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+			},
+			{ status: 503 },
+		);
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	return NextResponse.json({ data: mockOverview });
 }

@@ -22,7 +22,7 @@ import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import { useRevokeApiKey } from "@/hooks/useRevokeApiKey";
 import { createApiKey } from "@/lib/api/index";
 import { cn } from "@/lib/utils";
-import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
+import type { ApiKey, CreatedApiKey } from "@/types/apiKey";
 
 interface ApiKeysTableProps {
 	/** Override keys list for focused component tests and storybook. */

@@ -1,11 +1,7 @@
-export interface OverviewData {
-	totalWallets: number;
-	activeWallets: number;
-	totalTransactions: number;
-	totalVolumeXlm: string;
-	apiRequestsToday: number;
-	lastUpdated: string;
-}
+import type { OverviewData } from "@/types/overview";
+
+/** Re-exported for backward compatibility; the canonical type now lives in `@/types/overview`. */
+export type { OverviewData };
 
 export const mockOverview: OverviewData = {
 	totalWallets: 156,

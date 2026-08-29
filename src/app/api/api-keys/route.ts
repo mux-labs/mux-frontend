@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import {
+	getApiBaseUrl,
+	getUpstreamAuthHeaders,
+	isMockFallbackAllowed,
+} from "@/lib/api/config";
 import { createApiKey, getApiKeys, revokeApiKey } from "@/mock-data/api-keys";
 
 function backendHeaders(): Record<string, string> {
@@ -9,13 +13,28 @@ function backendHeaders(): Record<string, string> {
 	};
 }
 
+function backendUnavailableResponse() {
+	return NextResponse.json(
+		{
+			error: "backend_unavailable",
+			message:
+				"No API keys backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+		},
+		{ status: 503 },
+	);
+}
+
 /**
  * GET /api/api-keys
  *
  * Proxies to the configured backend's real API key store
  * (NEXT_PUBLIC_API_URL or legacy aliases). Falls back to the local mock
  * store (previously localStorage-backed) only when no backend is
- * configured, so local dev/CI keeps working without a running API server.
+ * configured, so local dev/CI keeps working without a running API server —
+ * and only outside production, mirroring `/api/wallets` (see
+ * `isMockFallbackAllowed()`). A production deployment with no backend
+ * configured must never silently list, create, or revoke against the mock
+ * store.
  */
 export async function GET() {
 	const backendUrl = getApiBaseUrl();
@@ -44,7 +63,11 @@ export async function GET() {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return backendUnavailableResponse();
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	return NextResponse.json({ data: getApiKeys() });
 }
 
@@ -88,7 +111,11 @@ export async function POST(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return backendUnavailableResponse();
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	return NextResponse.json({ data: createApiKey(name) }, { status: 201 });
 }
 
@@ -139,7 +166,11 @@ export async function PATCH(request: Request) {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
+	if (!isMockFallbackAllowed()) {
+		return backendUnavailableResponse();
+	}
+
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
 	const revoked = revokeApiKey(body.id);
 	if (!revoked) {
 		return NextResponse.json({ error: "API key not found" }, { status: 404 });

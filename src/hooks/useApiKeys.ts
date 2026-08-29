@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { fetchApiKeys } from "@/lib/api/index";
-import type { ApiKey } from "@/mock-data/api-keys";
+import type { ApiKey } from "@/types/apiKey";
 
 export function useApiKeys(enabled = true) {
 	const [data, setData] = useState<ApiKey[] | null>(null);

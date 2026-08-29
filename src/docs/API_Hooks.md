@@ -47,8 +47,61 @@ Files:
 
 - `src/hooks/useApiKeys.ts` — fetch + refetch behavior
 - `src/hooks/useRevokeApiKey.ts` — mutation for revoking a key
-- `src/lib/api.ts` — small API wrapper using `src/mock-data/api-keys.ts`
-- `src/mock-data/api-keys.ts` — mock store with `getApiKeys()` and `revokeApiKey()` persistence via `localStorage` or in-memory fallback
+- `src/lib/api.ts` — small API wrapper using `src/types/apiKey.ts`
+- `src/mock-data/api-keys.ts` — mock store with `getApiKeys()` and `revokeApiKey()` persistence via `localStorage` or in-memory fallback; used only as the non-production fallback for `src/app/api/api-keys/route.ts`
+
+### Types are not the mock's (#706, #707, #708)
+
+`ApiKey` / `CreatedApiKey` (`src/types/apiKey.ts`) and `OverviewData`
+(`src/types/overview.ts`) are the canonical shapes `DashboardOverview`,
+`ApiKeysTable`, `useRevokeApiKey`, and `APIKeyModal` type against. The
+`src/mock-data/*` modules import and re-export these same types purely for
+backward compatibility — they are not the source of truth, so a real
+`mux-backend` response only needs to satisfy the `src/types/*` contract,
+not whatever shape the mock fixture happens to use.
+
+### `/api/api-keys` revoke and the mock store (#707)
+
+`ApiKeysTable`'s revoke button calls `useRevokeApiKey().revoke(id)` →
+`revokeKey()` → `PATCH /api/api-keys`
+(`src/app/api/api-keys/route.ts`), which proxies to
+`{NEXT_PUBLIC_API_URL}/api-keys` when a backend is configured. GET, POST,
+and PATCH all fall back to the `localStorage`-backed mock store
+(`src/mock-data/api-keys.ts`) only when no backend is configured **and**
+`isMockFallbackAllowed()` is true — i.e. never in a production build. A
+production deployment with no backend configured gets `503
+backend_unavailable` instead of a revoke that silently "succeeds" against
+the mock store while leaving the key active on any real backend.
+
+### `APIKeyModal` create-once secret (#708)
+
+The full secret is only ever present on the value returned by the create
+call (`CreatedApiKey.secret`); the list endpoint (`GET /api/api-keys`)
+returns `ApiKey`, which has no `secret` field, so there is nothing to
+re-fetch. `APIKeyModal` holds the secret in local component state only
+and clears it on close; `ApiKeysTable` strips `secret` before ever putting
+a key into table state (`toTableApiKey()`). The modal's own client-side
+key generator — used only when rendered without an `onCreateKey` handler —
+throws instead of fabricating a secret whenever `isMockFallbackAllowed()`
+is `false`, so it can't silently hand out a fake key in production.
+
+### Wallets prefetch cache: TTL + tenant isolation (#705)
+
+`src/lib/walletsPrefetchCache.ts` (used by `Sidebar` on hover of the
+Wallets nav item) now attaches the current session's access token as an
+`Authorization: Bearer` header — previously it fetched with no auth header
+at all, so the request always failed once `/api/wallets` began requiring
+one. The cache entry is also keyed by that same token
+(`sessionKey()`), not just the request URL: if a different session (or an
+anonymous state) is active when `prefetchWallets()` / 
+`getWalletsPrefetchEntry()` is called, the previous entry is treated as a
+miss regardless of its 30s TTL. This closes a cross-tenant leak where a
+prefetch started under one user could otherwise still be "fresh" when a
+different user signs in on the same tab/device shortly after, and would
+have handed the second user the first user's wallet list.
+`resetWalletsPrefetchCache()` (called on `signOut()`) still clears it
+outright, but correctness no longer depends solely on every call site
+remembering to do so.
 
 ## `useWallets`
 

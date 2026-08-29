@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { revokeKey } from "@/lib/api/index";
-import type { ApiKey } from "@/mock-data/api-keys";
+import type { ApiKey } from "@/types/apiKey";
 
 export function useRevokeApiKey() {
 	const [loading, setLoading] = useState(false);

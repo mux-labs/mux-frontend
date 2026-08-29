@@ -1,5 +1,5 @@
-import type { ApiKey, CreatedApiKey } from "@/mock-data/api-keys";
-import type { OverviewData } from "@/mock-data/overview";
+import type { ApiKey, CreatedApiKey } from "@/types/apiKey";
+import type { OverviewData } from "@/types/overview";
 import ApiClient from "./client";
 import { getApiBaseUrl } from "./config";
 

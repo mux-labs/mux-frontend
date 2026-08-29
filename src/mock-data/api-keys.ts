@@ -7,22 +7,10 @@
  * environment with a backend configured, create/revoke/list are served by
  * the real mux-backend API instead.
  */
-export interface ApiKey {
-	id: string;
-	name: string;
-	/** Masked key shown in the table (e.g. "sk_live_51M0...") */
-	key: string;
-	status: "Active" | "Revoked";
-	createdAt: string;
-}
+import type { ApiKey, CreatedApiKey } from "@/types/apiKey";
 
-export interface CreatedApiKey extends ApiKey {
-	/**
-	 * Full secret returned only by the create flow. Never persist this in table
-	 * state after the modal is closed.
-	 */
-	secret: string;
-}
+/** Re-exported for backward compatibility; the canonical types now live in `@/types/apiKey`. */
+export type { ApiKey, CreatedApiKey };
 
 export const mockApiKeys: ApiKey[] = [
 	{

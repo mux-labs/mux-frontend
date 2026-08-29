@@ -28,14 +28,29 @@ The Mux Protocol frontend uses a **hybrid session** model:
   client-set `mux_auth_session` marker cookie is **not** trusted on its own —
   this closes the "anyone can forge `mux_auth_session=1`" gap. `/api/auth/login`
   proxies credentials to `{backend}/auth/login` and, on success, stores the
-  backend-issued token in the `mux_auth_token` cookie. `signOut()` calls
-  `POST /api/auth/logout`, which clears the cookie and best-effort notifies
-  `{backend}/auth/logout`.
+  backend-issued token in the `mux_auth_token` cookie via a server `Set-Cookie`
+  header with `HttpOnly; SameSite=Lax; Path=/` (plus `Secure` when
+  `NODE_ENV=production`) — see `setSessionCookie()` in
+  `src/app/api/auth/login/route.ts` (#627). `/api/auth/refresh` proxies to
+  `{backend}/auth/refresh`, forwarding the caller's `Authorization` header and
+  session cookie, and rotates `mux_auth_token` from the response (#626).
+  `signOut()` calls `POST /api/auth/logout`, which clears the cookie and
+  best-effort notifies `{backend}/auth/logout`.
 - **Mock mode** (no backend, non-production only): `/api/auth/login` accepts
-  any well-formed credentials and returns a mock user; the middleware accepts
-  the `mux_auth_session` marker cookie so `pnpm dev` / CI work without a live
-  auth server. In a **production** build with no backend, `/api/auth/login`
-  returns `503` — there is no mock sign-in in production.
+  any well-formed credentials and returns a mock user **plus a `session`
+  block** (`accessToken` / `refreshToken` / `expiresIn`); the middleware
+  accepts the `mux_auth_session` marker cookie so `pnpm dev` / CI work without
+  a live auth server. In a **production** build with no backend,
+  `/api/auth/login` and `/api/auth/refresh` return `503 backend_unavailable`
+  — there is no mock sign-in or mock refresh in production (#625).
+
+### Bearer tokens (`src/lib/session.js` / `src/lib/api.js`) — #628
+
+Any `session` block in the login response is persisted to `sessionStorage`
+(tab-scoped, cleared on close — never `localStorage`, never a `NEXT_PUBLIC_*`
+var) by `signIn`. `src/lib/api.js` then attaches
+`Authorization: Bearer <accessToken>` to outgoing requests and silently calls
+`/api/auth/refresh` once on a `401`. `signOut` clears this store.
 
 Full SSO / OAuth (Clerk, Better Auth, …) is a later change; this model is
 provider-agnostic and does not add any SaaS dependency.
@@ -127,12 +142,20 @@ signIn({ name: "Jane Doe", email: "jane@example.com", role: "developer" });
 signIn(user, 4 * 60 * 60 * 1000); // 4-hour session
 ```
 
+```ts
+// Optional third arg: bearer-token block from the login response (#628)
+signIn(user, undefined, { accessToken, refreshToken, expiresIn });
+```
+
 What `signIn` does:
 1. Writes a `SessionRecord` (user + `expiresAt`) to `sessionStorage` (client
    UI state only).
-2. Writes a non-`HttpOnly` `mux_auth_session=1` marker cookie — used only by
-   the middleware's non-production presence-check fallback.
-3. Updates `user` state in `AuthContext` → `isAuthenticated` becomes `true`.
+2. Writes a non-`HttpOnly` `mux_auth_session=1` marker cookie
+   (`SameSite=Lax`, plus `; Secure` on HTTPS) — used only by the middleware's
+   non-production presence-check fallback.
+3. If a token block is passed, persists it via `src/lib/session.js`
+   (`sessionStorage`) so `src/lib/api.js` can authorize requests (#628).
+4. Updates `user` state in `AuthContext` → `isAuthenticated` becomes `true`.
 
 The authoritative session token — the `HttpOnly` `mux_auth_session` cookie
 the middleware verifies in production — is set by `POST /api/auth/login`
@@ -150,9 +173,10 @@ signOut();
 What `signOut` does:
 1. Removes the `mux_auth_user` key from `sessionStorage`.
 2. Clears the client-side marker cookie (`max-age=0`).
-3. Fires `POST /api/auth/logout` (fire-and-forget) so the server clears the
-   `HttpOnly` `mux_auth_session` cookie — JS cannot delete it directly.
-4. Sets `user` to `null` → `isAuthenticated` becomes `false`.
+3. Clears the bearer-token session (`src/lib/session.js`).
+4. Fires `POST /api/auth/logout` (fire-and-forget) so the server clears the
+   `HttpOnly` `mux_auth_token` cookie — JS cannot delete it directly.
+5. Sets `user` to `null` → `isAuthenticated` becomes `false`.
 
 ### Session rehydration
 
@@ -257,9 +281,11 @@ NEXT_PUBLIC_API_URL=http://localhost:4000
 
 The backend is expected to expose `POST /auth/login` (returning a user plus
 an opaque session `token` / `accessToken` / `sessionToken`),
-`GET /auth/session` (200 when the token is valid), and
-`POST /auth/logout`. No custody secrets are ever placed in `NEXT_PUBLIC_*`
-or `localStorage`; the session token lives only in an HttpOnly cookie.
+`POST /auth/refresh` (rotating the token), `GET /auth/session` (200 when the
+token is valid), and `POST /auth/logout`. No custody secrets are ever placed
+in `NEXT_PUBLIC_*` or `localStorage`; the session token lives only in an
+HttpOnly cookie (bearer tokens, when returned, live only in tab-scoped
+`sessionStorage`).
 
 ---
 

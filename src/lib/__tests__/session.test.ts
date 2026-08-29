@@ -7,13 +7,14 @@
 
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
-	loadSession,
-	saveSession,
 	clearSession,
-	isSessionValid,
 	createDemoSession,
 	createExpiredDemoSession,
+	createSession,
+	isSessionValid,
+	loadSession,
 	STORAGE_KEY,
+	saveSession,
 } from "../session";
 
 describe("session.js — sessionStorage security migration", () => {
@@ -81,6 +82,41 @@ describe("session.js — sessionStorage security migration", () => {
 		expect(isSessionValid(undefined)).toBe(false);
 		expect(isSessionValid({})).toBe(false);
 		expect(isSessionValid({ accessToken: "x" })).toBe(false);
+	});
+
+	describe("createSession — build a record from a login token block (#628)", () => {
+		it("derives expiresAt from expiresIn (seconds)", () => {
+			const before = Date.now();
+			const record = createSession({
+				accessToken: "a",
+				refreshToken: "r",
+				expiresIn: 900,
+			});
+			expect(record).not.toBeNull();
+			expect(record!.accessToken).toBe("a");
+			expect(record!.refreshToken).toBe("r");
+			expect(record!.expiresAt).toBeGreaterThanOrEqual(before + 900_000 - 100);
+			expect(isSessionValid(record)).toBe(true);
+		});
+
+		it("passes an explicit expiresAt through unchanged", () => {
+			const at = Date.now() + 5_000;
+			expect(
+				createSession({ accessToken: "a", expiresAt: at })!.expiresAt,
+			).toBe(at);
+		});
+
+		it("returns null when there is no access token", () => {
+			expect(createSession(undefined)).toBeNull();
+			expect(createSession({})).toBeNull();
+			expect(createSession({ refreshToken: "r" })).toBeNull();
+		});
+
+		it("round-trips through saveSession/loadSession", () => {
+			const record = createSession({ accessToken: "tok", expiresIn: 60 });
+			saveSession(record);
+			expect(loadSession()!.accessToken).toBe("tok");
+		});
 	});
 
 	it("handles corrupt storage data gracefully", () => {

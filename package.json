@@ -23,7 +23,7 @@
 		"build-storybook": "storybook build"
 	},
 	"lint-staged": {
-		"*.{ts,tsx,js,jsx,css,scss,json,md}": "npm run lint:fix"
+		"*.{ts,tsx,js,jsx,css,scss,json,md}": "pnpm run lint:fix"
 	},
 	"dependencies": {
 		"@heroicons/react": "^2.2.0",

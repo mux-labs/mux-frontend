@@ -72,6 +72,7 @@ values for testnet/mainnet-connected work.
 | `NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID` | No | _(none)_ | WalletConnect project ID, needed only if wallet-connect based flows are enabled. |
 | `MUX_API_KEY` | No | _(none)_ | Server-only Mux Protocol API key. Used exclusively by Next.js API routes (`src/app/api/**`) to authenticate upstream requests to the backend. Never exposed to the browser — do not prefix it with `NEXT_PUBLIC_`. |
 | `MUX_API_SECRET` | No | _(none)_ | Server-only Mux Protocol API secret, paired with `MUX_API_KEY` and sent alongside it on every upstream request. |
+| `MUX_BACKEND_URL` | No | _(none)_ | Server-only base URL of `mux-backend`. Used by `/api/spending-limits` to proxy `GET`/`PUT` (spending limits and the real `todayUsage`). When unset the route returns `503` rather than fabricating usage — the frontend never persists spending limits itself (see `getBackendApiBaseUrl()` in `src/lib/api/config.ts`). |
 
 There is no client-visible Mux API key. Project credentials only ever
 live in `MUX_API_KEY`/`MUX_API_SECRET` and are attached server-side, in
@@ -142,14 +143,29 @@ verification checklist.
   (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
   package; no backend call is involved
 
-**Server-verified sessions (#621).** When `NEXT_PUBLIC_API_URL` is set,
-`POST /api/auth/login` proxies to the backend and stores the backend-issued
-session token in an **HttpOnly `mux_auth_token` cookie**. The Next.js
-middleware verifies that token against `GET {backend}/auth/session` on every
-`/dashboard` and `/demo/dashboard` request — the old client-set
-`mux_auth_session` marker cookie is only trusted in mock mode (no backend).
-An unauthenticated request is redirected to `/login?callbackUrl=<path>`. `signOut()` calls
-`POST /api/auth/logout` to clear the HttpOnly cookie. See
+**Server-verified sessions (#621–#628).** When `NEXT_PUBLIC_API_URL` is set:
+
+* `POST /api/auth/login` proxies to `{backend}/auth/login` and writes the
+  backend-issued session token to an **HttpOnly, `SameSite=Lax`, `Secure`
+  (in production) `mux_auth_token` cookie** set from the route's `Set-Cookie`
+  response — never `document.cookie` (#627).
+* `POST /api/auth/refresh` proxies to `{backend}/auth/refresh`, forwarding the
+  caller's `Authorization` header / session cookie, and rotates the
+  `mux_auth_token` cookie from the response (#626). Without a backend it only
+  mints the mock token outside production.
+* The Next.js middleware verifies the token against `GET {backend}/auth/session`
+  on every `/dashboard` request — the client-set `mux_auth_session` marker
+  cookie is only trusted in mock mode (no backend), and now carries `; Secure`
+  on HTTPS.
+* Any bearer-token block in the login response is persisted to
+  `sessionStorage` (never `localStorage`) via `src/lib/session.js` so
+  `src/lib/api.js` can attach `Authorization` headers and refresh on `401`
+  (#628).
+* `signOut()` calls `POST /api/auth/logout` to clear the HttpOnly cookie and
+  the stored bearer session.
+
+A production build with no backend refuses mock sign-in / refresh with
+`503 backend_unavailable` (#625). See
 [`docs/auth-local-setup.md`](docs/auth-local-setup.md).
 
 **No silent mock success in production.** API routes that fall back to
@@ -163,7 +179,7 @@ masked. The shared rule lives in `src/lib/api/runtimeMode.ts`.
 Run unit/component smoke tests with:
 
 ```bash
-npm test
+pnpm test
 ```
 
 Run Playwright end-to-end smoke tests (login, wallet monitoring, and
@@ -173,6 +189,9 @@ wallet send/receive, desktop and mobile viewports) with:
 pnpm exec playwright install --with-deps chromium
 pnpm run test:e2e
 ```
+
+CI runs this same suite on every push and PR (the `e2e-tests` job in
+`.github/workflows/ci.yml`), alongside typecheck, Vitest, and build.
 
 See [`tests/e2e/README.md`](tests/e2e/README.md) for what's covered and a
 manual verification checklist.
@@ -198,5 +217,10 @@ stay easy to find and don't clutter the repo root as features evolve.
 
 * Per-key usage analytics
 * Webhooks and notifications for SDK events
-* Team access management
-* Audit logs for all wallet and API activity
+* ~~Team access management~~ — basic admin/developer member management is in
+  at `/dashboard/settings/team` (`/api/team`); see
+  [`docs/team-access-and-audit-log.md`](docs/team-access-and-audit-log.md)
+* ~~Audit logs for all wallet and API activity~~ — `/api/activity` now
+  follows the same production/mock split as the rest of the app instead of
+  always serving mock data; see
+  [`docs/team-access-and-audit-log.md`](docs/team-access-and-audit-log.md)

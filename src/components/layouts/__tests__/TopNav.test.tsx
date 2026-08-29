@@ -2,8 +2,9 @@
  * Tests for TopNav — issue #468: Show user initials avatar in top nav
  */
 
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
+import { shellLabels } from "@/lib/i18n/shellLabels";
 import { TopNav } from "../TopNav";
 
 // ---------------------------------------------------------------------------
@@ -43,6 +44,7 @@ vi.mock("@/hooks/useNotifications", () => ({
 // ---------------------------------------------------------------------------
 
 import { useAuth } from "@/context/AuthContext";
+
 const mockUseAuth = vi.mocked(useAuth);
 
 function renderTopNav() {
@@ -83,7 +85,11 @@ describe("TopNav — user initials avatar (#468)", () => {
 
 	it("caps initials at 2 characters for names with more than 2 words", () => {
 		mockUseAuth.mockReturnValue({
-			user: { name: "John Paul Smith", email: "jps@example.com", role: "admin" },
+			user: {
+				name: "John Paul Smith",
+				email: "jps@example.com",
+				role: "admin",
+			},
 			isLoading: false,
 			isAuthenticated: true,
 			signIn: vi.fn(),
@@ -132,5 +138,42 @@ describe("TopNav — user initials avatar (#468)", () => {
 		renderTopNav();
 		const avatar = screen.getByTestId("user-avatar");
 		expect(avatar).toHaveAttribute("aria-label", "Jane Doe avatar");
+	});
+});
+
+describe("TopNav — shell copy from shellLabels (#650)", () => {
+	beforeEach(() => {
+		mockUseAuth.mockReturnValue({
+			user: { name: "Jane Doe", email: "jane@example.com", role: "admin" },
+			isLoading: false,
+			isAuthenticated: true,
+			signIn: vi.fn(),
+			signOut: vi.fn(),
+		});
+	});
+
+	it("renders the network switcher labels from shellLabels", () => {
+		renderTopNav();
+		expect(
+			screen.getByRole("button", { name: /switch to testnet/i }),
+		).toHaveTextContent(shellLabels.header.testnet);
+		expect(
+			screen.getByRole("button", { name: /switch to mainnet/i }),
+		).toHaveTextContent(shellLabels.header.mainnet);
+	});
+
+	it("shows the breadcrumb home label from shellLabels", () => {
+		renderTopNav();
+		expect(
+			screen.getByText(shellLabels.header.breadcrumbHome),
+		).toBeInTheDocument();
+	});
+
+	it("labels the sign-out action from shellLabels", () => {
+		renderTopNav();
+		fireEvent.click(screen.getByRole("button", { name: /open user menu/i }));
+		expect(screen.getByTestId("logout-button")).toHaveTextContent(
+			shellLabels.header.logout,
+		);
 	});
 });

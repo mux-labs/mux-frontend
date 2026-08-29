@@ -1,14 +1,41 @@
 # API Hooks
 
+## Auth routes (`/api/auth/*`)
+
+| Route | Backend configured (`NEXT_PUBLIC_API_URL`) | No backend, non-prod | No backend, production |
+|---|---|---|---|
+| `POST /api/auth/login` | Proxies to `{backend}/auth/login`; on success sets the `mux_auth_token` cookie (`HttpOnly; SameSite=Lax; Secure` in prod) from the response token (#627). | Returns a mock `{ user, session }` (any well-formed credentials). | `503 backend_unavailable` — no mock sign-in (#625). |
+| `POST /api/auth/refresh` | Proxies to `{backend}/auth/refresh`, forwarding `Authorization` / `Cookie`; rotates the `mux_auth_token` cookie from the response (#626). | Mints the mock access token for `mock-refresh-token`; `401 invalid_refresh` otherwise. | `503 backend_unavailable`. |
+| `POST /api/auth/logout` | Best-effort `{backend}/auth/logout`; always clears `mux_auth_token`. | Clears `mux_auth_token`. | Clears `mux_auth_token`. |
+
+Client side: `signIn(user, ttlMs?, tokens?)` in `src/context/AuthContext.tsx`
+persists any `tokens` block to tab-scoped `sessionStorage` via
+`src/lib/session.js` (`createSession` → `saveSession`); `src/lib/api.js`
+(`apiFetch`) then sends `Authorization: Bearer <accessToken>` and calls
+`/api/auth/refresh` once on a `401`. `signOut()` clears it. No token is ever
+written to `localStorage` or a `NEXT_PUBLIC_*` var (#628).
+
 ## Spending limits
 
 The production dashboard calls `/api/spending-limits`, which proxies `GET` and
-`PUT` requests to mux-backend at `MUX_BACKEND_URL`. It forwards the server API
+`PUT` requests to mux-backend at `MUX_BACKEND_URL` (resolved by
+`getBackendApiBaseUrl()` in `src/lib/api/config.ts`). It forwards the server API
 key and any caller `Authorization` header, and returns `503` when no backend is
-configured. It does not persist values in the frontend process.
+configured. It does not persist values in the frontend process, and
+`todayUsage` comes straight from the backend's real activity — the frontend
+never substitutes a constant.
+
+`SpendingLimitsCard` (`src/components/dashboard/SpendingLimitsCard.tsx`) reads
+and writes limits only through this API. It does **not** cache them in
+`localStorage`: spending limits are account state, and a per-browser copy would
+be wrong for a second device or a shared machine (#649). On a failed load it
+shows an explicit error plus clearly-labelled default limits.
 
 The `/demo/dashboard/spending-limits` page intentionally calls
-`/api/demo/spending-limits`, whose in-memory store is demo-only.
+`/api/demo/spending-limits`, whose in-memory store is demo-only. That route
+derives `todayUsage` from the mock transaction store via `computeTodayUsage()`
+(`src/lib/spending-limits/todayUsage.ts`) — the sum of completed transaction
+amounts on the most recent day — rather than returning a fixed number (#648).
 
 This document explains the new API hooks added to the project:
 

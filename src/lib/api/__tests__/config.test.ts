@@ -3,6 +3,7 @@ import {
 	getApiBaseUrl,
 	getApiKey,
 	getApiSecret,
+	getBackendApiBaseUrl,
 	getUpstreamAuthHeaders,
 } from "../config";
 
@@ -37,6 +38,35 @@ describe("getApiBaseUrl", () => {
 
 	it("returns empty string when no API base URL is configured", () => {
 		expect(getApiBaseUrl()).toBe("");
+	});
+});
+
+describe("getBackendApiBaseUrl", () => {
+	beforeEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("reads the server-only MUX_BACKEND_URL", () => {
+		vi.stubEnv("MUX_BACKEND_URL", "https://backend.internal");
+		expect(getBackendApiBaseUrl()).toBe("https://backend.internal");
+	});
+
+	it("normalizes trailing slashes", () => {
+		vi.stubEnv("MUX_BACKEND_URL", "https://backend.internal///");
+		expect(getBackendApiBaseUrl()).toBe("https://backend.internal");
+	});
+
+	it("returns an empty string when unset so the route can 503 instead of faking data", () => {
+		expect(getBackendApiBaseUrl()).toBe("");
+	});
+
+	it("does not fall back to a NEXT_PUBLIC_* URL", () => {
+		vi.stubEnv("NEXT_PUBLIC_API_URL", "https://public-api.example.com");
+		expect(getBackendApiBaseUrl()).toBe("");
 	});
 });
 

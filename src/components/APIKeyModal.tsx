@@ -1,9 +1,10 @@
 "use client";
 
-import { X } from "lucide-react";
+import { WifiOff, X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/ui/CopyButton";
+import { useOfflineStatus } from "@/hooks/useOfflineStatus";
 import type { CreatedApiKey } from "@/mock-data/api-keys";
 
 interface APIKeyModalProps {
@@ -24,6 +25,7 @@ export default function APIKeyModal({
 	const [isSubmitting, setIsSubmitting] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [acknowledged, setAcknowledged] = useState(false);
+	const isOffline = useOfflineStatus();
 
 	const fallbackCreateKey = async (keyName: string): Promise<CreatedApiKey> => {
 		const secret = `mux_live_${Math.random().toString(36).slice(2)}${Math.random()
@@ -43,6 +45,13 @@ export default function APIKeyModal({
 		const trimmedName = name.trim();
 		if (!trimmedName) {
 			setError("Key name is required. Please enter a name for this API key.");
+			return;
+		}
+
+		if (isOffline) {
+			setError(
+				"You're offline. Creating a key is paused until your connection is back.",
+			);
 			return;
 		}
 
@@ -69,30 +78,6 @@ export default function APIKeyModal({
 		setError(null);
 		setAcknowledged(false);
 		onClose();
-	};
-
-	const generateApiKey = async () => {
-		const trimmedName = keyName.trim();
-		if (!trimmedName) {
-			setError("Key name is required.");
-			return;
-		}
-
-		setError(null);
-		setIsSubmitting(true);
-		await Promise.resolve();
-
-		const newKey = createApiKey();
-		setApiKey(newKey);
-		setIsSubmitting(false);
-		onKeyCreated?.({ name: trimmedName, value: newKey, key: newKey });
-	};
-
-	const copyToClipboard = async () => {
-		if (!apiKey) return;
-		await navigator.clipboard.writeText(apiKey);
-		setCopied(true);
-		window.setTimeout(() => setCopied(false), 2000);
 	};
 
 	if (!isOpen) return null;
@@ -140,33 +125,7 @@ export default function APIKeyModal({
 								</div>
 							</div>
 						</div>
-						<div>
-							<h2
-								id={titleId}
-								className="text-xl font-semibold text-zinc-900 dark:text-zinc-50"
-							>
-								{isRevealStep ? "Save your API key" : "Create API Key"}
-							</h2>
-							<p
-								id={descriptionId}
-								className="text-sm text-zinc-500 dark:text-zinc-400"
-							>
-								{isRevealStep
-									? "This key will only be shown once."
-									: "Name the key before generating a secret."}
-							</p>
-						</div>
-					</div>
-					<Button
-						type="button"
-						variant="ghost"
-						size="icon-sm"
-						onClick={handleClose}
-						aria-label="Close dialog"
-					>
-						<X className="h-4 w-4" aria-hidden="true" />
-					</Button>
-				</div>
+					)}
 
 					{createdKey ? (
 						<div className="space-y-4">
@@ -194,11 +153,6 @@ export default function APIKeyModal({
 										data-testid="copy-generated-key"
 									/>
 								</div>
-								{copied && (
-									<p role="status" className="mt-2 text-sm text-green-700 dark:text-green-400">
-										API key copied to clipboard
-									</p>
-								)}
 							</div>
 							<label className="flex items-start gap-2 text-sm text-zinc-600 dark:text-zinc-400">
 								<input
@@ -235,6 +189,16 @@ export default function APIKeyModal({
 									className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-900/10 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50 dark:focus:border-zinc-100"
 								/>
 							</div>
+							{isOffline && (
+								<p
+									role="status"
+									className="flex items-center gap-1.5 text-sm text-amber-700 dark:text-amber-400"
+								>
+									<WifiOff className="h-4 w-4 shrink-0" aria-hidden="true" />
+									You're offline. Creating a key is paused until your
+									connection is back.
+								</p>
+							)}
 							{error && (
 								<p
 									role="alert"
@@ -263,7 +227,7 @@ export default function APIKeyModal({
 							</Button>
 							<Button
 								onClick={handleCreate}
-								disabled={isSubmitting}
+								disabled={isSubmitting || isOffline}
 								data-testid="generate-key-btn"
 							>
 								{isSubmitting ? "Creating…" : "Generate Key"}

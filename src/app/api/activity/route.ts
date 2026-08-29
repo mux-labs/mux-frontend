@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl, getUpstreamAuthHeaders } from "@/lib/api/config";
+import { getApiBaseUrl, getUpstreamAuthHeaders, isMockFallbackAllowed } from "@/lib/api/config";
+import { appendAuditLog, getAuditLog } from "@/lib/audit/log";
 import { mockTransactions } from "@/mock-data/transactions";
 import type { Transaction } from "@/types/transaction";
 
@@ -72,10 +73,26 @@ export async function GET() {
 		}
 	}
 
-	// --- Mock fallback (no NEXT_PUBLIC_API_URL set) ---
-	// Synthesizes activity items from mock transaction data; used for local
-	// dev / CI only when no backend is configured.
-	const activities = mockTransactions.map(mapTransactionToActivity);
+	if (!isMockFallbackAllowed()) {
+		return NextResponse.json(
+			{
+				error: "backend_unavailable",
+				message:
+					"No activity backend is configured for this production deployment. Set NEXT_PUBLIC_API_URL.",
+			},
+			{ status: 503 },
+		);
+	}
 
-	return NextResponse.json({ data: activities });
+	// --- Mock fallback (no NEXT_PUBLIC_API_URL set, non-production only) ---
+	// Synthesizes activity items from mock transaction data and records them
+	// into the in-memory audit log; used for local dev / CI only when no
+	// backend is configured. See src/lib/audit/log.ts.
+	if (getAuditLog().length === 0) {
+		for (const activity of mockTransactions.map(mapTransactionToActivity)) {
+			appendAuditLog(activity);
+		}
+	}
+
+	return NextResponse.json({ data: getAuditLog() });
 }

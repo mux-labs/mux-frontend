@@ -58,6 +58,16 @@ These never reach the browser and are safe for secrets.
   route makes to the Mux backend. Only ever read inside `src/app/api/**`
   route handlers or other server-only modules — never import
   `getApiKey()`/`getApiSecret()` from a client component.
+- **`MUX_BACKEND_URL`** — server-only base URL of `mux-backend`, read by
+  `getBackendApiBaseUrl()` in `src/lib/api/config.ts`. `/api/spending-limits`
+  proxies `GET`/`PUT` here (forwarding the server API key and any caller
+  `Authorization` header) so spending limits and the real `todayUsage`
+  counter live in the backend, not the frontend process. No default: when
+  unset the route responds `503 { error: "Spending limits backend is not
+  configured" }` instead of returning a fabricated figure. The
+  `/api/demo/spending-limits` route needs no backend — it derives its
+  `todayUsage` from the mock transaction store
+  (`computeTodayUsage()` in `src/lib/spending-limits/todayUsage.ts`).
 
 ### Implicit
 
@@ -130,9 +140,14 @@ authenticated session.
 ## CI
 
 `.github/workflows/ci.yml` sets `NEXT_PUBLIC_API_URL=https://api.example.com`
-purely so `next build` succeeds without real credentials. It is a
-placeholder, not a real environment — do not read it as evidence of a
-live mainnet or testnet target.
+for the `build` job purely so `next build` succeeds without real
+credentials. It is a placeholder, not a real environment — do not read it
+as evidence of a live mainnet or testnet target.
+
+The `e2e-tests` job (Playwright) instead sets `NEXT_PUBLIC_API_URL=""` so
+the specs exercise the in-repo mock `/api/*` routes with no backend. No
+job sets `MUX_BACKEND_URL`, so `/api/spending-limits` returns `503` in CI
+— the e2e specs cover login and wallet flows, not spending limits.
 
 ## Manual verification checklist
 

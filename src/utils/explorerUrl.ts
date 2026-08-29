@@ -2,30 +2,19 @@
  * Generates explorer URLs for Stellar addresses based on network
  */
 
+import { getCachedExplorerBaseUrl } from "@/utils/explorerUrlCache";
+
 export type ExplorerType = "address" | "transaction" | "account";
 
-interface ExplorerConfig {
-	mainnet: string;
-	testnet: string;
-}
-
-const explorerUrls: Record<ExplorerType, ExplorerConfig> = {
-	address: {
-		mainnet: "https://stellar.expert/explorer/public",
-		testnet: "https://stellar.expert/explorer/testnet",
-	},
-	transaction: {
-		mainnet: "https://stellar.expert/explorer/public/tx",
-		testnet: "https://stellar.expert/explorer/testnet/tx",
-	},
-	account: {
-		mainnet: "https://stellar.expert/explorer/public/account",
-		testnet: "https://stellar.expert/explorer/testnet/account",
-	},
-};
-
 /**
- * Generates a full explorer URL for a given address or transaction ID
+ * Generates a full explorer URL for a given address or transaction ID.
+ *
+ * The base URL is resolved through {@link getCachedExplorerBaseUrl}, which is
+ * keyed by `(type, network)` — this is the single source of truth for
+ * explorer base URLs, so a network switch (e.g. via the TopNav testnet/mainnet
+ * toggle) always resolves to the correct network's URL rather than a stale
+ * one from a separate, potentially out-of-sync map.
+ *
  * @param identifier - The address or transaction ID
  * @param network - The network (mainnet or testnet)
  * @param type - The explorer type (address, transaction, or account)
@@ -40,7 +29,7 @@ export function getExplorerUrl(
 		throw new Error("Identifier cannot be empty");
 	}
 
-	const baseUrl = explorerUrls[type][network];
+	const baseUrl = getCachedExplorerBaseUrl(type, network);
 	return `${baseUrl}/${encodeURIComponent(identifier)}`;
 }
 

@@ -17,6 +17,7 @@ import { ToastContainer, useToast } from "@/components/ui/toast";
 import { useAnalyticsExport } from "@/hooks/useAnalyticsExport";
 import { useAnalyticsMetrics } from "@/hooks/useAnalyticsMetrics";
 import { useAnalyticsTracking } from "@/hooks/useAnalyticsTracking";
+import { useAnalyticsTransactions } from "@/hooks/useAnalyticsTransactions";
 
 // ---------------------------------------------------------------------------
 // Lazy-loaded chart components — reduces the initial JS bundle for the
@@ -57,27 +58,13 @@ export default function AnalyticsPage() {
 
 	const { data, isLoading, isEmpty, isError, error, refetch } =
 		useAnalyticsMetrics(range);
+	// #453 – real export data: the analytics export is backed by genuine,
+	// date-scoped transaction records (GET /analytics/transactions-list) via
+	// useAnalyticsTransactions, not synthetic objects derived from the
+	// aggregated topAssets table.
+	const { transactions } = useAnalyticsTransactions(range);
 	const { track } = useAnalyticsTracking("analytics");
 	const { toasts, addToast, dismissToast } = useToast();
-
-	// #453 – analytics export stub: wire the export hook to the page so
-	// developers can download transaction data as CSV or JSON.
-	const transactions = data?.topAssets
-		? // Convert TopAssetsTable rows to Transaction shape for export.
-			// When a real transactions endpoint is available, replace this with
-			// a dedicated useTransactions(range) hook.
-			data.topAssets.map((asset, i) => ({
-				id: `asset-${i}`,
-				description: asset.name,
-				date: range.to,
-				humanDate: range.to,
-				category: asset.symbol,
-				status: "completed" as const,
-				amount: asset.txCount,
-				currency: asset.symbol,
-				type: "outgoing" as const,
-			}))
-		: [];
 
 	const {
 		status: exportStatus,
@@ -181,19 +168,19 @@ export default function AnalyticsPage() {
 
 				<MetricsCards metrics={data.metrics} />
 
-			<div className="grid gap-6 lg:grid-cols-2">
-				<AnalyticsChart
-					title="Volume"
-					description="Total transaction volume over the selected period"
-					data={data.volumeData}
-					formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
-				/>
-				<AnalyticsChart
-					title="Transactions"
-					description="Number of transactions over the selected period"
-					data={data.transactionsData}
-				/>
-			</div>
+				<div className="grid gap-6 lg:grid-cols-2">
+					<AnalyticsChart
+						title="Volume"
+						description="Total transaction volume over the selected period"
+						data={data.volumeData}
+						formatValue={(v) => `$${(v / 1_000_000).toFixed(1)}M`}
+					/>
+					<AnalyticsChart
+						title="Transactions"
+						description="Number of transactions over the selected period"
+						data={data.transactionsData}
+					/>
+				</div>
 
 				<TopAssetsTable assets={data.topAssets} />
 			</div>

@@ -244,6 +244,25 @@ Data hooks and their API routes follow one rule, centralised in
   served in production (`canUseMockFallback()` in
   `src/lib/api/runtimeMode.ts`).
 
+### `useAnalyticsTransactions(range)` — #453
+
+`src/hooks/useAnalyticsTransactions.ts`. Fetches the real, export-shaped
+transaction list for a date range (`GET /analytics/transactions-list`), used as
+the data source for the analytics **CSV / JSON export**. It mirrors the
+production/mock split of `useAnalyticsMetrics`:
+
+- Backend configured → fetch real rows via `fetchExportTransactions`.
+- No backend + not production → fall back to `exportTransactions` from
+  `src/mock-data/analytics.ts`.
+- No backend + **production** → surface an error (never export mock rows).
+
+This replaces the earlier stub where the analytics page synthesised fake
+`Transaction` objects from the aggregated `topAssets` table — the exported CSV /
+JSON now contains genuine per-transaction records for the selected range.
+No custody secret is involved: the rows are fetched through the same
+client-side `ApiClient` path as the rest of analytics, which only reads
+`NEXT_PUBLIC_API_URL` / its aliases.
+
 ### Notifications bell — #618
 
 `src/components/layouts/TopNav.tsx` mounts

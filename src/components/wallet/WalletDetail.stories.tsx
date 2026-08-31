@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react";
+import { MOCK_WALLET_IDS } from "@/mock-data/wallets";
 import { WalletDetail } from "./WalletDetail";
 
 /**
@@ -10,8 +11,13 @@ import { WalletDetail } from "./WalletDetail";
  * - Skeleton loading state while data is in flight
  * - Full-page error state when the wallet cannot be found
  *
- * All stories use wallet IDs from the project's mock-data layer so no real
- * network calls are made.
+ * **Mock vs production split (#711):**
+ * Stories use wallet IDs sourced from `MOCK_WALLET_IDS` in
+ * `src/mock-data/wallets.ts` — never hardcoded strings — so a single
+ * rename propagates everywhere. These IDs are only meaningful in the
+ * mock/dev/Storybook environment; in production the IDs come from the
+ * real backend and `WalletDetail` fetches by the ID passed via the route
+ * param.
  */
 const meta = {
 	title: "Wallet/WalletDetail",
@@ -46,7 +52,7 @@ type Story = StoryObj<typeof meta>;
  * Demonstrates the fully-loaded state after the initial fetch resolves.
  */
 export const Active: Story = {
-	args: { id: "wallet-001" },
+	args: { id: MOCK_WALLET_IDS.ACTIVE_MAINNET },
 };
 
 /**
@@ -54,7 +60,7 @@ export const Active: Story = {
  * amber colour scheme for testnet wallets.
  */
 export const Testnet: Story = {
-	args: { id: "wallet-002" },
+	args: { id: MOCK_WALLET_IDS.ACTIVE_TESTNET },
 };
 
 /**
@@ -62,7 +68,7 @@ export const Testnet: Story = {
  * the address copy / refresh actions remain fully functional.
  */
 export const Pending: Story = {
-	args: { id: "wallet-003" },
+	args: { id: MOCK_WALLET_IDS.PENDING },
 };
 
 /**
@@ -70,7 +76,7 @@ export const Pending: Story = {
  * The grey status badge should be displayed.
  */
 export const Inactive: Story = {
-	args: { id: "wallet-005" },
+	args: { id: MOCK_WALLET_IDS.INACTIVE_ARCHIVED },
 };
 
 /**
@@ -78,7 +84,7 @@ export const Inactive: Story = {
  * formatted correctly inside the balance card.
  */
 export const HighBalance: Story = {
-	args: { id: "wallet-004" },
+	args: { id: MOCK_WALLET_IDS.HIGH_BALANCE },
 };
 
 /**

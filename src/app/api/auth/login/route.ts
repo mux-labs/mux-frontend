@@ -96,14 +96,34 @@ export async function POST(request: Request) {
 				body: JSON.stringify({ email, password }),
 			});
 
-			const data = await upstream.json().catch(() => ({}));
+			const data = (await upstream.json().catch(() => ({}))) as Record<
+				string,
+				unknown
+			>;
 
 			if (!upstream.ok) {
 				return NextResponse.json(data, { status: upstream.status });
 			}
 
-			const response = NextResponse.json(data, { status: 200 });
+			// Echo a `session` block so the client can persist the bearer token
+			// in sessionStorage (via `src/lib/session.js`) and attach it as the
+			// Authorization header on subsequent wallet/API requests (#712).
+			// The token is ALSO written to the HttpOnly cookie below — both
+			// transports are needed: the cookie for middleware-level route
+			// protection, the sessionStorage copy for client-side fetch calls.
 			const token = extractSessionToken(data);
+			const responsePayload: Record<string, unknown> = { ...data };
+			if (token && !responsePayload.session) {
+				responsePayload.session = {
+					accessToken: token,
+					// Carry forward expiresIn from the backend response when present.
+					...(typeof data.expiresIn === "number"
+						? { expiresIn: data.expiresIn }
+						: {}),
+				};
+			}
+
+			const response = NextResponse.json(responsePayload, { status: 200 });
 			if (token) {
 				setSessionCookie(response, token);
 			}

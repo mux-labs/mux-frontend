@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import {
 	getBackendApiBaseUrl,
 	getServerApiKey,
+	isMockFallbackAllowed,
 } from "@/lib/api/config";
 
 export interface SpendingLimitsData {
@@ -54,10 +55,44 @@ async function proxy(request: Request, init?: RequestInit) {
 }
 
 export async function GET(request: Request) {
+	// Require a bearer token so the route is never accessible without auth.
+	const authorization = request.headers.get("authorization");
+	if (!authorization?.startsWith("Bearer ")) {
+		return NextResponse.json({ error: "missing_auth" }, { status: 401 });
+	}
+
+	const backendUrl = getBackendApiBaseUrl();
+	if (!backendUrl) {
+		if (!isMockFallbackAllowed()) {
+			return NextResponse.json(
+				{
+					error: "backend_unavailable",
+					message:
+						"No spending-limits backend is configured for this production deployment. Set MUX_BACKEND_URL.",
+				},
+				{ status: 503 },
+			);
+		}
+		// Non-production mock fallback — return default limits with zero usage.
+		return NextResponse.json(
+			{
+				limits: { dailyLimit: 5000, transactionLimit: 1000 },
+				todayUsage: 0,
+			},
+			{ status: 200 },
+		);
+	}
+
 	return proxy(request);
 }
 
 export async function PUT(request: Request) {
+	// Require a bearer token so the route is never accessible without auth.
+	const authorization = request.headers.get("authorization");
+	if (!authorization?.startsWith("Bearer ")) {
+		return NextResponse.json({ error: "missing_auth" }, { status: 401 });
+	}
+
 	let body: unknown;
 	try {
 		body = await request.json();

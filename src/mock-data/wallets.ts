@@ -1,5 +1,40 @@
 import type { Wallet } from "@/types/wallet";
 
+/**
+ * Canonical IDs for the in-repo mock wallets.
+ *
+ * Use these constants wherever a test or story needs to reference a mock
+ * wallet by ID — never hardcode the strings directly. That way a future
+ * rename only needs to happen here (#711).
+ *
+ * These IDs are only meaningful in mock/dev mode. In production the IDs
+ * come from the real backend and these constants are never used.
+ */
+export const MOCK_WALLET_IDS = {
+	/** Mainnet active wallet with a healthy balance. */
+	ACTIVE_MAINNET: "wallet-001",
+	/** Testnet active wallet. */
+	ACTIVE_TESTNET: "wallet-002",
+	/** Mainnet wallet in `pending` status. */
+	PENDING: "wallet-003",
+	/** High-balance testnet wallet. */
+	HIGH_BALANCE: "wallet-004",
+	/** Archived inactive mainnet wallet. */
+	INACTIVE_ARCHIVED: "wallet-005",
+	/** Active mainnet wallet with moderate balance. */
+	ACTIVE_MAINNET_2: "wallet-006",
+	/** Testnet pending wallet. */
+	PENDING_TESTNET: "wallet-007",
+	/** Active mainnet wallet. */
+	ACTIVE_MAINNET_3: "wallet-008",
+	/** Archived inactive testnet wallet. */
+	INACTIVE_ARCHIVED_TESTNET: "wallet-009",
+	/** Mainnet pending wallet with balance. */
+	PENDING_WITH_BALANCE: "wallet-010",
+} as const;
+
+export type MockWalletId = (typeof MOCK_WALLET_IDS)[keyof typeof MOCK_WALLET_IDS];
+
 export const dummyWallets: Wallet[] = [
 	{
 		id: "wallet-001",

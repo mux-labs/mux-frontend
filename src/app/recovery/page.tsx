@@ -19,11 +19,12 @@ import { trackRecoveryEvent } from "@/services/recoveryAnalyticsTracking";
 
 export default function RecoveryPage() {
 	// Drive recovery status/timeline off the first available real wallet. When
-	// no wallet is available (e.g. no auth session yet) we fall back to demo
-	// mode inside useRecovery(null), which is explicitly a stub bootstrap.
-	const { wallets } = useWallets();
+	// no wallet is available (e.g. no auth session yet) there is nothing to
+	// fetch a per-wallet status for, so useRecovery(null) just mirrors the
+	// wallets fetch (`walletsLoading`) instead of running a fake delay (#620).
+	const { wallets, loading: walletsLoading } = useWallets();
 	const walletId = wallets[0]?.id ?? null;
-	const recovery = useRecovery(walletId);
+	const recovery = useRecovery(walletId, { walletsLoading });
 
 	// #456/#601 – recovery timeline list: sourced from the real
 	// fetchRecoveryStatus endpoint (via useRecovery -> useRecoveryStatus) when

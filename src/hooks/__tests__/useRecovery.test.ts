@@ -49,22 +49,51 @@ async function waitForIdle(result: {
 	});
 }
 
-// ─── Stub / demo mode (walletId = null) ───────────────────────────────────────
-describe("useRecovery — stub mode (no walletId)", () => {
-	it("starts in loading state", () => {
-		const { result } = renderHook(() => useRecovery());
+// ─── No walletId (#620) ───────────────────────────────────────────────────────
+// With no wallet selected there is nothing to fetch a per-wallet status for, so
+// the hook must NOT run a simulated `setTimeout` bootstrap — it mirrors the
+// caller's real wallet-list fetch via `walletsLoading` instead.
+describe("useRecovery — no walletId (#620)", () => {
+	it("resolves straight to idle when the wallet list is not loading — no fake delay", () => {
+		const { result } = renderHook(() => useRecovery(null));
+		expect(result.current.state).toBe("idle");
+		expect(result.current.errorMessage).toBeNull();
+	});
+
+	it("stays in loading while the upstream wallet list is still loading", () => {
+		const { result } = renderHook(() =>
+			useRecovery(null, { walletsLoading: true }),
+		);
 		expect(result.current.state).toBe("loading");
 		expect(result.current.errorMessage).toBeNull();
 	});
 
-	it("transitions loading → idle after bootstrap", async () => {
-		const { result } = renderHook(() => useRecovery());
-		await waitForIdle(result);
+	it("transitions loading → idle when the wallet list settles", () => {
+		const { result, rerender } = renderHook(
+			({ loading }: { loading: boolean }) =>
+				useRecovery(null, { walletsLoading: loading }),
+			{ initialProps: { loading: true } },
+		);
+		expect(result.current.state).toBe("loading");
+		rerender({ loading: false });
 		expect(result.current.state).toBe("idle");
 	});
 
+	it("never schedules the old 1200ms simulated bootstrap timer", () => {
+		const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+		try {
+			renderHook(() => useRecovery(null));
+			const scheduledDelays = setTimeoutSpy.mock.calls.map((call) => call[1]);
+			expect(scheduledDelays).not.toContain(1200);
+		} finally {
+			setTimeoutSpy.mockRestore();
+		}
+	});
+
 	it("does not initiate recovery while loading", () => {
-		const { result } = renderHook(() => useRecovery());
+		const { result } = renderHook(() =>
+			useRecovery(null, { walletsLoading: true }),
+		);
 		act(() => {
 			result.current.initiateRecovery();
 		});

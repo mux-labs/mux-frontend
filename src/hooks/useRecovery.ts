@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import { useRecoveryStatus } from "@/hooks/useRecoveryStatus";
 import { initiateRecovery as initiateRecoveryApi } from "@/services/recoveryApi";
 import type { RecoveryTimeline } from "@/types/recovery";
@@ -29,6 +29,19 @@ export interface UseRecoveryReturn {
 	resetRecovery: () => void;
 }
 
+export interface UseRecoveryOptions {
+	/**
+	 * Whether the upstream wallet list is still loading. Only consulted when
+	 * `walletId === null`: the hook stays in `loading` until the wallets fetch
+	 * settles, then resolves to `idle` because there is no wallet to fetch a
+	 * per-wallet recovery status for.
+	 *
+	 * This replaces the old simulated `setTimeout` bootstrap (#620) — the
+	 * loading skeleton now tracks a real fetch instead of a fake delay.
+	 */
+	walletsLoading?: boolean;
+}
+
 /**
  * Hook for driving the wallet recovery state machine.
  *
@@ -36,57 +49,25 @@ export interface UseRecoveryReturn {
  * the backend via `useRecoveryStatus`. The loading and error states produced
  * by that fetch are surfaced through this hook (#459).
  *
- * When `walletId` is `null` (no wallet selected / demo mode) the hook falls
- * back to a short simulated bootstrap so the page still renders a loading
- * skeleton before transitioning to idle.
+ * When `walletId` is `null` there is no wallet to fetch a per-wallet recovery
+ * status for, so the hook does not fabricate one (#620). Instead it mirrors
+ * the caller's real wallet-list fetch via `options.walletsLoading`: `loading`
+ * while that fetch is in flight, then `idle` once it settles. No simulated
+ * delay, in any environment.
  *
  * State machine:
- *   loading   – initial API/stub fetch in progress
+ *   loading   – per-wallet status fetch (or the upstream wallets fetch) in progress
  *   idle      – status loaded; no recovery in-flight
  *   confirming – user clicked "Initiate"; awaiting explicit confirmation (#457)
  *   pending   – confirmation submitted; waiting for API response
  *   success   – recovery request accepted by backend
  *   error     – bootstrap fetch failed OR CTA submission failed
  */
-export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
-	// ── Stub bootstrap (walletId === null / demo mode) ────────────────────────
-	const [stubLoaded, setStubLoaded] = useState(false);
-	const [stubError, setStubError] = useState<string | null>(null);
-
-	useEffect(() => {
-		if (walletId !== null) return; // Real API path — skip stub
-
-		// Production vs demo/mock split (#620):
-		//
-		//  - Production: a `null` walletId just means "no wallet selected yet"
-		//    (e.g. the wallets list is still loading). There is nothing to
-		//    fetch without a wallet id, so resolve straight to `idle` — never
-		//    a simulated `setTimeout` delay. The real per-wallet status fetch
-		//    runs on the `walletId !== null` path via `useRecoveryStatus`.
-		//  - Non-production (demo/mock): keep a short simulated bootstrap so
-		//    the demo dashboards still render the loading skeleton without a
-		//    live backend.
-		if (process.env.NODE_ENV === "production") {
-			setStubLoaded(true);
-			return;
-		}
-
-		let cancelled = false;
-		const run = async () => {
-			try {
-				await new Promise<void>((resolve) => setTimeout(resolve, 1200));
-				if (!cancelled) setStubLoaded(true);
-			} catch {
-				if (!cancelled) {
-					setStubError("Failed to load recovery status.");
-				}
-			}
-		};
-		run();
-		return () => {
-			cancelled = true;
-		};
-	}, [walletId]);
+export function useRecovery(
+	walletId: string | null = null,
+	options: UseRecoveryOptions = {},
+): UseRecoveryReturn {
+	const { walletsLoading = false } = options;
 
 	// ── Real API fetch (#455) ─────────────────────────────────────────────────
 	const {
@@ -118,11 +99,12 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 			state = ctaState;
 		}
 	} else {
-		// Stub / demo path
-		if (!stubLoaded && stubError === null) {
+		// No wallet selected (#620): there is nothing to fetch a per-wallet
+		// recovery status for, so mirror the caller's real wallet-list fetch
+		// rather than a simulated delay. `loading` while that fetch is in
+		// flight, then straight to the CTA state machine (`idle` initially).
+		if (walletsLoading) {
 			state = "loading";
-		} else if (stubError !== null && ctaState === "idle") {
-			state = "error";
 		} else {
 			state = ctaState;
 		}
@@ -131,7 +113,7 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 	const errorMessage: string | null =
 		state === "error"
 			? (ctaError ??
-				(walletId !== null ? apiError : stubError) ??
+				(walletId !== null ? apiError : null) ??
 				"An unexpected error occurred.")
 			: null;
 
@@ -149,8 +131,9 @@ export function useRecovery(walletId: string | null = null): UseRecoveryReturn {
 	 * Transitions: confirming → pending → success | error.
 	 *
 	 * Real API path (`walletId !== null`) calls `recoveryApi.initiateRecovery`.
-	 * Demo/stub path (`walletId === null`, same gate used for the bootstrap
-	 * fetch above) keeps a short simulated delay so the demo dashboards don't
+	 * With no wallet selected (`walletId === null`) there is nothing to submit:
+	 * production rejects with an explicit "select a wallet" error, while
+	 * non-production keeps a short simulated delay so the demo dashboards don't
 	 * depend on a live backend. Only the wallet identifier is ever sent —
 	 * never a private key, seed phrase, or other custody secret.
 	 */

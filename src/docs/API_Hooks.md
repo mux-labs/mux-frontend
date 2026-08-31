@@ -252,16 +252,22 @@ The red dot renders only when `unreadCount > 0` (showing the count, capped at
 `9+`); closing the panel calls `refetch()` so the badge reflects a
 mark-all-read performed inside the panel.
 
-### `useRecovery(walletId)` — #620
+### `useRecovery(walletId, { walletsLoading })` — #620
 
 `src/hooks/useRecovery.ts`.
 
 - `walletId !== null` → real per-wallet status fetch via `useRecoveryStatus`
-  / `fetchRecoveryStatus`.
-- `walletId === null`:
-  - **production** — resolves straight to `idle` (no wallet selected yet =
-    nothing to fetch); `confirmRecovery()` rejects with
-    "Select a wallet before initiating recovery." No simulated delay, no
-    fake success.
-  - **non-production** — keeps a short simulated bootstrap so the demo
-    dashboards render a loading skeleton without a live backend.
+  / `fetchRecoveryStatus`. `loading`/`error` states come from that fetch.
+- `walletId === null` → there is no wallet to fetch a per-wallet recovery
+  status for, so the hook never fabricates one. It mirrors the caller's real
+  wallet-list fetch via `options.walletsLoading`: `loading` while that fetch
+  is in flight, then `idle` once it settles. **No simulated `setTimeout`
+  bootstrap, in any environment** — the old 1200 ms fake delay is gone.
+  `confirmRecovery()` with no wallet selected rejects with
+  "Select a wallet before initiating recovery." in **production**; in
+  **non-production** it keeps a short simulated success so the demo
+  dashboards work without a live backend.
+
+The recovery page (`src/app/recovery/page.tsx`) wires this up by passing
+`useWallets().loading` through as `walletsLoading`, so the loading skeleton
+tracks the real wallets request.

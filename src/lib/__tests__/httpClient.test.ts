@@ -24,9 +24,8 @@ describe("fetchJson", () => {
 	it("returns parsed data and requests with no-store cache", async () => {
 		vi.mocked(fetch).mockResolvedValue(jsonResponse([{ id: "t1" }]));
 
-		const result = await fetchJson<Record<string, unknown>[]>(
-			"/api/transactions",
-		);
+		const result =
+			await fetchJson<Record<string, unknown>[]>("/api/transactions");
 
 		expect(result.error).toBeUndefined();
 		expect(result.data).toEqual([{ id: "t1" }]);
@@ -36,14 +35,12 @@ describe("fetchJson", () => {
 	});
 
 	it("maps non-ok responses to an error string", async () => {
-		vi.mocked(fetch).mockResolvedValue(
-			jsonResponse({ error: "boom" }, 503),
-		);
+		vi.mocked(fetch).mockResolvedValue(jsonResponse({ error: "boom" }, 503));
 
 		const result = await fetchJson("/api/transactions");
 
 		expect(result.data).toBeUndefined();
-		expect(result.error).toBe("HTTP 503: {\"error\":\"boom\"}");
+		expect(result.error).toBe('HTTP 503: {"error":"boom"}');
 	});
 
 	it("maps thrown fetch failures to an error string", async () => {

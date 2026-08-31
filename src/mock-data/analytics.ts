@@ -23,9 +23,14 @@
 // Types (re-exported from the shared domain types module)
 // ---------------------------------------------------------------------------
 
-import type { AssetData, ChartDataPoint, Metric } from "@/types/analytics";
+import type {
+	AssetData,
+	ChartDataPoint,
+	Metric,
+	Transaction,
+} from "@/types/analytics";
 
-export type { Metric, ChartDataPoint, AssetData } from "@/types/analytics";
+export type { AssetData, ChartDataPoint, Metric } from "@/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Mock data
@@ -155,5 +160,73 @@ export const topAssets: AssetData[] = [
 		volumeChange: -1.8,
 		tvl: "$6.7M",
 		txCount: 5678,
+	},
+];
+
+/**
+ * Real per-transaction rows used by the analytics export (CSV / JSON).
+ *
+ * These are genuine transaction records in the export {@link Transaction}
+ * shape — not synthetic objects derived from the `topAssets` aggregation.
+ * The non-production fallback (no API base URL) returns this list so the
+ * export button always has representative data to download while developing:
+ * the production path always calls `/analytics/transactions-list` via
+ * `fetchExportTransactions` and never falls back to mock rows.
+ */
+export const exportTransactions: Transaction[] = [
+	{
+		id: "txn_mainnet_48291034",
+		description: "SDK wallet payout",
+		date: "2025-05-28",
+		humanDate: "May 28, 2025",
+		category: "MW",
+		status: "completed",
+		amount: 250,
+		currency: "XLM",
+		type: "outgoing",
+	},
+	{
+		id: "txn_mainnet_48291010",
+		description: "Wallet fund",
+		date: "2025-05-27",
+		humanDate: "May 27, 2025",
+		category: "MW",
+		status: "completed",
+		amount: 1000,
+		currency: "XLM",
+		type: "incoming",
+	},
+	{
+		id: "txn_testnet_48290987",
+		description: "Testnet top-up",
+		date: "2025-05-27",
+		humanDate: "May 27, 2025",
+		category: "SDK",
+		status: "pending",
+		amount: 50.5,
+		currency: "XLM",
+		type: "outgoing",
+	},
+	{
+		id: "txn_mainnet_48290950",
+		description: "Batch payout",
+		date: "2025-05-26",
+		humanDate: "May 26, 2025",
+		category: "MW",
+		status: "failed",
+		amount: 75.25,
+		currency: "XLM",
+		type: "outgoing",
+	},
+	{
+		id: "txn_mainnet_48290900",
+		description: "Invoice settlement",
+		date: "2025-05-26",
+		humanDate: "May 26, 2025",
+		category: "SDK",
+		status: "completed",
+		amount: 3500,
+		currency: "XLM",
+		type: "incoming",
 	},
 ];

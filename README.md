@@ -152,6 +152,12 @@ verification checklist.
   (or its aliases) when configured, and fall back to mock data / an in-memory mock transaction otherwise.
   `GET /api/transactions` filters the mock list by `?address=` (sender or recipient) and `?network=`, and
   returns `503 backend_unavailable` in a production build with no backend rather than serving mock history
+* The analytics **CSV / JSON export** (`/dashboard/analytics`) is backed by real,
+  date-scoped transaction records via `useAnalyticsTransactions`
+  (`GET /analytics/transactions-list`), not synthetic objects derived from the
+  aggregated top-assets table. Same production/mock split: in a production
+  build with no backend it surfaces an error instead of silently exporting
+  mock rows. See `src/docs/Analytics_Data_Sources.md`.
 * Receive-address QR codes (`src/components/wallet/QrCode.tsx`) and the QR download action
   (`src/components/wallet/QRDownloadButton.tsx`) encode the real wallet address client-side via the `qrcode`
   package; no backend call is involved

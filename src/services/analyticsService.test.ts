@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import type ApiClient from "@/lib/api/client";
 import {
 	fetchAllAnalytics,
+	fetchExportTransactions,
 	fetchMetrics,
 	fetchTopAssets,
 	fetchTransactionsData,
@@ -130,6 +131,59 @@ describe("fetchTopAssets", () => {
 			"/analytics/top-assets?from=2024-01-01&to=2024-01-07",
 		);
 		expect(result[0].symbol).toBe("MUX");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// fetchExportTransactions
+// ---------------------------------------------------------------------------
+
+describe("fetchExportTransactions", () => {
+	it("calls the export transactions-list endpoint with date range params", async () => {
+		const client = makeClient({
+			get: vi.fn().mockResolvedValue({
+				transactions: [
+					{
+						id: "tx-1",
+						description: "Mainnet payout",
+						date: "2024-01-03",
+						humanDate: "Jan 3, 2024",
+						category: "MW",
+						status: "completed",
+						amount: 250,
+						currency: "XLM",
+						type: "outgoing",
+					},
+				],
+			}),
+		});
+
+		const result = await fetchExportTransactions(client, RANGE);
+
+		expect(client.get).toHaveBeenCalledWith(
+			"/analytics/transactions-list?from=2024-01-01&to=2024-01-07",
+		);
+		expect(result).toHaveLength(1);
+		expect(result[0].description).toBe("Mainnet payout");
+	});
+
+	it("returns an empty array when the backend omits the transactions field", async () => {
+		const client = makeClient({
+			get: vi.fn().mockResolvedValue({}),
+		});
+
+		const result = await fetchExportTransactions(client, RANGE);
+		expect(result).toEqual([]);
+	});
+
+	it("propagates errors from the client", async () => {
+		const client = makeClient({
+			get: vi.fn().mockRejectedValue(new Error("Network error")),
+		});
+
+		await expect(fetchExportTransactions(client, RANGE)).rejects.toThrow(
+			"Network error",
+		);
 	});
 });
 

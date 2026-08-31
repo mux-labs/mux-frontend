@@ -25,6 +25,7 @@ how to swap mock data for a real backend when one becomes available.
    - [TransactionVolumeChart](#transactionvolumechart)
    - [AnalyticsExportButton](#analyticsexportbutton)
 5. [Hooks](#hooks)
+   - [useAnalyticsTransactions](#useanalyticstransactions)
    - [useAnalyticsExport](#useanalyticsexport)
 6. [Environment Variables](#environment-variables)
 7. [Replacing Mock Data with a Real Backend](#replacing-mock-data-with-a-real-backend)
@@ -35,10 +36,14 @@ how to swap mock data for a real backend when one becomes available.
 
 ## Overview
 
-The analytics dashboard currently runs entirely on **local mock data** — no
-network requests are made. All mock data is deterministic and version-controlled
-so the UI is always functional in development, CI, and demo environments without
-a live backend.
+The analytics dashboard fetch metrics, chart data, and the top-assets table from
+the Mux backend when an API base URL is configured (`NEXT_PUBLIC_API_URL` / its
+aliases) and falls back to deterministic **local mock data** otherwise, so the
+UI stays functional in development, CI, and demo environments without a live
+backend. The **CSV / JSON export** is backed by real, date-scoped transaction
+records (`GET /analytics/transactions-list`, consumed via
+`useAnalyticsTransactions`) — never synthetic objects derived from the
+top-assets aggregation.
 
 The architecture is designed so that swapping in a real API requires only
 changing the data-loading layer (a single async function per data type) without
@@ -174,8 +179,12 @@ child components:
 | `volumeData` | `ChartDataPoint[]` | Seven daily volume data points (Mon–Sun), values in USD |
 | `transactionsData` | `ChartDataPoint[]` | Seven daily transaction count data points (Mon–Sun) |
 | `topAssets` | `AssetData[]` | Five assets ranked by volume: MUX, XLM, USDC, ETH, BTC |
+| `exportTransactions` | `Transaction[]` | Five export-shaped transaction rows consumed by the CSV / JSON downloads (via `useAnalyticsTransactions`). Used only as the non-production mock fallback. |
 
-All values are static and representative of a typical week of platform activity.
+All metrics/chart values are static and representative of a typical week of
+platform activity.
+`exportTransactions` are genuine per-transaction rows (not derived from
+`topAssets`) so the export always has representative data to download locally.
 They are intentionally pre-formatted (e.g. `"$12.4M"`) so components do not need
 to perform currency formatting themselves.
 
@@ -266,6 +275,25 @@ data dependency; the data flows through the hook.
 ---
 
 ## Hooks
+
+### useAnalyticsTransactions
+
+**File:** `src/hooks/useAnalyticsTransactions.ts`
+
+Fetches the real, export-shaped transaction list for a date range
+(`GET /analytics/transactions-list`), mirroring the production/mock split of
+`useAnalyticsMetrics`:
+
+- Backend URL configured → fetch real rows via `fetchExportTransactions`.
+- No backend, non-production → fall back to `exportTransactions` from
+  `src/mock-data/analytics.ts`.
+- No backend, **production** → surface an error. The export never silently
+  reports success with mock rows in production.
+
+This hook supplies the `transactions` array the analytics page passes to
+`useAnalyticsExport` — so the CSV / JSON download contains genuine
+per-transaction records for the selected range rather than synthetic objects
+synthesised from the aggregated `topAssets` table.
 
 ### useAnalyticsExport
 
@@ -374,6 +402,31 @@ The backend must return JSON matching these shapes:
   ]
 }
 ```
+
+**`GET /analytics/transactions-list?from=YYYY-MM-DD&to=YYYY-MM-DD`** — the
+backing source for the analytics **export** (CSV / JSON download). Returns the
+real, export-shaped `Transaction[]` records for the selected range — not the
+aggregated top-assets table:
+```json
+{
+  "transactions": [
+    {
+      "id": "txn_mainnet_48291034",
+      "description": "SDK wallet payout",
+      "date": "2025-05-28",
+      "humanDate": "May 28, 2025",
+      "category": "MW",
+      "status": "completed",
+      "amount": 250,
+      "currency": "XLM",
+      "type": "outgoing"
+    }
+  ]
+}
+```
+Consumed by `fetchExportTransactions` (`src/services/analyticsService.ts`) via
+the `useAnalyticsTransactions` hook. In a production build with no backend, the
+hook surfaces an error rather than exporting mock rows.
 
 ### 3. Create a data-loading function
 

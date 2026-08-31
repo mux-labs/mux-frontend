@@ -102,6 +102,158 @@ describe("POST /api/auth/refresh", () => {
 			expect(cookie?.sameSite).toBe("lax");
 		});
 
+		it("sets secure flag on the session cookie when NODE_ENV=production", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubEnv("NODE_ENV", "production");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ token: "secure-token-123" }),
+				}),
+			);
+
+			const res = await POST(makeRequest({ refreshToken: "x" }));
+
+			expect(res.status).toBe(200);
+			const cookie = res.cookies.get("mux_auth_token");
+			expect(cookie?.value).toBe("secure-token-123");
+			expect(cookie?.secure).toBe(true);
+			expect(cookie?.httpOnly).toBe(true);
+			expect(cookie?.sameSite).toBe("lax");
+		});
+
+		it("forwards the caller's cookie header to the upstream", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ accessToken: "new-token" }),
+				}),
+			);
+
+			await POST(
+				makeRequest(
+					{ refreshToken: "x" },
+					{
+						authorization: "Bearer old",
+						cookie: "mux_auth_token=old-session",
+					},
+				),
+			);
+
+			const init = (
+				fetch as unknown as {
+					mock: { calls: [string, { headers: Record<string, string> }][] };
+				}
+			).mock.calls[0][1];
+			expect(init.headers.cookie).toBe("mux_auth_token=old-session");
+			expect(init.headers.authorization).toBe("Bearer old");
+		});
+
+		it("forwards upstream auth headers (x-api-key, x-api-secret)", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubEnv("MUX_API_KEY", "test-api-key");
+			vi.stubEnv("MUX_API_SECRET", "test-api-secret");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ accessToken: "new-token" }),
+				}),
+			);
+
+			await POST(makeRequest({ refreshToken: "x" }));
+
+			const init = (
+				fetch as unknown as {
+					mock: { calls: [string, { headers: Record<string, string> }][] };
+				}
+			).mock.calls[0][1];
+			expect(init.headers["x-api-key"]).toBe("test-api-key");
+			expect(init.headers["x-api-secret"]).toBe("test-api-secret");
+		});
+
+		it("forwards the request body to the upstream", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ accessToken: "tok" }),
+				}),
+			);
+
+			await POST(makeRequest({ refreshToken: "my-refresh" }));
+
+			const init = (
+				fetch as unknown as {
+					mock: { calls: [string, { body: string }][] };
+				}
+			).mock.calls[0][1];
+			expect(JSON.parse(init.body)).toEqual({ refreshToken: "my-refresh" });
+		});
+
+		it("recognises the sessionToken key for cookie rotation", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ sessionToken: "rotated-via-sessionToken" }),
+				}),
+			);
+
+			const res = await POST(makeRequest({ refreshToken: "x" }));
+			const cookie = res.cookies.get("mux_auth_token");
+			expect(cookie?.value).toBe("rotated-via-sessionToken");
+		});
+
+		it("recognises the token key for cookie rotation", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ token: "rotated-via-token" }),
+				}),
+			);
+
+			const res = await POST(makeRequest({ refreshToken: "x" }));
+			const cookie = res.cookies.get("mux_auth_token");
+			expect(cookie?.value).toBe("rotated-via-token");
+		});
+
+		it("does not set a session cookie when the backend returns no token field", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+			vi.stubGlobal(
+				"fetch",
+				vi.fn().mockResolvedValue({
+					ok: true,
+					status: 200,
+					json: () =>
+						Promise.resolve({ message: "ok" }),
+				}),
+			);
+
+			const res = await POST(makeRequest({ refreshToken: "x" }));
+			expect(res.status).toBe(200);
+			expect(res.cookies.get("mux_auth_token")).toBeUndefined();
+		});
+
 		it("passes an upstream 401 through unchanged", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
 			vi.stubGlobal(
@@ -132,6 +284,21 @@ describe("POST /api/auth/refresh", () => {
 	});
 
 	describe("production without a configured backend", () => {
+		it("returns 503 with a descriptive message", async () => {
+			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
+			vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
+			vi.stubEnv("NODE_ENV", "production");
+
+			const res = await POST(makeRequest({ refreshToken: "mock-refresh-token" }));
+
+			expect(res.status).toBe(503);
+			const body = await res.json();
+			expect(body.error).toBe("backend_unavailable");
+			expect(body.message).toBeTruthy();
+			expect(body.accessToken).toBeUndefined();
+		});
+
 		it("returns 503 instead of accepting the hardcoded mock refresh token", async () => {
 			vi.stubEnv("NEXT_PUBLIC_API_URL", "");
 			vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");

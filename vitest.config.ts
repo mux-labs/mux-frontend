@@ -23,6 +23,7 @@ export default defineConfig({
 				"src/services/**",
 				"src/app/**/wallets/**",
 				"src/app/**/analytics/**",
+				"src/app/api/**",
 			],
 			exclude: ["src/test/**", "**/*.d.ts"],
 		},

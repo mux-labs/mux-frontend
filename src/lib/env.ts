@@ -4,6 +4,14 @@
  * Validates required environment variables at build/startup time.
  * Follows Next.js conventions: public vars are prefixed with NEXT_PUBLIC_.
  * Private vars are only validated on the server side.
+ *
+ * Server-only guard (#694):
+ *   MUX_API_SECRET and MUX_API_KEY must never be read from client-side code.
+ *   Next.js strips non-NEXT_PUBLIC_* vars from the browser bundle at build
+ *   time, so these will always be undefined in the browser.  As an extra
+ *   defence-in-depth measure, `getServerOnlyEnv()` throws at runtime when
+ *   called from a client context (window is defined), making the violation
+ *   immediately visible rather than silently returning undefined.
  */
 
 interface EnvVar {
@@ -69,6 +77,42 @@ const serverEnvVars: EnvVar[] = [
 ];
 
 const allEnvVars = [...publicEnvVars, ...serverEnvVars];
+
+/** Names of vars that must never be read outside a server context. */
+const SERVER_ONLY_VAR_NAMES: ReadonlySet<string> = new Set(
+	serverEnvVars
+		.map((v) => v.name)
+		.filter((name) => !name.startsWith("NEXT_PUBLIC_")),
+);
+
+/**
+ * Returns true when the current execution context is a browser (client) JS
+ * bundle.  Uses `typeof window` rather than `window` directly so that the
+ * check itself does not throw in a non-browser environment.
+ */
+function isClientSide(): boolean {
+	return typeof window !== "undefined";
+}
+
+/**
+ * Guard that throws if called from client-side (browser) code. (#694)
+ *
+ * Next.js strips server-only env vars from the browser bundle at build time,
+ * but importing `process.env.MUX_API_SECRET` directly in a client component
+ * would silently return `undefined` rather than failing loudly.  This guard
+ * makes the mistake visible at runtime in development before it reaches prod.
+ *
+ * @param varName - The variable name being accessed (used in the error message).
+ */
+export function assertServerSide(varName: string): void {
+	if (isClientSide()) {
+		throw new Error(
+			`[env] Attempted to read server-only variable "${varName}" from a client-side context. ` +
+				`Server-only variables (${[...SERVER_ONLY_VAR_NAMES].join(", ")}) must only be accessed ` +
+				`inside Next.js API routes, Server Components, or server actions — never in "use client" code.`,
+		);
+	}
+}
 
 /**
  * Validates environment variables against the defined schema.
@@ -147,4 +191,22 @@ export function getEnv(): Record<string, string | undefined> {
 		}
 	}
 	return result;
+}
+
+/**
+ * Reads a server-only environment variable.  Throws at runtime if called
+ * from a browser (client) bundle so the misconfiguration is immediately
+ * visible. (#694)
+ *
+ * Use this instead of reading `process.env.MUX_API_SECRET` (etc.) directly
+ * inside API routes and Server Components.
+ *
+ * @param name - The server-only variable name to read.
+ * @returns The variable value, or `undefined` when unset.
+ */
+export function getServerOnlyEnv(
+	name: string,
+): string | undefined {
+	assertServerSide(name);
+	return getEnv()[name];
 }

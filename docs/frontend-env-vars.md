@@ -24,18 +24,30 @@ against in-repo mocks (`/api/auth/login`, `/api/wallets`, etc.).
 These are inlined into the browser bundle at build time. Never put secrets
 in a `NEXT_PUBLIC_*` variable.
 
-- **`NEXT_PUBLIC_API_URL`** — primary backend base URL. Read directly in
+- **`NEXT_PUBLIC_API_URL`** — canonical backend base URL. Read directly in
   `src/app/api/auth/login/route.ts` to decide whether to proxy to a real
   backend or fall back to the mock login response, and in
-  `src/lib/api/config.ts::getApiBaseUrl()` as the first candidate for all
-  other API calls (e.g. `useWallets`, `GET /api/requests/today`, and
-  `POST /api/transactions` for the wallet "Send" flow).
-- **`NEXT_PUBLIC_MUX_API_URL`** — second candidate in the same
-  `getApiBaseUrl()` fallback chain; defaults to
-  `https://api.muxprotocol.com` when nothing else is set. Predates
-  `NEXT_PUBLIC_API_URL` and is kept for older deploy configs.
-- **`NEXT_PUBLIC_API_BASE`** — third and final candidate in the fallback
-  chain, for deploys that used this older name.
+  `src/lib/api/config.ts::getApiBaseUrl()` as the **first** candidate for
+  all other API calls (e.g. `useWallets`, `GET /api/requests/today`, and
+  `POST /api/transactions` for the wallet "Send" flow). **Set this in new
+  deploys.**
+- **`NEXT_PUBLIC_MUX_API_URL`** — **legacy alias**, checked second in the
+  `getApiBaseUrl()` fallback chain (see below). Defaults to
+  `https://api.muxprotocol.com` in production when all three aliases are
+  unset. Predates `NEXT_PUBLIC_API_URL`; kept for older deploy configs.
+- **`NEXT_PUBLIC_API_BASE`** — **legacy alias**, third and final candidate
+  in the fallback chain, for deploys that used this older name.
+
+  **API URL resolution chain (#693):** `getApiBaseUrl()` in
+  `src/lib/api/config.ts` walks the three aliases above in priority order
+  and returns the first *non-empty* value. An alias set to an empty string
+  (e.g. `NEXT_PUBLIC_API_URL=`) is treated as unset and the chain
+  continues to the next alias. This means a mis-set deploy that blanks the
+  primary var still picks up the legacy alias instead of silently falling
+  back to mock data. The `API_URL_CANDIDATES` constant exported from
+  `config.ts` documents the exact order so tests can verify it without
+  reimplementing it. Use `getActiveApiUrlVar()` (also exported from
+  `config.ts`) to log which alias is actually in effect at startup.
 - **`NEXT_PUBLIC_APP_URL`** — this app's own public URL; defaults to
   `http://localhost:3000`.
 - **`NEXT_PUBLIC_WALLET_CONNECT_PROJECT_ID`** — only relevant if
@@ -56,8 +68,16 @@ These never reach the browser and are safe for secrets.
   `getUpstreamAuthHeaders()` in `src/lib/api/config.ts` and attached
   (`x-api-key` / `x-api-secret`) to every upstream request a Next.js API
   route makes to the Mux backend. Only ever read inside `src/app/api/**`
-  route handlers or other server-only modules — never import
-  `getApiKey()`/`getApiSecret()` from a client component.
+  route handlers or other server-only modules — **never import
+  `getApiKey()`/`getApiSecret()` from a client component** (#694).
+
+  As an extra defence-in-depth measure, `assertServerSide()` and
+  `getServerOnlyEnv()` in `src/lib/env.ts` throw at runtime whenever they
+  are called from a browser context (`window` is defined), so accidentally
+  importing these helpers in a `"use client"` file causes an immediate,
+  visible error in development rather than silently returning `undefined`.
+  Use `getServerOnlyEnv("MUX_API_SECRET")` in server-only code instead of
+  reading `process.env.MUX_API_SECRET` directly.
 - **`MUX_BACKEND_URL`** — server-only base URL of `mux-backend`, read by
   `getBackendApiBaseUrl()` in `src/lib/api/config.ts`. `/api/spending-limits`
   proxies `GET`/`PUT` here (forwarding the server API key and any caller

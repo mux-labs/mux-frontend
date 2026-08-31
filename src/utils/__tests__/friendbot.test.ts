@@ -1,6 +1,9 @@
+import { describe, expect, it } from "vitest";
 import {
 	FRIENDBOT_DOCS_URL,
 	FRIENDBOT_URL,
+	MainnetFriendbotError,
+	assertTestnetOnly,
 	getFriendbotUrl,
 	isFriendbotEligible,
 	isValidAddressForFriendbot,
@@ -85,6 +88,74 @@ describe("friendbot utilities", () => {
 			const url = getFriendbotUrl(address);
 			const urlObj = new URL(url);
 			expect(urlObj.searchParams.get("addr")).toBe(address);
+		});
+
+		// --- mainnet guard (#695) ---
+
+		it("throws MainnetFriendbotError when network is mainnet", () => {
+			const address =
+				"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+			expect(() => getFriendbotUrl(address, "mainnet")).toThrow(
+				MainnetFriendbotError,
+			);
+		});
+
+		it("thrown error message mentions testnet-only restriction", () => {
+			const address =
+				"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+			expect(() => getFriendbotUrl(address, "mainnet")).toThrow(/testnet/i);
+		});
+
+		it("does not throw when network is testnet", () => {
+			const address =
+				"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+			expect(() => getFriendbotUrl(address, "testnet")).not.toThrow();
+		});
+
+		it("does not throw when network is omitted (backward compat)", () => {
+			const address =
+				"GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI";
+			expect(() => getFriendbotUrl(address)).not.toThrow();
+		});
+	});
+
+	// --- assertTestnetOnly (#695) ---
+
+	describe("assertTestnetOnly", () => {
+		it("throws MainnetFriendbotError on mainnet", () => {
+			expect(() => assertTestnetOnly("mainnet")).toThrow(
+				MainnetFriendbotError,
+			);
+		});
+
+		it("does not throw on testnet", () => {
+			expect(() => assertTestnetOnly("testnet")).not.toThrow();
+		});
+
+		it("error name is MainnetFriendbotError", () => {
+			try {
+				assertTestnetOnly("mainnet");
+			} catch (err) {
+				expect((err as Error).name).toBe("MainnetFriendbotError");
+			}
+		});
+	});
+
+	// --- MainnetFriendbotError class ---
+
+	describe("MainnetFriendbotError", () => {
+		it("is an instance of Error", () => {
+			expect(new MainnetFriendbotError()).toBeInstanceOf(Error);
+		});
+
+		it("has a descriptive message", () => {
+			const err = new MainnetFriendbotError();
+			expect(err.message).toContain("testnet");
+			expect(err.message).toContain("mainnet");
+		});
+
+		it("has the correct name", () => {
+			expect(new MainnetFriendbotError().name).toBe("MainnetFriendbotError");
 		});
 	});
 

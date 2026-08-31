@@ -1,4 +1,5 @@
 import type { SpendingLimitsResponse } from "@/app/api/spending-limits/route";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 
 export interface ApiResult<T> {
 	data?: T;

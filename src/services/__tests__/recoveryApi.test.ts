@@ -1,5 +1,8 @@
 import { vi } from "vitest";
-import { mockRecoveryTimelineCompleted } from "@/mock-data/recovery";
+import {
+	mockRecoveryTimelineCompleted,
+	mockRecoveryTimelineInProgress,
+} from "@/mock-data/recovery";
 import {
 	fetchRecoveryEvents,
 	fetchRecoveryStatus,
@@ -7,13 +10,38 @@ import {
 	type RecoveryStatusResponse,
 } from "../recoveryApi";
 
-// Mock fetch
-global.fetch = vi.fn();
+// Mock fetchWithAuth and loadSession (matching the production module imports)
+vi.mock("@/utils/fetchWithAuth", () => ({
+	fetchWithAuth: vi.fn(),
+}));
+
+vi.mock("@/lib/session", () => ({
+	loadSession: vi.fn(),
+}));
+
+import { loadSession } from "@/lib/session";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
+
+const mockFetch = vi.mocked(fetchWithAuth);
+const mockLoadSession = vi.mocked(loadSession);
+
+function okResponse(body: unknown) {
+	return {
+		ok: true,
+		status: 200,
+		json: async () => body,
+	} as Response;
+}
 
 describe("Recovery API Service", () => {
 	beforeEach(() => {
-		vi.clearAllMocks();
+		vi.resetAllMocks();
 		vi.useFakeTimers();
+		mockLoadSession.mockReturnValue({
+			accessToken: "test-access-token",
+			refreshToken: "r",
+			expiresAt: Date.now() + 60_000,
+		});
 	});
 
 	afterEach(() => {
@@ -32,10 +60,7 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-			});
+			mockFetch.mockResolvedValueOnce(okResponse(mockResponse));
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
@@ -52,70 +77,71 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle network errors with retry", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-				new Error("Network error"),
-			);
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({
-					...mockRecoveryTimelineCompleted,
-					startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
-					events: mockRecoveryTimelineCompleted.events.map((e) => ({
-						...e,
-						timestamp: e.timestamp.toISOString(),
-					})),
-				}),
-			});
+			mockFetch
+				.mockRejectedValueOnce(new Error("Network error"))
+				.mockResolvedValueOnce(
+					okResponse({
+						...mockRecoveryTimelineCompleted,
+						startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
+						events: mockRecoveryTimelineCompleted.events.map((e) => ({
+							...e,
+							timestamp: e.timestamp.toISOString(),
+						})),
+					}),
+				);
 
-			const result = await fetchRecoveryStatus("wallet-123", {
+			const resultPromise = fetchRecoveryStatus("wallet-123", {
 				retryAttempts: 2,
 				retryDelay: 100,
 			});
+			// Advance past retry delay so the setTimeout(resolve) in the retry fires
+			await vi.advanceTimersByTimeAsync(200);
+			const result = await resultPromise;
 
 			expect(result.success).toBe(true);
-			expect(global.fetch).toHaveBeenCalledTimes(2);
+			expect(mockFetch).toHaveBeenCalledTimes(2);
 		});
 
 		it("should handle HTTP errors", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			mockFetch.mockResolvedValueOnce({
 				ok: false,
 				status: 404,
 				json: async () => ({ message: "Not found" }),
-			});
+			} as Response);
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
 			expect(result.success).toBe(false);
-			expect(result.error).toContain("404");
+			expect(result.error).toBe("Not found");
 		});
 
 		it("should handle timeout errors", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error("timeout"));
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({
-					...mockRecoveryTimelineCompleted,
-					startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
-					events: mockRecoveryTimelineCompleted.events.map((e) => ({
-						...e,
-						timestamp: e.timestamp.toISOString(),
-					})),
-				}),
-			});
+			mockFetch
+				.mockRejectedValueOnce(new Error("timeout"))
+				.mockResolvedValueOnce(
+					okResponse({
+						...mockRecoveryTimelineCompleted,
+						startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
+						events: mockRecoveryTimelineCompleted.events.map((e) => ({
+							...e,
+							timestamp: e.timestamp.toISOString(),
+						})),
+					}),
+				);
 
-			const result = await fetchRecoveryStatus("wallet-123", {
+			const resultPromise = fetchRecoveryStatus("wallet-123", {
 				retryAttempts: 2,
 				retryDelay: 100,
 			});
+			// Advance past retry delay so the setTimeout(resolve) in the retry fires
+			await vi.advanceTimersByTimeAsync(200);
+			const result = await resultPromise;
 
 			expect(result.success).toBe(true);
 		});
 
 		it("should validate response data", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ invalid: "data" }),
-			});
+			mockFetch.mockResolvedValueOnce(okResponse({ invalid: "data" }));
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
@@ -134,10 +160,7 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockResponse,
-			});
+			mockFetch.mockResolvedValueOnce(okResponse(mockResponse));
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
@@ -147,9 +170,8 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should include timestamp in response", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({
+			mockFetch.mockResolvedValueOnce(
+				okResponse({
 					...mockRecoveryTimelineCompleted,
 					startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
 					events: mockRecoveryTimelineCompleted.events.map((e) => ({
@@ -157,7 +179,7 @@ describe("Recovery API Service", () => {
 						timestamp: e.timestamp.toISOString(),
 					})),
 				}),
-			});
+			);
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
@@ -173,10 +195,7 @@ describe("Recovery API Service", () => {
 				timestamp: e.timestamp.toISOString(),
 			}));
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockEvents,
-			});
+			mockFetch.mockResolvedValueOnce(okResponse(mockEvents));
 
 			const result = await fetchRecoveryEvents("recovery-123");
 
@@ -192,11 +211,11 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle HTTP errors", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			mockFetch.mockResolvedValueOnce({
 				ok: false,
 				status: 500,
 				json: async () => ({ message: "Server error" }),
-			});
+			} as Response);
 
 			const result = await fetchRecoveryEvents("recovery-123");
 
@@ -205,10 +224,7 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should validate events array", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({ invalid: "data" }),
-			});
+			mockFetch.mockResolvedValueOnce(okResponse({ invalid: "data" }));
 
 			const result = await fetchRecoveryEvents("recovery-123");
 
@@ -228,10 +244,7 @@ describe("Recovery API Service", () => {
 				},
 			];
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => mockEvents,
-			});
+			mockFetch.mockResolvedValueOnce(okResponse(mockEvents));
 
 			const result = await fetchRecoveryEvents("recovery-123");
 
@@ -242,33 +255,34 @@ describe("Recovery API Service", () => {
 
 	describe("pollRecoveryStatus", () => {
 		it("should poll recovery status at intervals", async () => {
+			// Use in_progress so polling continues past the first callback
 			const mockResponse = {
-				...mockRecoveryTimelineCompleted,
-				startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
-				events: mockRecoveryTimelineCompleted.events.map((e) => ({
+				...mockRecoveryTimelineInProgress,
+				startedAt: mockRecoveryTimelineInProgress.startedAt.toISOString(),
+				events: mockRecoveryTimelineInProgress.events.map((e) => ({
 					...e,
 					timestamp: e.timestamp.toISOString(),
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-				ok: true,
-				json: async () => mockResponse,
-			});
+			mockFetch.mockResolvedValue(okResponse(mockResponse));
 
 			const onUpdate = vi.fn();
 			const stop = pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
+			// Flush microtasks so the async poll() completes
+			await vi.advanceTimersByTimeAsync(0);
+
 			// Initial call
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
-			// Advance time
-			vi.advanceTimersByTime(1000);
+			// Advance to the next interval — the setTimeout(poll, 1000) fires
+			await vi.advanceTimersByTimeAsync(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2);
 
 			// Stop polling
 			stop();
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2); // No additional calls
 		});
 
@@ -283,17 +297,16 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-				ok: true,
-				json: async () => completedResponse,
-			});
+			mockFetch.mockResolvedValue(okResponse(completedResponse));
 
 			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
+			await vi.advanceTimersByTimeAsync(0);
+
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			// Should not poll again since status is completed
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 		});
@@ -309,17 +322,16 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-				ok: true,
-				json: async () => failedResponse,
-			});
+			mockFetch.mockResolvedValue(okResponse(failedResponse));
 
 			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
 
+			await vi.advanceTimersByTimeAsync(0);
+
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			// Should not poll again since status is failed
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 		});
@@ -335,39 +347,42 @@ describe("Recovery API Service", () => {
 				})),
 			};
 
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
-				ok: true,
-				json: async () => inProgressResponse,
-			});
+			mockFetch.mockResolvedValue(okResponse(inProgressResponse));
 
 			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 3000, onUpdate);
+
+			await vi.advanceTimersByTimeAsync(0);
 
 			// Initial call
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 
 			// Advance to 1 second
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(2);
 
 			// Advance to 2 seconds
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(3);
 
 			// Advance to 3 seconds (max duration reached)
-			vi.advanceTimersByTime(1000);
+			await vi.advanceTimersByTimeAsync(1000);
 			expect(onUpdate).toHaveBeenCalledTimes(3); // No additional calls
 		});
 
+		// Use 404 (non-retryable) so fetchRecoveryStatus returns immediately
+		// without hitting the retry-delay setTimeout that hangs under fake timers.
 		it("should handle polling errors", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValue({
+			mockFetch.mockResolvedValue({
 				ok: false,
-				status: 500,
-				json: async () => ({ message: "Server error" }),
-			});
+				status: 404,
+				json: async () => ({ message: "Not found" }),
+			} as Response);
 
 			const onUpdate = vi.fn();
 			pollRecoveryStatus("wallet-123", 1000, 5000, onUpdate);
+
+			await vi.advanceTimersByTimeAsync(0);
 
 			expect(onUpdate).toHaveBeenCalledTimes(1);
 			expect(onUpdate).toHaveBeenCalledWith(
@@ -380,7 +395,7 @@ describe("Recovery API Service", () => {
 
 	describe("Error handling", () => {
 		it("should handle fetch errors gracefully", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("Network error"));
+			mockFetch.mockRejectedValue(new Error("Network error"));
 
 			const result = await fetchRecoveryStatus("wallet-123", {
 				retryAttempts: 1,
@@ -391,26 +406,28 @@ describe("Recovery API Service", () => {
 		});
 
 		it("should handle malformed JSON responses", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+			mockFetch.mockResolvedValueOnce({
 				ok: true,
 				json: async () => {
 					throw new Error("Invalid JSON");
 				},
-			});
+			} as Response);
 
-			const result = await fetchRecoveryStatus("wallet-123");
+			// retryAttempts: 1 so the retry-delay setTimeout never fires under fake timers
+			const result = await fetchRecoveryStatus("wallet-123", {
+				retryAttempts: 1,
+			});
 
 			expect(result.success).toBe(false);
 		});
 
 		it("should handle missing required fields", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({
+			mockFetch.mockResolvedValueOnce(
+				okResponse({
 					id: "recovery-123",
 					// Missing required fields
 				}),
-			});
+			);
 
 			const result = await fetchRecoveryStatus("wallet-123");
 
@@ -421,9 +438,8 @@ describe("Recovery API Service", () => {
 
 	describe("Configuration", () => {
 		it("should use custom base URL", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
-				ok: true,
-				json: async () => ({
+			mockFetch.mockResolvedValueOnce(
+				okResponse({
 					...mockRecoveryTimelineCompleted,
 					startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
 					events: mockRecoveryTimelineCompleted.events.map((e) => ({
@@ -431,27 +447,26 @@ describe("Recovery API Service", () => {
 						timestamp: e.timestamp.toISOString(),
 					})),
 				}),
-			});
+			);
 
 			await fetchRecoveryStatus("wallet-123", {
 				baseUrl: "https://api.example.com",
 			});
 
-			expect(global.fetch).toHaveBeenCalledWith(
+			expect(mockFetch).toHaveBeenCalledWith(
 				expect.stringContaining("https://api.example.com"),
 				expect.any(Object),
 			);
 		});
 
 		it("should use custom timeout", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>).mockImplementationOnce(
+			mockFetch.mockImplementationOnce(
 				() =>
 					new Promise((resolve) => {
 						setTimeout(
 							() =>
-								resolve({
-									ok: true,
-									json: async () => ({
+								resolve(
+									okResponse({
 										...mockRecoveryTimelineCompleted,
 										startedAt:
 											mockRecoveryTimelineCompleted.startedAt.toISOString(),
@@ -460,26 +475,27 @@ describe("Recovery API Service", () => {
 											timestamp: e.timestamp.toISOString(),
 										})),
 									}),
-								}),
+								),
 							100,
 						);
 					}),
 			);
 
-			const result = await fetchRecoveryStatus("wallet-123", {
+			// Advance fake timers so the mock's setTimeout(100) fires
+			const resultPromise = fetchRecoveryStatus("wallet-123", {
 				timeout: 200,
 			});
+			await vi.advanceTimersByTimeAsync(150);
+			const result = await resultPromise;
 
 			expect(result.success).toBe(true);
 		});
-
 		it("should use custom retry attempts", async () => {
-			(global.fetch as ReturnType<typeof vi.fn>)
+			mockFetch
 				.mockRejectedValueOnce(new Error("Error 1"))
 				.mockRejectedValueOnce(new Error("Error 2"))
-				.mockResolvedValueOnce({
-					ok: true,
-					json: async () => ({
+				.mockResolvedValueOnce(
+					okResponse({
 						...mockRecoveryTimelineCompleted,
 						startedAt: mockRecoveryTimelineCompleted.startedAt.toISOString(),
 						events: mockRecoveryTimelineCompleted.events.map((e) => ({
@@ -487,15 +503,18 @@ describe("Recovery API Service", () => {
 							timestamp: e.timestamp.toISOString(),
 						})),
 					}),
-				});
+				);
 
-			const result = await fetchRecoveryStatus("wallet-123", {
+			// Advance fake timers so retry-delay setTimeouts fire
+			const resultPromise = fetchRecoveryStatus("wallet-123", {
 				retryAttempts: 3,
 				retryDelay: 100,
 			});
+			await vi.advanceTimersByTimeAsync(500);
+			const result = await resultPromise;
 
 			expect(result.success).toBe(true);
-			expect(global.fetch).toHaveBeenCalledTimes(3);
+			expect(mockFetch).toHaveBeenCalledTimes(3);
 		});
 	});
 });

@@ -6,7 +6,9 @@
  */
 
 import { getApiBaseUrl } from "@/lib/api/config";
+import { loadSession } from "@/lib/session";
 import type { RecoveryTimeline, RecoveryTimelineEvent } from "@/types/recovery";
+import { fetchWithAuth } from "@/utils/fetchWithAuth";
 
 /**
  * API response types
@@ -81,12 +83,23 @@ function validateRecoveryTimeline(data: unknown): data is RecoveryTimeline {
 /**
  * Converts API response dates to Date objects
  */
+/** Raw API shape where date fields may arrive as ISO strings. */
+interface RawTimeline {
+	id: string;
+	walletId: string;
+	startedAt: string | Date;
+	completedAt?: string | Date;
+	status: string;
+	events: { timestamp: string | Date; [k: string]: unknown }[];
+	[k: string]: unknown;
+}
+
 function parseRecoveryTimeline(data: unknown): RecoveryTimeline | null {
 	if (!validateRecoveryTimeline(data)) {
 		return null;
 	}
 
-	const timeline = data as any;
+	const timeline = data as RawTimeline;
 
 	return {
 		...timeline,
@@ -99,7 +112,7 @@ function parseRecoveryTimeline(data: unknown): RecoveryTimeline | null {
 				? new Date(timeline.completedAt)
 				: timeline.completedAt
 			: undefined,
-		events: (timeline.events as any[]).map((event) => ({
+		events: timeline.events.map((event) => ({
 			...event,
 			timestamp:
 				typeof event.timestamp === "string"
@@ -175,6 +188,15 @@ export async function fetchRecoveryStatus(
 
 	let lastError: RecoveryStatusError | null = null;
 
+	// Build request headers — include Authorization when a session exists.
+	const requestHeaders: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	const session = loadSession() as { accessToken?: string } | null;
+	if (session?.accessToken) {
+		requestHeaders["Authorization"] = `Bearer ${session.accessToken}`;
+	}
+
 	// Retry logic
 	for (let attempt = 0; attempt < finalConfig.retryAttempts; attempt++) {
 		try {
@@ -184,13 +206,11 @@ export async function fetchRecoveryStatus(
 				finalConfig.timeout,
 			);
 
-			const response = await fetch(
+			const response = await fetchWithAuth(
 				`${finalConfig.baseUrl}/recovery/status/${walletId}`,
 				{
 					method: "GET",
-					headers: {
-						"Content-Type": "application/json",
-					},
+					headers: requestHeaders,
 					signal: controller.signal,
 				},
 			);
@@ -307,17 +327,24 @@ export async function fetchRecoveryEvents(
 		};
 	}
 
+	// Build request headers — include Authorization when a session exists.
+	const requestHeaders: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	const session = loadSession() as { accessToken?: string } | null;
+	if (session?.accessToken) {
+		requestHeaders["Authorization"] = `Bearer ${session.accessToken}`;
+	}
+
 	try {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), finalConfig.timeout);
 
-		const response = await fetch(
+		const response = await fetchWithAuth(
 			`${finalConfig.baseUrl}/recovery/${recoveryId}/events`,
 			{
 				method: "GET",
-				headers: {
-					"Content-Type": "application/json",
-				},
+				headers: requestHeaders,
 				signal: controller.signal,
 			},
 		);
@@ -344,13 +371,15 @@ export async function fetchRecoveryEvents(
 		}
 
 		// Parse event timestamps
-		const events = data.map((event: any) => ({
-			...event,
-			timestamp:
-				typeof event.timestamp === "string"
-					? new Date(event.timestamp)
-					: event.timestamp,
-		}));
+		const events = data.map(
+			(event: { timestamp: string | Date; [k: string]: unknown }) => ({
+				...event,
+				timestamp:
+					typeof event.timestamp === "string"
+						? new Date(event.timestamp)
+						: event.timestamp,
+			}),
+		);
 
 		return {
 			success: true,
@@ -410,18 +439,28 @@ export async function initiateRecovery(
 		};
 	}
 
+	// Build request headers — include Authorization when a session exists.
+	const requestHeaders: Record<string, string> = {
+		"Content-Type": "application/json",
+	};
+	const session = loadSession() as { accessToken?: string } | null;
+	if (session?.accessToken) {
+		requestHeaders["Authorization"] = `Bearer ${session.accessToken}`;
+	}
+
 	try {
 		const controller = new AbortController();
 		const timeoutId = setTimeout(() => controller.abort(), finalConfig.timeout);
 
-		const response = await fetch(`${finalConfig.baseUrl}/recovery/initiate`, {
-			method: "POST",
-			headers: {
-				"Content-Type": "application/json",
+		const response = await fetchWithAuth(
+			`${finalConfig.baseUrl}/recovery/initiate`,
+			{
+				method: "POST",
+				headers: requestHeaders,
+				body: JSON.stringify({ walletId }),
+				signal: controller.signal,
 			},
-			body: JSON.stringify({ walletId }),
-			signal: controller.signal,
-		});
+		);
 
 		clearTimeout(timeoutId);
 

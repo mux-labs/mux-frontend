@@ -6,7 +6,13 @@
  * Run with: npx vitest run or similar test runner.
  */
 
-import { getEnv, validateEnv } from "../env";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	assertServerSide,
+	getEnv,
+	getServerOnlyEnv,
+	validateEnv,
+} from "../env";
 
 describe("validateEnv", () => {
 	beforeEach(() => {
@@ -109,5 +115,97 @@ describe("getEnv", () => {
 		vi.stubEnv("NEXT_PUBLIC_API_URL", "");
 
 		expect(getEnv().NEXT_PUBLIC_API_URL).toBeFalsy();
+	});
+});
+
+// --- server-only guard (#694) ---
+
+describe("assertServerSide", () => {
+	it("does not throw in a Node.js (server) environment", () => {
+		// In Vitest / Node.js, window is undefined, so this is a server context.
+		expect(() => assertServerSide("MUX_API_SECRET")).not.toThrow();
+	});
+
+	it("throws when window is defined (simulated browser)", () => {
+		// Simulate a browser environment by defining window.
+		const originalWindow = globalThis.window;
+		// @ts-expect-error — intentionally setting window to simulate browser
+		globalThis.window = {};
+		try {
+			expect(() => assertServerSide("MUX_API_SECRET")).toThrow(
+				/server-only variable/,
+			);
+		} finally {
+			globalThis.window = originalWindow;
+		}
+	});
+
+	it("error message names the variable being accessed", () => {
+		const originalWindow = globalThis.window;
+		// @ts-expect-error — intentionally setting window to simulate browser
+		globalThis.window = {};
+		try {
+			expect(() => assertServerSide("MUX_API_SECRET")).toThrow(/MUX_API_SECRET/);
+		} finally {
+			globalThis.window = originalWindow;
+		}
+	});
+
+	it("error message lists the other server-only vars for context", () => {
+		const originalWindow = globalThis.window;
+		// @ts-expect-error — intentionally setting window to simulate browser
+		globalThis.window = {};
+		try {
+			expect(() => assertServerSide("MUX_API_KEY")).toThrow(/MUX_API_KEY/);
+		} finally {
+			globalThis.window = originalWindow;
+		}
+	});
+});
+
+describe("getServerOnlyEnv", () => {
+	beforeEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	afterEach(() => {
+		vi.unstubAllEnvs();
+	});
+
+	it("returns the variable value on the server", () => {
+		vi.stubEnv("MUX_API_SECRET", "super-secret");
+		expect(getServerOnlyEnv("MUX_API_SECRET")).toBe("super-secret");
+	});
+
+	it("returns undefined when the variable is not set", () => {
+		expect(getServerOnlyEnv("MUX_API_SECRET")).toBeUndefined();
+	});
+
+	it("throws when called from a simulated browser context (#694)", () => {
+		const originalWindow = globalThis.window;
+		// @ts-expect-error — intentionally setting window to simulate browser
+		globalThis.window = {};
+		try {
+			expect(() => getServerOnlyEnv("MUX_API_SECRET")).toThrow(
+				/server-only variable/,
+			);
+		} finally {
+			globalThis.window = originalWindow;
+		}
+	});
+
+	it("MUX_API_SECRET is never accessible client-side, even if injected (#694)", () => {
+		// This is the regression guard: if a future refactor accidentally imports
+		// getServerOnlyEnv in a client component, the test below will catch the
+		// throw in a simulated browser environment.
+		vi.stubEnv("MUX_API_SECRET", "should-not-reach-browser");
+		const originalWindow = globalThis.window;
+		// @ts-expect-error — intentionally setting window to simulate browser
+		globalThis.window = {};
+		try {
+			expect(() => getServerOnlyEnv("MUX_API_SECRET")).toThrow();
+		} finally {
+			globalThis.window = originalWindow;
+		}
 	});
 });

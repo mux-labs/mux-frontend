@@ -10,7 +10,12 @@
  */
 
 import type ApiClient from "@/lib/api/client";
-import type { AssetData, ChartDataPoint, Metric } from "@/types/analytics";
+import type {
+	AssetData,
+	ChartDataPoint,
+	Metric,
+	Transaction,
+} from "@/types/analytics";
 
 // ---------------------------------------------------------------------------
 // Response shapes expected from the backend
@@ -30,6 +35,10 @@ export interface TransactionsResponse {
 
 export interface TopAssetsResponse {
 	assets: AssetData[];
+}
+
+export interface ExportTransactionsResponse {
+	transactions: Transaction[];
 }
 
 export interface AnalyticsMetricsPayload {
@@ -94,6 +103,27 @@ export async function fetchTopAssets(
 		`/analytics/top-assets${toQueryString(range)}`,
 	);
 	return res.assets;
+}
+
+/**
+ * Fetches the raw, export-shaped transaction list for a date range.
+ *
+ * This is the data source for the analytics export (CSV / JSON download),
+ * replacing the previous stub that synthesised transaction objects from
+ * `topAssets` rows. The endpoint is date-scoped: `from` and `to` are sent as
+ * query params so the backend only returns transactions within the selected
+ * range.
+ *
+ * @see `useAnalyticsTransactions` — `src/hooks/useAnalyticsTransactions.ts`
+ */
+export async function fetchExportTransactions(
+	client: ApiClient,
+	range: DateRangeParams,
+): Promise<Transaction[]> {
+	const res = await client.get<ExportTransactionsResponse>(
+		`/analytics/transactions-list${toQueryString(range)}`,
+	);
+	return res.transactions ?? [];
 }
 
 // ---------------------------------------------------------------------------

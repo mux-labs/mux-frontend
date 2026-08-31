@@ -228,7 +228,10 @@ The integration test suite (`useAnalyticsExport.dateRange.test.ts`) fails if:
 
 `validateDateRange` is a pure function — no backend call, no mock path.
 `useAnalyticsExport` calls `exportTransactions` (a client-side Blob/anchor
-download utility) and does not make a backend request. The guard runs
+download utility) and does not make a backend request; the transactions it
+serialises are supplied by `useAnalyticsTransactions`, which fetches the real,
+date-scoped rows from `GET /analytics/transactions-list` (production/mock
+split documented in `src/docs/Analytics_Data_Sources.md`). The guard runs
 identically in dev and production.
 
 ---

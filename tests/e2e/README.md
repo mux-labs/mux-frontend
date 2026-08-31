@@ -24,6 +24,7 @@ Set `PLAYWRIGHT_BASE_URL` to point the suite at an already-running server
 | `login.spec.ts` | empty/welcome state, field validation errors, password visibility toggle, successful sign-in + redirect, failed sign-in error card |
 | `wallets.spec.ts` | auth redirect for signed-out visitors, sidebar navigation into the page, error state, empty state, populated table, add-wallet modal |
 | `wallet-send-receive.spec.ts` | receive modal renders a real (non-stub) QR code and downloads it as a file; send modal submits to the real `/api/transactions` route and closes on success |
+| `analytics.spec.ts` | signs in and downloads the analytics transaction list as CSV and JSON from `/dashboard/analytics` (mock-backed in this environment) |
 
 All specs run under two Playwright projects — `desktop-chromium` and
 `mobile-chromium` (Pixel 7 viewport) — so layout regressions on narrow

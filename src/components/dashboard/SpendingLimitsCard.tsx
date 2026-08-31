@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { Toast } from "@/components/ui/toast";
 import { useCopyToClipboard } from "@/hooks/useCopyToClipboard";
+import { loadSession } from "@/lib/session";
 
 const DEFAULT_DAILY_LIMIT = 5000;
 const DEFAULT_TRANSACTION_LIMIT = 1000;
@@ -25,6 +26,22 @@ const MAX_LIMIT = 1000000;
 const TOAST_RESET_MS = 3000;
 
 type LoadSource = "api" | "default";
+
+/**
+ * Reads the stored access token from sessionStorage (via `src/lib/session.js`)
+ * and returns a headers object with an Authorization header when a token is
+ * present. This ensures the `/api/spending-limits` proxy route receives the
+ * bearer token and can forward it to the backend (#710).
+ */
+function getAuthHeaders(): Record<string, string> {
+	try {
+		const session = loadSession() as { accessToken?: string } | null;
+		const token = session?.accessToken;
+		return token ? { Authorization: `Bearer ${token}` } : {};
+	} catch {
+		return {};
+	}
+}
 
 interface SpendingLimitsShape {
 	dailyLimit: number;
@@ -183,6 +200,9 @@ export function SpendingLimitsCard({
 		try {
 			const response = await fetch(apiPath, {
 				cache: "no-store",
+				headers: {
+					...getAuthHeaders(),
+				},
 			});
 
 			if (!response.ok) {
@@ -248,7 +268,7 @@ export function SpendingLimitsCard({
 		try {
 			const response = await fetch(apiPath, {
 				method: "PUT",
-				headers: { "Content-Type": "application/json" },
+				headers: { "Content-Type": "application/json", ...getAuthHeaders() },
 				body: JSON.stringify(payload),
 			});
 

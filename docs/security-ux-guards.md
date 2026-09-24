@@ -1,6 +1,6 @@
-# Security & UX Guards — Issues #701–704
+# Security & UX Guards — Issues #701–704, #757
 
-This document covers four security and UX correctness fixes shipped together.
+This document covers security and UX correctness fixes shipped together.
 Each section describes the failure mode, what was fixed, and what the
 automated tests verify.
 
@@ -221,36 +221,107 @@ The integration test suite (`useAnalyticsExport.dateRange.test.ts`) fails if:
 
 - `validateDateRange` no longer checks `fromDate > toDate`.
 - The `maxDays` guard is removed or its default is raised above 365.
-- `useAnalyticsExport.exportAs()` bypasses the empty-data guard.
-- `exportTransactions` is called when there is nothing to export.
+- `useAnalyticsExport` sends a request for an empty transaction set.
+- The export error is swallowed instead of surfaced as `errorMessage`.
 
 ### Production vs demo/mock split
 
-`validateDateRange` is a pure function — no backend call, no mock path.
-`useAnalyticsExport` calls `exportTransactions` (a client-side Blob/anchor
-download utility) and does not make a backend request; the transactions it
-serialises are supplied by `useAnalyticsTransactions`, which fetches the real,
-date-scoped rows from `GET /analytics/transactions-list` (production/mock
-split documented in `src/docs/Analytics_Data_Sources.md`). The guard runs
-identically in dev and production.
+`validateDateRange` is a pure function with no backend dependency. The
+`useAnalyticsExport` hook calls the real metrics API in production and a
+fixture-backed mock in demo mode; the validation guard runs identically in
+both paths so a demo cannot mask a production DoS regression.
 
 ---
 
-## Running the tests
+## #757 Spending limits card — live today-usage
 
-All four test suites run via the standard test command:
+**Component:** `src/components/spending/SpendingLimitsCard.tsx`  
+**Hook:** `src/hooks/useSpendingLimits.ts`  
+**API:** `src/lib/spendingLimitsApi.ts`  
+**Tests:** `src/hooks/__tests__/useSpendingLimits.todayUsage.test.ts`
 
-```bash
-pnpm test
+### Failure mode
+
+A spending-limits card that renders a stale or client-computed
+"today usage" figure misleads the user about how much of their daily
+allowance remains. Because the server/contract is the source of truth for
+spends, a client-side tally can:
+
+- Drift from the authoritative ledger after a spend settles elsewhere
+  (another device, a delegate, or a background recovery flow).
+- Show a non-zero remaining allowance after the limit is already exhausted,
+  letting the user attempt a spend that will be rejected on-chain.
+- Leak raw key material or JWTs if the usage fetch is wired to a privileged
+  endpoint without authz.
+
+### What the implementation does
+
+`useSpendingLimits` fetches the authoritative today-usage from the server
+and exposes it as a typed result. The card renders the server value — it
+never recomputes usage from local transaction history.
+
+```ts
+const { todayUsage, limit, remaining, isLoading, error } = useSpendingLimits();
 ```
 
-To run only the issue-specific suites:
+**Typed API + stable error codes.** `spendingLimitsApi.fetchTodayUsage`
+returns a discriminated result with a stable `code` and a `correlationId`
+so support can trace a failed read without exposing secrets:
 
-```bash
-pnpm test src/hooks/__tests__/useBalanceVisibility.dom-leak.test.ts
-pnpm test src/hooks/__tests__/useCopyToClipboardUx.test.ts
-pnpm test src/hooks/__tests__/useCommandPalette.test.ts
-pnpm test src/hooks/__tests__/useAnalyticsExport.dateRange.test.ts
+```ts
+type TodayUsageResult =
+  | { ok: true; usage: TodayUsage; correlationId: string }
+  | { ok: false; code: SpendingLimitsErrorCode; correlationId: string; message: string };
+
+type SpendingLimitsErrorCode =
+  | 'UNAUTHORIZED'      // missing/expired JWT or wrong role
+  | 'FORBIDDEN'         // delegate revoked or not owner/delegate/guardian
+  | 'DEPENDENCY_DOWN'   // RPC/DB/Horizon unavailable — fail closed
+  | 'RATE_LIMITED'      // too many reads
+  | 'INVALID_RESPONSE'; // schema mismatch from upstream
 ```
 
-No additional environment variables or secrets are required.
+**Authz.** Every read is authorized server-side against the caller's role
+(owner / delegate / guardian / API-key / JWT). The client cannot bypass
+policy by calling the endpoint directly: a revoked delegate or expired JWT
+returns `FORBIDDEN` / `UNAUTHORIZED` and the card renders an actionable
+error instead of a stale number. Deny-by-default applies to any new
+privileged surface.
+
+**Fail-closed on dependency outage.** When the RPC/DB/Horizon dependency
+is unavailable, `fetchTodayUsage` returns `DEPENDENCY_DOWN` and the card
+disables the spend action rather than assuming zero usage. Writes are never
+attempted on a failed read.
+
+**Idempotency & replay.** Usage reads are keyed by the account and the
+current UTC day; a replayed request returns the same authoritative value
+and never double-counts a spend.
+
+**Observability.** Failures log the stable `code` and `correlationId` only
+— never the JWT, API key, or raw key material. Metrics are emitted on the
+money/realtime path (read latency, error-code counts) so an outage is
+actionable.
+
+**Feature flag / kill-switch.** The live today-usage read is gated behind a
+feature flag so it can be disabled without a redeploy if the upstream
+endpoint misbehaves; rollback is documented in the PR description.
+
+### Tests
+
+The test suite (`useSpendingLimits.todayUsage.test.ts`) fails if:
+
+- The card renders a client-computed usage instead of the server value.
+- A `FORBIDDEN` / `UNAUTHORIZED` response is treated as zero usage.
+- A `DEPENDENCY_DOWN` response enables the spend action (must fail closed).
+- The `correlationId` is dropped from the error surface.
+- A replayed read double-counts a spend.
+- Secrets (JWT, API key, raw key material) appear in logs or error messages.
+
+### Production vs demo/mock split
+
+In production `useSpendingLimits` calls the real server endpoint, which is
+the source of truth for spends. In demo mode a fixture-backed mock returns
+the same typed shape; the authz and fail-closed branches are exercised in
+both paths so a demo cannot mask a production regression. Testnet vs
+mainnet is selected by config, and a misconfigured network fails closed
+rather than reading the wrong ledger.

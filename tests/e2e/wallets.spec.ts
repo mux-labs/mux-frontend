@@ -35,6 +35,37 @@ test.describe("Wallets dashboard smoke", () => {
 		).toBeVisible();
 	});
 
+	test("shows a loading skeleton while the wallets request is in flight", async ({
+		page,
+	}) => {
+		// Hold the wallets response open so the loading state is observable,
+		// then release it and assert the skeleton is replaced by real data.
+		let release: () => void = () => {};
+		const gate = new Promise<void>((resolve) => {
+			release = resolve;
+		});
+
+		await page.route("**/api/wallets*", async (route) => {
+			await gate;
+			return route.fulfill({
+				status: 200,
+				contentType: "application/json",
+				body: JSON.stringify([]),
+			});
+		});
+
+		await signIn(page);
+		await page.goto("/dashboard/wallets");
+
+		// Loading state is announced and the table is not yet rendered.
+		await expect(page.getByTestId("wallets-loading")).toBeVisible();
+		await expect(page.getByTestId("wallet-row-0")).toHaveCount(0);
+
+		release();
+		await expect(page.getByTestId("wallets-loading")).toHaveCount(0);
+		await expect(page.getByText("No wallets found")).toBeVisible();
+	});
+
 	test("shows the error state when the wallets API is unreachable", async ({
 		page,
 	}) => {
@@ -48,6 +79,33 @@ test.describe("Wallets dashboard smoke", () => {
 			page.getByText("Failed to load wallets", { exact: false }),
 		).toBeVisible();
 		await page.getByRole("button", { name: "Retry" }).click();
+	});
+
+	test("fails closed on wallets fetch error without rendering stale rows", async ({
+		page,
+	}) => {
+		// Dependency outage must fail closed: an actionable error with a
+		// stable code/correlation id is shown and no wallet rows are rendered
+		// as if the data were valid.
+		await page.route("**/api/wallets*", (route) =>
+			route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				headers: { "x-correlation-id": "corr-wallets-503" },
+				body: JSON.stringify({
+					code: "WALLETS_UNAVAILABLE",
+					message: "Wallets are temporarily unavailable",
+					correlationId: "corr-wallets-503",
+				}),
+			}),
+		);
+
+		await signIn(page);
+		await page.goto("/dashboard/wallets");
+
+		await expect(page.getByTestId("wallets-error")).toBeVisible();
+		await expect(page.getByTestId("wallet-row-0")).toHaveCount(0);
+		await expect(page.getByText("No wallets found")).toHaveCount(0);
 	});
 
 	test("shows the empty state when no wallets are returned", async ({

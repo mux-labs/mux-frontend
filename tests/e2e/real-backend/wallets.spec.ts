@@ -52,6 +52,70 @@ test.describe("Wallets dashboard against a real mux-backend", () => {
 		).toBeVisible();
 	});
 
+	test("shows the loading skeleton before the wallets table resolves", async ({
+		page,
+	}) => {
+		await signInRealBackend(page);
+
+		// Hold the wallets response open so the loading state is observable
+		// deterministically instead of racing the real backend's latency.
+		let releaseWallets: () => void = () => {};
+		const walletsHeld = new Promise<void>((resolve) => {
+			releaseWallets = resolve;
+		});
+		await page.route("**/api/wallets", async (route) => {
+			await walletsHeld;
+			await route.continue();
+		});
+
+		await page.goto("/dashboard/wallets");
+
+		// While the request is in flight the table must render its loading
+		// state, not stale or partial wallet data.
+		await expect(page.getByTestId("wallets-loading")).toBeVisible();
+		await expect(page.getByTestId("wallet-row-0")).toHaveCount(0);
+
+		releaseWallets();
+		await expect(
+			page.getByTestId("wallet-row-0").or(page.getByText("No wallets found")),
+		).toBeVisible();
+	});
+
+	test("fails closed with an actionable error when the wallets fetch fails", async ({
+		page,
+	}) => {
+		await signInRealBackend(page);
+
+		// Simulate a dependency outage (RPC/DB/Horizon) on the wallets path.
+		await page.route("**/api/wallets", (route) =>
+			route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({
+					code: "WALLETS_UNAVAILABLE",
+					correlationId: "e2e-correlation-id",
+					message: "Wallets are temporarily unavailable.",
+				}),
+			}),
+		);
+
+		await page.goto("/dashboard/wallets");
+
+		// Fail-closed: the error state is shown and no wallet rows are
+		// rendered as if the data were valid.
+		await expect(page.getByTestId("wallets-error")).toBeVisible();
+		await expect(page.getByTestId("wallet-row-0")).toHaveCount(0);
+		await expect(page.getByText("No wallets found")).toHaveCount(0);
+
+		// The error must be actionable and must not leak secrets or raw
+		// key material.
+		await expect(page.getByText("WALLETS_UNAVAILABLE")).toBeVisible();
+		await expect(page.getByText("e2e-correlation-id")).toBeVisible();
+		await expect(
+			page.getByText(/bearer|authorization|secret|private key/i),
+		).toHaveCount(0);
+	});
+
 	test("scopes the request to the active network switcher against the real backend", async ({
 		page,
 	}) => {

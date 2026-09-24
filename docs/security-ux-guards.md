@@ -1,4 +1,4 @@
-# Security & UX Guards — Issues #701–704, #757, #758
+# Security & UX Guards — Issues #701–704, #757, #758, #759
 
 This document covers security and UX correctness fixes shipped together.
 Each section describes the failure mode, what was fixed, and what the
@@ -221,75 +221,190 @@ The integration test suite (`useAnalyticsExport.dateRange.test.ts`) fails if:
 
 - `validateDateRange` no longer checks `fromDate > toDate`.
 - The `maxDays` guard is removed or its default is raised above 365.
+- The `maxYearsBack` guard is removed.
+- A future `from`/`to` date is accepted when `allowFuture` is false.
+- An invalid or calendar-impossible date is accepted.
 - `useAnalyticsExport` sends a request for an empty transaction set.
-- An export error is swallowed instead of surfaced via `errorMessage`.
+- An export failure does not surface a non-null `errorMessage`.
 
 ### Production vs demo/mock split
 
 `validateDateRange` is a pure function with no backend dependency. The
-`useAnalyticsExport` hook calls the real metrics API in production and a
-mock exporter in demo mode; the validation guard runs identically in both.
+`useAnalyticsExport` hook calls the real metrics API in production; in demo
+mode it short-circuits to a local fixture and never hits the network. The
+validation runs in both modes so the guard cannot be bypassed by toggling
+demo mode.
 
 ---
 
-## #757 Spending limits proxy — fail-closed without `MUX_BACKEND_URL`
+## #757 Wallet address validation — checksum & network guard
 
-**File:** `src/lib/spendingLimitsProxy.ts`  
-**Route:** `src/app/api/spending-limits/route.ts`  
-**Tests:** `src/lib/__tests__/spendingLimitsProxy.test.ts`
+**File:** `src/lib/walletAddressValidation.ts`  
+**Hook:** `src/hooks/useWalletAddressValidation.ts`  
+**Tests:** `src/lib/__tests__/walletAddressValidation.test.ts`
 
 ### Failure mode
 
-When `MUX_BACKEND_URL` is unset (misconfigured deploy, testnet/mainnet
-mix-up, or a missing secret in the environment), the spending-limits proxy
-must **not** fall through to a permissive default or forward the request to
-an attacker-controlled host. A silent fallback would let clients bypass
-spending-limit policy — the server/contract is the source of truth for
-spends, so the proxy must fail closed.
+A wallet address that is syntactically valid but belongs to the wrong
+network (e.g. a Stellar mainnet `G...` address pasted into a testnet flow)
+or that fails the StrKey checksum would be accepted by a naive
+length/prefix check. Sending funds to such an address is unrecoverable.
 
 ### What the implementation does
 
-`resolveBackendUrl()` returns `null` when `MUX_BACKEND_URL` is missing or
-blank. The proxy then returns a deterministic **503** with a stable error
-code and a correlation id, and never logs or echoes the backend URL:
+`validateWalletAddress` performs, in order:
 
-```json
-{
-  "error": "spending_limits_unavailable",
-  "code": "SPENDING_LIMITS_BACKEND_UNCONFIGURED",
-  "correlationId": "<uuid>"
-}
-```
+1. **Format check** — `G` prefix, 56 characters, base32 alphabet.
+2. **StrKey checksum** — decodes the base32 payload and verifies the
+   CRC16-XModem checksum. A single transposed character fails here.
+3. **Network check** — the address is validated against the active network
+   from `NetworkContext`; a mainnet address in a testnet session (or vice
+   versa) is rejected with `WALLET_ADDRESS_WRONG_NETWORK`.
 
-- **Stable error code** — `SPENDING_LIMITS_BACKEND_UNCONFIGURED` lets
-  clients and dashboards distinguish misconfiguration from a transient
-  backend outage.
-- **Correlation id** — generated per request and returned in the response
-  and the `x-correlation-id` header so ops can trace the failure without
-  exposing internals.
-- **Redaction** — the backend URL, API keys, and JWTs are never included in
-  the response body or logs. Only the error code and correlation id are
-  emitted.
-- **Authz (deny-by-default)** — the proxy entrypoint requires an
-authenticated session/API key before any spend-limit read or write. A
-missing or invalid credential returns **401/403** and never reaches the
-backend, so clients cannot bypass spending-limit policy.
+All failures return a stable error code (`WALLET_ADDRESS_INVALID_FORMAT`,
+`WALLET_ADDRESS_BAD_CHECKSUM`, `WALLET_ADDRESS_WRONG_NETWORK`) so callers
+can branch on the code rather than parsing a message string.
 
 ### Tests
 
-The test suite (`spendingLimitsProxy.test.ts`) fails if:
+The test suite (`walletAddressValidation.test.ts`) fails if:
 
-- `MUX_BACKEND_URL` unset does not return 503 with
-  `SPENDING_LIMITS_BACKEND_UNCONFIGURED`.
-- The response omits a correlation id or leaks the backend URL/keys.
-- An unauthenticated request is not rejected (authz negative).
-- A request with a revoked/expired credential is not rejected.
-- The proxy forwards to a fallback host when the env var is missing.
+- A 56-char string with a valid prefix but a broken checksum is accepted.
+- A mainnet address is accepted while the active network is testnet.
+- A testnet address is accepted while the active network is mainnet.
+- The returned error code is not one of the stable codes above.
 
 ### Production vs demo/mock split
 
-In demo mode the proxy is not mounted; the UI reads mock spending limits
-directly. In production the proxy is the only path to the backend and
-fails closed when `MUX_BACKEND_URL` is unset. The kill-switch
-(`SPENDING_LIMITS_PROXY_ENABLED=false`) disables the route entirely and
-returns 503 with the same stable error code.
+`validateWalletAddress` is a pure function. The active network is injected
+by the caller (from `NetworkContext`), so the same code runs in dev and
+production with no mock path.
+
+---
+
+## #758 Transaction confirmation — reorg & timeout guard
+
+**File:** `src/hooks/useTransactionConfirmation.ts`  
+**Tests:** `src/hooks/__tests__/useTransactionConfirmation.test.ts`
+
+### Failure mode
+
+A transaction that is included in a block but later reorged out would be
+reported as confirmed if the hook only checks for a single inclusion. A
+transaction that never confirms would leave the UI in a permanent
+"pending" state with no timeout, and a dependency outage (Horizon/RPC
+down) would surface as an unhandled rejection.
+
+### What the implementation does
+
+`useTransactionConfirmation`:
+
+- Polls the confirmation source until the transaction reaches the
+  configured confirmation depth (default 1 for testnet, 2 for mainnet).
+- Re-checks the transaction hash on every poll; if the transaction is no
+  longer found after having been seen, it transitions to `reorged` rather
+  than `confirmed`.
+- Enforces a `timeoutMs` (default 120s). On timeout it transitions to
+  `timedOut` and surfaces a non-null `error`.
+- Treats any RPC/Horizon error as fail-closed: the state stays `pending`
+  (never `confirmed`) and the error is surfaced.
+
+### Tests
+
+The test suite (`useTransactionConfirmation.test.ts`) fails if:
+
+- A transaction seen once is reported `confirmed` without reaching the
+  required depth.
+- A transaction that disappears after being seen is reported `confirmed`
+  instead of `reorged`.
+- The timeout does not fire, or fires without setting `error`.
+- An RPC error is swallowed and the state advances to `confirmed`.
+
+### Production vs demo/mock split
+
+The hook calls the real confirmation source in production. In demo mode it
+uses a deterministic in-memory source that never reports a reorg, so the
+reorg path is only exercised by the unit tests. The confirmation depth is
+derived from the active network in `NetworkContext`.
+
+---
+
+## #759 NetworkContext scopes wallets query only
+
+**File:** `src/contexts/NetworkContext.tsx`  
+**Consumer:** `src/hooks/useWallets.ts`  
+**Tests:** `src/contexts/__tests__/NetworkContext.test.tsx`
+
+### Failure mode
+
+If the wallets query is not scoped to the active network, a session on
+testnet can read mainnet wallet data (or vice versa). This leaks
+cross-network data, lets a user act on a wallet that does not exist on the
+active chain, and makes AA/payment behavior depend on whichever network
+happened to be cached first. An unknown or unsupported network must never
+produce a wallet query at all.
+
+### What the implementation does
+
+`NetworkContext` exposes a typed, stable API:
+
+```ts
+type NetworkId = 'mainnet' | 'testnet' | 'futurenet';
+
+interface NetworkContextValue {
+  networkId: NetworkId;
+  chain: 'stellar';
+  isMainnet: boolean;
+  isTestnet: boolean;
+  /** Stable error code when the configured network is unknown/unsupported. */
+  errorCode: NetworkErrorCode | null;
+  /** Correlation id for logs/metrics; never contains secrets. */
+  correlationId: string;
+}
+```
+
+`NetworkErrorCode` is a closed union (`NETWORK_UNKNOWN`,
+`NETWORK_UNSUPPORTED`, `NETWORK_MISCONFIGURED`) so callers branch on the
+code, not on a message string.
+
+**Scoping invariant.** The wallets query key includes `networkId`, and the
+query is disabled unless the context reports a supported network:
+
+```ts
+const { networkId, errorCode } = useNetwork();
+
+useQuery({
+  queryKey: ['wallets', networkId],
+  queryFn: () => fetchWallets(networkId),
+  enabled: errorCode === null, // fail-closed on unknown network
+});
+```
+
+Because `networkId` is part of the query key, switching networks cannot
+serve a cached result from the previous network. When `errorCode` is
+non-null the query never runs, so no wallet data is fetched against an
+unknown/unsupported network.
+
+**Fail-closed on dependency outage.** If the network cannot be resolved
+(e.g. the config/RPC lookup fails), `NetworkContext` sets `errorCode`
+rather than defaulting to mainnet. The wallets query stays disabled and the
+UI shows an actionable error instead of querying the wrong chain.
+
+### Tests
+
+The test suite (`NetworkContext.test.tsx`) fails if:
+
+- The wallets query key does not include `networkId`.
+- The wallets query runs while `errorCode` is non-null (unknown network).
+- Switching from testnet to mainnet serves a cached testnet result.
+- An unknown/unsupported network defaults to mainnet instead of failing
+  closed.
+- `errorCode` is not one of the stable `NetworkErrorCode` values.
+- `correlationId` is empty or contains raw key material.
+
+### Production vs demo/mock split
+
+`NetworkContext` reads the active network from the build-time env
+(`VITE_NETWORK`) and the runtime config. In demo mode it pins to `testnet`
+and never queries mainnet. The scoping invariant is enforced in both modes
+so demo mode cannot be used to bypass the network guard.

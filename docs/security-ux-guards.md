@@ -62,6 +62,50 @@ are rejected before any write occurs.
   secrets, or key material. Redact before logging.
 - Metrics on money/realtime paths are emitted without per-user identifiers.
 
+## Notifications
+
+Notifications are a read-mostly surface, but they still follow the same
+guards as the rest of the app: fail-closed authz, idempotent mutations,
+and no secret leakage in logs or metrics.
+
+### Authz and fail-closed reads
+
+- The notifications list and unread count are scoped to the authenticated
+  session. A missing, expired, or tampered session MUST fail closed with
+  the stable codes above (`SESSION_MISSING`, `SESSION_EXPIRED`,
+  `SESSION_INVALID`) rather than rendering another user's notifications.
+- A session whose role does not satisfy the notifications route policy is
+  rejected with `SESSION_FORBIDDEN`; the UI MUST NOT fall back to an
+  anonymous or elevated view.
+- Revoked delegates MUST NOT be able to read or mutate notifications.
+
+### Idempotent mutations
+
+- Mark-as-read and clear-all are mutations and MUST be idempotent.
+  Replaying the same request (same idempotency key) returns the original
+  result instead of re-executing the side effect.
+- Marking an already-read notification as read is a no-op success, not an
+  error, so retries and double-clicks are safe.
+- Clear-all is idempotent: clearing an empty list succeeds without error.
+
+### Empty states
+
+- When there are no notifications, the UI MUST render an explicit,
+  accessible empty state instead of a blank panel or a perpetual spinner.
+- The empty state is announced to assistive tech (e.g. `role="status"`
+  with a descriptive label) and uses copy that matches the rest of the
+  product; it MUST NOT imply an error or a loading state.
+- Empty states are covered by the e2e suite so a regression that hides the
+  message or reintroduces a spinner is caught in CI.
+
+### Observability
+
+- Notification errors use the stable codes above plus a correlation id.
+- Logs and metrics MUST NOT contain raw session tokens, JWTs, webhook
+  secrets, notification bodies, or key material. Redact before logging.
+- Metrics on the notifications path are emitted without per-user
+  identifiers.
+
 ### Tests
 
 Automated coverage for these invariants lives in `tests/e2e/` (including
@@ -70,5 +114,7 @@ Automated coverage for these invariants lives in `tests/e2e/` (including
 - cookie parity: login set attributes match logout clear attributes
 - auth negatives: expired session, tampered cookie, revoked delegate
 - idempotency: replayed request does not double-execute
+- notifications: list renders, mark-as-read and clear-all are idempotent,
+  and the empty state is shown and announced when there are none
 
 See `README.md` and `tests/e2e/` for how to run the suite.

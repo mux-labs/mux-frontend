@@ -177,6 +177,11 @@ export default function NotificationPreferencesPage() {
     return null;
   }, [savedAt, preferences.updatedAt]);
 
+  // Empty state: no channels or events are available to configure. Rendered
+  // with an accessible status role so e2e tests and screen readers can detect
+  // it, consistent with docs/manual-testing/emptystate-stories.md.
+  const hasConfigurableOptions = CHANNELS.length > 0 || EVENTS.length > 0;
+
   return (
     <main className="mx-auto max-w-3xl px-4 py-8">
       <header className="mb-6">
@@ -206,6 +211,17 @@ export default function NotificationPreferencesPage() {
 
       {loading ? (
         <p className="text-sm text-gray-500">Loading preferences…</p>
+      ) : !hasConfigurableOptions ? (
+        <div
+          role="status"
+          data-testid="notifications-empty-state"
+          className="rounded border border-dashed border-gray-300 bg-gray-50 p-6 text-center"
+        >
+          <p className="text-sm font-medium text-gray-700">No notification options available</p>
+          <p className="mt-1 text-xs text-gray-500">
+            There are no notification channels or events to configure for your account yet.
+          </p>
+        </div>
       ) : (
         <div className="space-y-8">
           <section aria-labelledby="channels-heading">
@@ -222,11 +238,11 @@ export default function NotificationPreferencesPage() {
                   <label className="inline-flex cursor-pointer items-center">
                     <input
                       type="checkbox"
-                      className="h-4 w-4"
                       checked={preferences.channels[channel.id]}
                       disabled={saving}
                       onChange={() => toggleChannel(channel.id)}
                       aria-label={`Toggle ${channel.label} notifications`}
+                      className="h-4 w-4"
                     />
                   </label>
                 </li>
@@ -248,11 +264,11 @@ export default function NotificationPreferencesPage() {
                   <label className="inline-flex cursor-pointer items-center">
                     <input
                       type="checkbox"
-                      className="h-4 w-4"
                       checked={preferences.events[event.id]}
                       disabled={saving}
                       onChange={() => toggleEvent(event.id)}
                       aria-label={`Toggle ${event.label} notifications`}
+                      className="h-4 w-4"
                     />
                   </label>
                 </li>

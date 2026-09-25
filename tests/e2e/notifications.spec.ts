@@ -34,6 +34,25 @@ test.describe("Notifications bell smoke", () => {
 		).toBeVisible();
 	});
 
+	test("renders the seeded notification list with unread items", async ({
+		page,
+	}) => {
+		await signIn(page);
+
+		await page.getByTestId("notifications-bell").click();
+		await expect(page.getByTestId("notifications-panel")).toBeVisible();
+
+		// The mock route seeds notifications; the list renders them.
+		const items = page.getByTestId("notification-item");
+		await expect(items.first()).toBeVisible();
+		await expect(await items.count()).toBeGreaterThan(0);
+
+		// Unread items are marked so the bell badge and list agree.
+		await expect(
+			page.getByTestId("notification-item-unread").first(),
+		).toBeVisible();
+	});
+
 	test("marks all read and clears the unread dot", async ({ page }) => {
 		await signIn(page);
 
@@ -48,10 +67,31 @@ test.describe("Notifications bell smoke", () => {
 		await expect(
 			page.getByRole("button", { name: /mark all read/i }),
 		).toBeHidden();
+		await expect(page.getByTestId("notification-item-unread")).toHaveCount(0);
 
 		// Close the panel; the bell badge is refetched and should be gone.
 		await page.keyboard.press("Escape");
 		await expect(page.getByTestId("notifications-unread-dot")).toBeHidden();
+	});
+
+	test("clears notifications and shows the empty state", async ({ page }) => {
+		await signIn(page);
+
+		await page.getByTestId("notifications-bell").click();
+		await expect(page.getByTestId("notifications-panel")).toBeVisible();
+
+		await page.getByTestId("notifications-clear").click();
+
+		// Empty state is rendered and announced accessibly (docs/security-ux-guards.md).
+		const emptyState = page.getByTestId("notifications-empty");
+		await expect(emptyState).toBeVisible();
+		await expect(emptyState).toHaveAttribute("role", "status");
+		await expect(
+			page.getByText(/no notifications/i),
+		).toBeVisible();
+
+		// No stale list items remain once the empty state is shown.
+		await expect(page.getByTestId("notification-item")).toHaveCount(0);
 	});
 });
 

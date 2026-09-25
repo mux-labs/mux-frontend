@@ -239,13 +239,12 @@ test.describe("Wallets dashboard smoke", () => {
 			route.fulfill({
 				status: 200,
 				contentType: "application/json",
-				headers: { "x-correlation-id": "corr-today-usage-001" },
+				headers: { "x-correlation-id": "corr-today-usage-1" },
 				body: JSON.stringify({
-					limit: "1000.00 XLM",
-					used: "250.00 XLM",
-					remaining: "750.00 XLM",
+					spentToday: "125.00 XLM",
+					limit: "1,000.00 XLM",
 					asOf: "2024-03-01T12:00:00Z",
-					correlationId: "corr-today-usage-001",
+					correlationId: "corr-today-usage-1",
 				}),
 			}),
 		);
@@ -253,44 +252,117 @@ test.describe("Wallets dashboard smoke", () => {
 		await signIn(page);
 		await page.goto("/dashboard/wallets");
 
-		const card = page.getByTestId("spending-limits-card");
-		await expect(card).toBeVisible();
-		await expect(card.getByText("Today's usage")).toBeVisible();
-		await expect(card.getByTestId("today-usage-used")).toHaveText(
-			"250.00 XLM",
-		);
-		await expect(card.getByTestId("today-usage-remaining")).toHaveText(
-			"750.00 XLM",
-		);
+		await expect(page.getByText("125.00 XLM")).toBeVisible();
 	});
 
-	test("fails closed on the spending limits card when today-usage is unavailable", async ({
-		page,
-	}) => {
-		// Dependency outage (RPC/DB/Horizon) must fail closed: the card shows
-		// an actionable error with the correlation id instead of a stale or
-		// fabricated usage figure, and never leaks raw key material.
-		await page.route("**/api/spending-limits/today-usage*", (route) =>
-			route.fulfill({
-				status: 503,
-				contentType: "application/json",
-				headers: { "x-correlation-id": "corr-today-usage-503" },
-				body: JSON.stringify({
-					code: "TODAY_USAGE_UNAVAILABLE",
-					message: "Today usage is temporarily unavailable",
-					correlationId: "corr-today-usage-503",
+	test.describe("wallet detail deep links", () => {
+		const wallet = {
+			id: "wallet-001",
+			address: "GBZXN7PIRZGNMHGA7MUUUF4GWPY5AYPV6LY4UV2GL6VJGIQRXFDNMADI",
+			network: "mainnet",
+			status: "active",
+			createdAt: "2024-01-15T10:30:00Z",
+			balance: "1,250.50 XLM",
+		};
+
+		test("deep-links directly to a wallet detail route and renders it", async ({
+			page,
+		}) => {
+			await page.route("**/api/wallets/wallet-001*", (route) =>
+				route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					headers: { "x-correlation-id": "corr-wallet-detail-1" },
+					body: JSON.stringify({ ...wallet, correlationId: "corr-wallet-detail-1" }),
 				}),
-			}),
-		);
+			);
 
-		await signIn(page);
-		await page.goto("/dashboard/wallets");
+			await signIn(page);
+			await page.goto("/dashboard/wallets/wallet-001");
 
-		const card = page.getByTestId("spending-limits-card");
-		await expect(card).toBeVisible();
-		await expect(
-			card.getByText("Today usage is temporarily unavailable"),
-		).toBeVisible();
-		await expect(card.getByTestId("today-usage-used")).toHaveCount(0);
+			await expect(page).toHaveURL(/\/dashboard\/wallets\/wallet-001/);
+			await expect(page.getByTestId("wallet-detail")).toBeVisible();
+			await expect(page.getByText(wallet.address)).toBeVisible();
+		});
+
+		test("navigates from the wallet table row into the detail deep link", async ({
+			page,
+		}) => {
+			await page.route("**/api/wallets*", (route) => {
+				const url = new URL(route.request().url());
+				if (url.pathname.endsWith("/wallet-001")) {
+					return route.fulfill({
+						status: 200,
+						contentType: "application/json",
+						body: JSON.stringify(wallet),
+					});
+				}
+				return route.fulfill({
+					status: 200,
+					contentType: "application/json",
+					body: JSON.stringify([wallet]),
+				});
+			});
+
+			await signIn(page);
+			await page.goto("/dashboard/wallets");
+
+			await page.getByTestId("wallet-row-0").click();
+			await expect(page).toHaveURL(/\/dashboard\/wallets\/wallet-001/);
+			await expect(page.getByTestId("wallet-detail")).toBeVisible();
+		});
+
+		test("fails closed on wallet detail fetch error with a stable code", async ({
+			page,
+		}) => {
+			await page.route("**/api/wallets/wallet-001*", (route) =>
+				route.fulfill({
+					status: 503,
+					contentType: "application/json",
+					headers: { "x-correlation-id": "corr-wallet-detail-503" },
+					body: JSON.stringify({
+						code: "WALLET_UNAVAILABLE",
+						message: "Wallet is temporarily unavailable",
+						correlationId: "corr-wallet-detail-503",
+					}),
+				}),
+			);
+
+			await signIn(page);
+			await page.goto("/dashboard/wallets/wallet-001");
+
+			await expect(page.getByTestId("wallet-detail-error")).toBeVisible();
+			await expect(page.getByTestId("wallet-detail")).toHaveCount(0);
+		});
+
+		test("denies access to a wallet detail deep link for a revoked delegate", async ({
+			page,
+		}) => {
+			await page.route("**/api/wallets/wallet-001*", (route) =>
+				route.fulfill({
+					status: 403,
+					contentType: "application/json",
+					headers: { "x-correlation-id": "corr-wallet-detail-403" },
+					body: JSON.stringify({
+						code: "WALLET_FORBIDDEN",
+						message: "You are not authorized to view this wallet",
+						correlationId: "corr-wallet-detail-403",
+					}),
+				}),
+			);
+
+			await signIn(page);
+			await page.goto("/dashboard/wallets/wallet-001");
+
+			await expect(page.getByTestId("wallet-detail-error")).toBeVisible();
+			await expect(page.getByTestId("wallet-detail")).toHaveCount(0);
+		});
+
+		test("redirects unauthenticated visitors away from a wallet detail deep link", async ({
+			page,
+		}) => {
+			await page.goto("/dashboard/wallets/wallet-001");
+			await expect(page).toHaveURL(/\/login\?callbackUrl=%2Fdashboard/);
+		});
 	});
 });

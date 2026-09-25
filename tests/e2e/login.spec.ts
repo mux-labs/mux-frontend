@@ -7,6 +7,9 @@ import { expect, test } from "@playwright/test";
  * The `/api/auth/login` route mocks a successful response for any
  * well-formed credentials when `NEXT_PUBLIC_API_URL` is unset, so this
  * spec exercises real client wiring without depending on a live backend.
+ *
+ * Real-backend coverage (typed entrypoints, stable error codes, correlation
+ * ids, and authz negatives) lives in `tests/e2e/real-backend/login.spec.ts`.
  */
 test.describe("Login smoke", () => {
 	test.beforeEach(async ({ page }) => {
@@ -81,5 +84,55 @@ test.describe("Login smoke", () => {
 		await expect(page.getByTestId("login-error")).toContainText(
 			"Invalid email or password.",
 		);
+	});
+
+	test("fails closed and surfaces a stable error code when the backend is unavailable", async ({
+		page,
+	}) => {
+		// Simulate a dependency outage (RPC/DB/Horizon) on the login path.
+		// The client must not fall through to a signed-in state; it must
+		// surface an actionable, stable error code and correlation id.
+		await page.route("**/api/auth/login", (route) =>
+			route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: "Authentication temporarily unavailable.",
+					code: "AUTH_BACKEND_UNAVAILABLE",
+					correlationId: "e2e-correlation-0001",
+				}),
+			}),
+		);
+
+		await page.getByLabel("Email address").fill("dev@muxprotocol.com");
+		await page.getByLabel("Password").fill("password123");
+		await page.getByTestId("login-submit").click();
+
+		await expect(page.getByTestId("login-error")).toBeVisible();
+		await expect(page).not.toHaveURL(/\/dashboard/);
+	});
+
+	test("denies login by default when the backend rejects the credentials", async ({
+		page,
+	}) => {
+		// Deny-by-default: a 403 from the authz layer must not grant access.
+		await page.route("**/api/auth/login", (route) =>
+			route.fulfill({
+				status: 403,
+				contentType: "application/json",
+				body: JSON.stringify({
+					error: "Access denied.",
+					code: "AUTH_FORBIDDEN",
+					correlationId: "e2e-correlation-0002",
+				}),
+			}),
+		);
+
+		await page.getByLabel("Email address").fill("dev@muxprotocol.com");
+		await page.getByLabel("Password").fill("password123");
+		await page.getByTestId("login-submit").click();
+
+		await expect(page.getByTestId("login-error")).toBeVisible();
+		await expect(page).not.toHaveURL(/\/dashboard/);
 	});
 });

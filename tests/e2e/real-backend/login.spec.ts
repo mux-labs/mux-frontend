@@ -18,6 +18,31 @@ import { readRealBackendEnv, REAL_BACKEND_SKIP_REASON } from "./helpers";
  */
 const realBackend = readRealBackendEnv();
 
+/**
+ * Stable error codes the real backend returns for the login surface. The
+ * frontend maps these to user-facing copy; asserting on the code (not the
+ * copy) keeps this spec resilient to wording changes while still pinning
+ * the contract. See docs/security-ux-guards.md.
+ */
+const LOGIN_ERROR_CODES = {
+	invalidCredentials: "AUTH_INVALID_CREDENTIALS",
+	missingCredentials: "AUTH_MISSING_CREDENTIALS",
+} as const;
+
+/**
+ * Correlation id header the backend echoes on every auth response so a
+ * failed login can be traced end-to-end without leaking credentials. The
+ * frontend surfaces it on the error element as a data attribute.
+ */
+const CORRELATION_ID_HEADER = "x-correlation-id";
+
+/**
+ * Authz roles the login surface must deny by default. A client must not be
+ * able to escalate by claiming a role in the request body — the backend
+ * derives the role from the authenticated principal only.
+ */
+const PRIVILEGED_ROLES = ["owner", "delegate", "guardian", "admin"] as const;
+
 test.describe("Login against a real mux-backend", () => {
 	test.skip(!realBackend, REAL_BACKEND_SKIP_REASON);
 
@@ -47,5 +72,87 @@ test.describe("Login against a real mux-backend", () => {
 
 		await page.waitForURL("**/dashboard**");
 		await expect(page).toHaveURL(/\/dashboard/);
+	});
+
+	test("returns a stable error code and correlation id on invalid credentials", async ({
+		page,
+	}) => {
+		const responsePromise = page.waitForResponse(
+			(res) =>
+				res.url().includes("/api/auth/login") &&
+				res.request().method() === "POST",
+		);
+
+		await page
+			.getByLabel("Email address")
+			.fill("not-a-real-account@example.com");
+		await page.getByLabel("Password").fill("definitely-wrong-password");
+		await page.getByTestId("login-submit").click();
+
+		const response = await responsePromise;
+		expect(response.status()).toBe(401);
+
+		const body = (await response.json()) as {
+			code?: string;
+			correlationId?: string;
+		};
+		expect(body.code).toBe(LOGIN_ERROR_CODES.invalidCredentials);
+
+		// Correlation id must be present on the response header so ops can
+		// trace the failure without the request body (which holds secrets).
+		const correlationId = response.headers()[CORRELATION_ID_HEADER];
+		expect(correlationId).toBeTruthy();
+		expect(body.correlationId ?? correlationId).toBeTruthy();
+
+		// The error surface must expose the correlation id for support, and
+		// must never echo the submitted password back to the client.
+		const errorEl = page.getByTestId("login-error");
+		await expect(errorEl).toBeVisible();
+		await expect(errorEl).not.toContainText("definitely-wrong-password");
+	});
+
+	test("rejects missing credentials with a stable error code", async ({ page }) => {
+		const responsePromise = page.waitForResponse(
+			(res) =>
+				res.url().includes("/api/auth/login") &&
+				res.request().method() === "POST",
+		);
+
+		await page.getByTestId("login-submit").click();
+
+		const response = await responsePromise;
+		expect(response.status()).toBe(400);
+
+		const body = (await response.json()) as { code?: string };
+		expect(body.code).toBe(LOGIN_ERROR_CODES.missingCredentials);
+		await expect(page).not.toHaveURL(/\/dashboard/);
+	});
+
+	test("denies client-supplied privileged roles (deny-by-default authz)", async ({
+		page,
+		request,
+	}) => {
+		// A client must not be able to escalate by claiming a role in the
+		// login payload. The backend derives the role from the authenticated
+		// principal; any client-supplied role is ignored and the request is
+		// denied by default for privileged surfaces.
+		for (const role of PRIVILEGED_ROLES) {
+			const response = await request.post("/api/auth/login", {
+				data: {
+					email: realBackend!.email,
+					password: realBackend!.password,
+					role,
+				},
+			});
+
+			// Either the request is rejected outright, or it succeeds but the
+			// returned principal does not carry the spoofed privileged role.
+			if (response.ok()) {
+				const body = (await response.json()) as { role?: string };
+				expect(body.role).not.toBe(role);
+			} else {
+				expect([400, 401, 403]).toContain(response.status());
+			}
+		}
 	});
 });

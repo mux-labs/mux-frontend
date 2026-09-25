@@ -84,6 +84,70 @@ user-facing error surface so support can trace a single deep-link attempt.
 - Document the rollback path in the PR description: disabling the flag must
   restore the previous resolution behavior without data migration.
 
+## Send form strkey validation
+
+The Send form accepts a recipient address. Recipient addresses are Stellar
+strkeys and are a money-path input: an invalid or ambiguous strkey must never be
+submitted to the backend. Validation is fail-closed and runs before submission.
+
+### Validation contract
+
+- The recipient field is validated as a Stellar strkey before the send is
+  allowed to proceed. Malformed or unsupported strkeys block submission.
+- Only strkey types valid for a send recipient are accepted. Unsupported strkey
+  types (for example, a secret seed or a non-recipient key type) are rejected
+  rather than passed through.
+- Validation is deterministic and side-effect free: it performs no network call
+  and no write. The server remains the source of truth for spends; client
+  validation is a guard, not an authorization decision.
+- The form fails closed: if validation cannot positively confirm a valid
+  recipient strkey, submission is blocked. There is no pass-through path for
+  unvalidated input.
+
+### Typed result and error codes
+
+Validation returns a typed, discriminated result. Callers must branch on the
+error code rather than on message text. Stable error codes:
+
+| Code | Meaning |
+| --- | --- |
+| `SEND_RECIPIENT_REQUIRED` | Recipient field is empty. |
+| `SEND_RECIPIENT_INVALID_STRKEY` | Recipient is not a well-formed strkey. |
+| `SEND_RECIPIENT_UNSUPPORTED_TYPE` | Strkey is well-formed but not a valid recipient type. |
+| `SEND_RECIPIENT_NETWORK_MISMATCH` | Strkey does not match the active network. |
+
+Error messages are stable and human-readable. They must not echo raw key
+material, secrets, or full recipient values into errors or logs.
+
+### Edge cases and failure modes
+
+- **Adversarial input:** oversized, truncated, or checksum-invalid strkeys are
+  rejected with `SEND_RECIPIENT_INVALID_STRKEY` before any submission.
+- **Ambiguous input:** a strkey that is well-formed but not a supported
+  recipient type is rejected with `SEND_RECIPIENT_UNSUPPORTED_TYPE`; it is never
+  coerced into a recipient.
+- **Testnet vs mainnet misconfig:** a recipient strkey for the wrong network is
+  rejected with `SEND_RECIPIENT_NETWORK_MISMATCH`; never silently switch
+  networks.
+- **Replay / concurrency:** validation is pure and idempotent; repeated
+  validation of the same input yields the same result and triggers no writes.
+- **Dependency outage:** validation does not depend on RPC/Horizon/DB. If a
+  downstream dependency is unavailable, the send still fails closed and is not
+  submitted.
+
+### Observability
+
+- Emit the validation error code and a correlation id on rejection. Do not log
+  raw recipient strkeys, key material, JWTs, or webhook secrets.
+- Track validation rejection counts by error code so ops can alert on spikes.
+
+### Rollout and rollback
+
+- Send-form validation changes that touch money paths or mainnet behavior must
+  land behind a feature flag or kill-switch.
+- Document the rollback path in the PR description: disabling the flag must
+  restore the previous submission behavior without data migration.
+
 ## References
 
 - `README.md`

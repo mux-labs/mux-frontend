@@ -12,6 +12,8 @@ import { expect, test } from "@playwright/test";
  * - the send form actually submitting to the real `/api/transactions`
  *   route handler (mock-backed in this environment) instead of just
  *   closing the modal with no request
+ * - the send form rejecting malformed/unsupported recipient strkeys
+ *   client-side (fail-closed) before any request reaches the backend
  */
 
 const FUNDED_WALLET = {
@@ -91,5 +93,74 @@ test.describe("Wallet send/receive smoke", () => {
 		expect(response.status()).toBe(201);
 
 		await expect(dialog).not.toBeVisible();
+	});
+
+	test("blocks submission and shows an error for a malformed recipient strkey", async ({
+		page,
+	}) => {
+		await stubWallets(page);
+		await page.goto("/wallet");
+
+		await page.getByRole("button", { name: "Send funds" }).click();
+
+		const dialog = page.getByRole("dialog");
+		await expect(dialog).toBeVisible();
+
+		let transactionRequested = false;
+		await page.route("**/api/transactions", (route) => {
+			transactionRequested = true;
+			return route.fulfill({
+				status: 201,
+				contentType: "application/json",
+				body: JSON.stringify({ id: "tx-should-not-happen" }),
+			});
+		});
+
+		await page
+			.getByLabel("Destination address")
+			.fill("not-a-valid-strkey");
+		await page.getByLabel("Amount (XLM)").fill("25");
+		await page.getByRole("button", { name: "Submit send transaction" }).click();
+
+		await expect(dialog).toBeVisible();
+		await expect(
+			dialog.getByText(/invalid.*(address|strkey)/i),
+		).toBeVisible();
+		expect(transactionRequested).toBe(false);
+	});
+
+	test("blocks submission for a strkey with an unsupported prefix", async ({
+		page,
+	}) => {
+		await stubWallets(page);
+		await page.goto("/wallet");
+
+		await page.getByRole("button", { name: "Send funds" }).click();
+
+		const dialog = page.getByRole("dialog");
+		await expect(dialog).toBeVisible();
+
+		let transactionRequested = false;
+		await page.route("**/api/transactions", (route) => {
+			transactionRequested = true;
+			return route.fulfill({
+				status: 201,
+				contentType: "application/json",
+				body: JSON.stringify({ id: "tx-should-not-happen" }),
+			});
+		});
+
+		// Valid checksum but a non-account (contract) strkey prefix.
+		await page
+			.getByLabel("Destination address")
+			.fill("CA3D5KRYM6CB7OWQ6TWYRR3Z4T7GNZLKERYNZGGA5SOAOPIFY6YQGAXE");
+		await page.getByLabel("Amount (XLM)").fill("25");
+		await page.getByRole("button", { name: "Submit send transaction" }).click();
+
+		await expect(dialog).toBeVisible();
+		await expect(
+			dialog.getByText(/invalid.*(address|strkey)/i),
+		).toBeVisible();
+		expect(transactionRequested).toBe(false);
 	});
 });

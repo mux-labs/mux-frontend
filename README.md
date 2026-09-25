@@ -25,6 +25,28 @@ See [`docs/security-ux-guards.md`](docs/security-ux-guards.md) for the
 security/UX invariants that back this behavior, and `tests/e2e/` for the
 end-to-end coverage of the receive flow.
 
+## Spending limits accessibility
+
+The spending-limits controls are fully operable with assistive technology and
+the keyboard:
+
+- **Labels & descriptions**: every limit input, toggle, and action button has an
+  associated `<label>` (via `htmlFor`/`id`) and help text wired through
+  `aria-describedby`, so screen readers announce the control's purpose and the
+  current value.
+- **Validation state**: inline errors are exposed with `role="alert"` and
+  `aria-invalid` on the offending field, so validation failures are announced
+  immediately.
+- **Dynamic updates**: saving a limit, a validation error, and loading states are
+  announced through polite/assertive live regions (`aria-live`), without ever
+  echoing secrets or raw key material.
+- **Keyboard & focus**: all controls are reachable in a logical tab order with a
+  visible focus indicator; no action depends on pointer-only interaction.
+
+See [`docs/security-ux-guards.md`](docs/security-ux-guards.md) for the
+security/UX invariants and `tests/e2e/` for the accessibility coverage of the
+spending-limits surface.
+
 ## Development
 
 ```bash

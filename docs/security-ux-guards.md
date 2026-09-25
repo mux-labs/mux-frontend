@@ -84,6 +84,76 @@ user-facing error surface so support can trace a single deep-link attempt.
 - Document the rollback path in the PR description: disabling the flag must
   restore the previous resolution behavior without data migration.
 
+## Spending limits a11y labels
+
+The spending-limits surface lets an owner or delegate view and edit per-wallet
+spending limits. It is a money-path control: an assistive-technology user must
+be able to read the current limit, understand its scope, and change it without
+ambiguity. Accessibility is a correctness requirement here, not a nicety — a
+mis-announced limit or an unlabeled control can cause an unintended spend.
+
+### Labeling contract
+
+- Every spending-limit control (amount input, period selector, enable/disable
+toggle, save/reset buttons) has a programmatic accessible name. Visible text is
+  associated via `htmlFor`/`id`; icon-only controls use `aria-label`.
+- Help text and validation messages are associated with their control via
+  `aria-describedby` so screen readers announce purpose, current value, and
+  validation state together.
+- The current limit and its period are exposed as text, not color or position
+alone. Units (for example, XLM or the asset code) are part of the accessible
+  name or description.
+- Toggles expose their state via `role="switch"` with `aria-checked`, or a
+  native checkbox; the state must never be conveyed by styling alone.
+- Validation errors use `role="alert"` (or an `aria-live="assertive"` region)
+  and are linked to the offending field. Success and loading states use a
+  polite live region (`aria-live="polite"` / `role="status"`).
+
+### Keyboard and focus
+
+- All spending-limit controls are reachable and operable by keyboard alone, in
+  a logical tab order.
+- Focus is visible on every interactive control; focus styles must not be
+  removed. Focus is moved to the first invalid field on a failed save and to the
+  status message on success.
+- Disabled controls are conveyed with the native `disabled` attribute (or
+  `aria-disabled`) so assistive tech reports them as unavailable.
+
+### Live-region semantics
+
+- Dynamic state changes are announced without leaking secrets or raw key
+  material: "limit saved", "validation error", and "loading" are announced via
+  live regions. Announcements contain only the limit value, period, and error
+  code/message — never key material, JWTs, or webhook secrets.
+- Announcements are debounced so rapid edits do not flood the live region.
+
+### Edge cases and failure modes
+
+- **Adversarial input:** oversized or malformed limit values are rejected with a
+  linked, announced validation error; the control is marked invalid with
+  `aria-invalid="true"`.
+- **Auth expiry / wrong role / revoked delegate:** the save control is disabled
+  and the reason is announced; the client never infers permission from the UI.
+- **Dependency outage:** a failed save fails closed and is announced as an
+  error; the previous limit remains displayed and is not optimistically
+  committed.
+- **Testnet vs mainnet misconfig:** the active network is part of the limit's
+  accessible description so a user cannot mistake a testnet limit for a mainnet
+  one.
+
+### Observability
+
+- Emit the validation error code and a correlation id on rejection. Do not log
+  raw key material, JWTs, or webhook secrets.
+- Track save success/failure counts so ops can alert on regressions.
+
+### Rollout and rollback
+
+- Spending-limit changes that touch money paths or mainnet behavior must land
+  behind a feature flag or kill-switch.
+- Document the rollback path in the PR description: disabling the flag must
+  restore the previous limit behavior without data migration.
+
 ## Send form strkey validation
 
 The Send form accepts a recipient address. Recipient addresses are Stellar
@@ -167,68 +237,5 @@ fail-closed.
 - The network badge is derived from configuration, not from user input or the
   URL. It must display exactly one of `testnet` or `mainnet`.
 - Rendering fails closed: if the network cannot be positively determined, or if
-  the receive address is missing or malformed, the QR is not rendered and the
-  surface shows an actionable error. There is no silent default to mainnet.
-
-### Typed result and error codes
-
-Receive resolution returns a typed, discriminated result. Callers must branch on
-the error code rather than on message text. Stable error codes:
-
-| Code | Meaning |
-| --- | --- |
-| `RECEIVE_ADDRESS_UNAVAILABLE` | Wallet has no receive address to display. |
-| `RECEIVE_ADDRESS_INVALID` | Receive address is not a well-formed strkey. |
-| `RECEIVE_NETWORK_UNKNOWN` | Active network is unknown or misconfigured. |
-| `RECEIVE_NETWORK_MISMATCH` | Address does not match the active network. |
-| `RECEIVE_FORBIDDEN` | Caller is not authorized to view this wallet's receive address. |
-| `RECEIVE_DEPENDENCY_UNAVAILABLE` | Upstream RPC/Horizon/DB unavailable. |
-
-Every resolution carries a correlation id that is propagated to logs and to the
-user-facing error surface so support can trace a single receive attempt.
-
-### Authorization
-
-- Deny by default. Viewing a receive address is a privileged surface; the
-  server evaluates owner, delegate, and guardian roles before returning an
-  address.
-- Revoked delegates and expired sessions fail closed with `RECEIVE_FORBIDDEN`.
-- API-key/JWT callers are subject to the same policy as interactive users; a
-  valid token is not sufficient on its own.
-
-### Edge cases and failure modes
-
-- **Replay / concurrency:** receive resolution is read-only and idempotent.
-  Repeated or concurrent opens for the same wallet must produce the same QR
-  payload and must not trigger writes.
-- **Dependency outage:** if RPC/Horizon/DB is unavailable, reads fail closed
-  with `RECEIVE_DEPENDENCY_UNAVAILABLE`; the QR is not rendered from stale or
-  partial data.
-- **Auth expiry / wrong role / revoked delegate:** surface the specific error
-  code and prompt re-auth; never render a QR for an unauthorized caller.
-- **Adversarial input:** oversized or malformed wallet identifiers are rejected
-  before any upstream call. Rate-limit receive resolution per session and per
-  IP.
-- **Testnet vs mainnet misconfig:** an unknown or mismatched network is an
-  error, not a silent switch. Never render a mainnet QR under a testnet session
-  or vice versa, and never default to mainnet when the network is unknown.
-
-### Observability
-
-- Emit structured logs with the correlation id, the resolved error code, and
-  the network. Do not log raw receive addresses, key material, JWTs, or webhook
-  secrets.
-- Track receive render success/failure counts by error code and latency so ops
-  can alert on dependency outages and auth failures.
-
-### Rollout and rollback
-
-- Receive QR and network-badge changes that touch money paths or mainnet
-  behavior must land behind a feature flag or kill-switch.
-- Document the rollback path in the PR description: disabling the flag must
-  restore the previous receive behavior without data migration.
-
-## References
-
-- `README.md`
-- `tests/e2e/`
+  the receive address is missing or malformed, the QR is not rendered and an
+error state is shown instead.

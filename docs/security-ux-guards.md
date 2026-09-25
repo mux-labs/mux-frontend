@@ -148,6 +148,86 @@ material, secrets, or full recipient values into errors or logs.
 - Document the rollback path in the PR description: disabling the flag must
   restore the previous submission behavior without data migration.
 
+## Receive QR + network badge
+
+The Receive surface renders a scannable QR that encodes the wallet's
+Stellar/Soroban receive address, together with an unambiguous network badge. The
+QR is a money-path surface: a QR that encodes the wrong address or the wrong
+network can cause funds to be sent to an unrecoverable destination. Rendering is
+fail-closed.
+
+### Rendering contract
+
+- The QR encodes the wallet's receive address as a Stellar strkey. The address
+  is sourced from the server (the source of truth for the wallet); the client
+  must not synthesize or derive an address locally.
+- The QR payload uses the canonical Stellar URI form for the active network so
+  that scanners resolve the correct network. The payload must not embed secrets,
+  key material, or session tokens.
+- The network badge is derived from configuration, not from user input or the
+  URL. It must display exactly one of `testnet` or `mainnet`.
+- Rendering fails closed: if the network cannot be positively determined, or if
+  the receive address is missing or malformed, the QR is not rendered and the
+  surface shows an actionable error. There is no silent default to mainnet.
+
+### Typed result and error codes
+
+Receive resolution returns a typed, discriminated result. Callers must branch on
+the error code rather than on message text. Stable error codes:
+
+| Code | Meaning |
+| --- | --- |
+| `RECEIVE_ADDRESS_UNAVAILABLE` | Wallet has no receive address to display. |
+| `RECEIVE_ADDRESS_INVALID` | Receive address is not a well-formed strkey. |
+| `RECEIVE_NETWORK_UNKNOWN` | Active network is unknown or misconfigured. |
+| `RECEIVE_NETWORK_MISMATCH` | Address does not match the active network. |
+| `RECEIVE_FORBIDDEN` | Caller is not authorized to view this wallet's receive address. |
+| `RECEIVE_DEPENDENCY_UNAVAILABLE` | Upstream RPC/Horizon/DB unavailable. |
+
+Every resolution carries a correlation id that is propagated to logs and to the
+user-facing error surface so support can trace a single receive attempt.
+
+### Authorization
+
+- Deny by default. Viewing a receive address is a privileged surface; the
+  server evaluates owner, delegate, and guardian roles before returning an
+  address.
+- Revoked delegates and expired sessions fail closed with `RECEIVE_FORBIDDEN`.
+- API-key/JWT callers are subject to the same policy as interactive users; a
+  valid token is not sufficient on its own.
+
+### Edge cases and failure modes
+
+- **Replay / concurrency:** receive resolution is read-only and idempotent.
+  Repeated or concurrent opens for the same wallet must produce the same QR
+  payload and must not trigger writes.
+- **Dependency outage:** if RPC/Horizon/DB is unavailable, reads fail closed
+  with `RECEIVE_DEPENDENCY_UNAVAILABLE`; the QR is not rendered from stale or
+  partial data.
+- **Auth expiry / wrong role / revoked delegate:** surface the specific error
+  code and prompt re-auth; never render a QR for an unauthorized caller.
+- **Adversarial input:** oversized or malformed wallet identifiers are rejected
+  before any upstream call. Rate-limit receive resolution per session and per
+  IP.
+- **Testnet vs mainnet misconfig:** an unknown or mismatched network is an
+  error, not a silent switch. Never render a mainnet QR under a testnet session
+  or vice versa, and never default to mainnet when the network is unknown.
+
+### Observability
+
+- Emit structured logs with the correlation id, the resolved error code, and
+  the network. Do not log raw receive addresses, key material, JWTs, or webhook
+  secrets.
+- Track receive render success/failure counts by error code and latency so ops
+  can alert on dependency outages and auth failures.
+
+### Rollout and rollback
+
+- Receive QR and network-badge changes that touch money paths or mainnet
+  behavior must land behind a feature flag or kill-switch.
+- Document the rollback path in the PR description: disabling the flag must
+  restore the previous receive behavior without data migration.
+
 ## References
 
 - `README.md`

@@ -21,6 +21,16 @@ contract for wallet, account-abstraction, and payment error boundaries.
 
 ### Typed entrypoints and stable error codes
 
+Every privileged entrypoint (wallet, AA, payment) is wrapped by a boun
+
+Error boundaries are the last line of defense between a failed privileged
+operation and the user. They must **fail closed**: a boundary never converts a
+failed or unauthorized operation into an apparent success, and it never exposes
+raw error internals, key material, or tokens. This section is the canonical
+contract for wallet, account-abstraction, and payment error boundaries.
+
+### Typed entrypoints and stable error codes
+
 Every privileged entrypoint (wallet, AA, payment) is wrapped by a boundary that
 returns a discriminated result. Callers branch on the error code, never on
 message text. Stable error codes:
@@ -271,21 +281,55 @@ are rejected before any write occurs.
 
 ## Notifications
 
-- Changes to audit filtering that touch money paths or mainnet behavior must
-  land behind a feature flag or kill-switch.
-- Document the rollback path in the PR description: disabling the flag must
-  restore the previous behavior without data migration.
+- Re-enabling production source maps is a policy change, not a routine edit. It
+  requires a design note, a private upload target, and a documented rollback in
+  the PR description.
 
-Notifications are a read-mostly surface, but they still follow the same
-guards as the rest of the app: fail-closed authz, idempotent mutations,
-and no secret leakage in logs or metrics.
+## Settings danger zone confirm phrase
 
-### Authz and fail
+The Settings danger zone hosts destructive, irreversible actions (for example
+account/wallet deletion and recovery reset). These actions are gated behind a
+typed confirm-phrase guard so a stray click or a scripted request cannot trigger
+them. The guard is **fail closed**: the destructive action stays disabled until
+the exact phrase is entered.
 
-## Notifications
+### Confirm phrase contract
 
-- Changes to audit filtering that touch money paths or mainnet behavior must
-  land behind a feature flag or kill-switch.
+- The required phrase is a fixed, documented constant (for example
+  `DELETE MY ACCOUNT`). It is never derived from user input or remote config.
+- Matching is **case-insensitive** and **whitespace-normalized**: leading and
+  trailing whitespace is trimmed and internal runs of whitespace collapse to a
+  single space before comparison. No other normalization is applied.
+- The confirm phrase is validated **server-side** as well as in the UI; a client
+  that skips the UI guard is still rejected with `GUARD_CONFIRM_REQUIRED`.
+- The destructive action is disabled until the phrase matches exactly; a partial
+  or near match fails closed.
+
+### Edge cases and failure modes
+
+- **Concurrent/replayed requests:** the destructive action carries an
+  idempotency key so a double-submit resolves to a single effect.
+- **Dependency outage:** if the write dependency is unavailable, the action
+  fails closed with `GUARD_DEPENDENCY_UNAVAILABLE` rather than appearing to
+  succeed.
+- **Auth expiry / wrong role / revoked delegate:** fail closed and prompt
+  re-auth before the confirm phrase is even evaluated.
+- **Adversarial input:** oversized or scripted confirm payloads are rejected;
+  attempts are rate-limited per session and per IP.
+- **Testnet vs mainnet:** the confirm phrase guard applies on both; a mainnet
+  destructive action is never satisfied by testnet state and vice versa.
+
+### Observability
+
+- Emit structured logs with the correlation id and the resolved error code
+  (never the raw confirm phrase or any key material).
+- Track confirm-guard pass/fail counts and rate-limit events so ops can alert on
+  abuse.
+
+### Rollout and rollback
+
+- Changes to the confirm-phrase guard that touch money paths or mainnet behavior
+  must land behind a feature flag or kill-switch.
 - Document the rollback path in the PR description: disabling the flag must
   restore the previous behavior without data migration.
 

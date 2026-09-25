@@ -258,28 +258,15 @@ export async function GET(request: Request) {
       ),
     }));
 
-    return NextResponse.json({
-      data: {
-        rangeDays: days,
-        series,
-        audit: {
-          action: filters.action,
-          outcome: filters.outcome,
-          limit: filters.limit,
-          keys: audit,
-        },
-      },
-    });
+    return NextResponse.json({ correlationId, series, audit });
   }
 
-  return NextResponse.json({ data: { rangeDays: days, series } });
+  return NextResponse.json({ correlationId, series });
 }
 
 export async function POST(request: Request) {
   const correlationId = newCorrelationId();
 
-  // Deny-by-default: privileged writes require an owner/API-key/JWT credential.
-  // Require an owner/API-key/JWT credential before any write is considered.
   if (!isAuthorized(request)) {
     return errorResponse(
       401,
@@ -287,6 +274,16 @@ export async function POST(request: Request) {
       "A valid owner, API key, or JWT credential is required.",
       correlationId,
     );
+  }
+
+  // Idempotency: replaying a request with the same key returns the cached result
+  // instead of re-running a privileged write.
+  const idempotencyKey = parseIdempotencyKey(request);
+  if (idempotencyKey !== null) {
+    const cached = idempotencyCache.get(idempotencyKey);
+    if (cached) {
+      return NextResponse.json(cached.body, { status: cached.status });
+    }
   }
 
   let body: unknown;
@@ -301,13 +298,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const { action, id, confirmed } = (body ?? {}) as {
+  if (typeof body !== "object" || body === null) {
+    return errorResponse(
+      400,
+      ERROR_CODES.INVALID_BODY,
+      "Request body must be a JSON object.",
+      correlationId,
+    );
+  }
+
+  const { action, id, confirm } = body as {
     action?: unknown;
     id?: unknown;
-    confirmed?: unknown;
+    confirm?: unknown;
   };
 
-  if (action !== "create" && action !== "rotate" && action !== "revoke") {
+  if (
+    action !== "create" &&
+    action !== "rotate" &&
+    action !== "revoke"
+  ) {
     return errorResponse(
       400,
       ERROR_CODES.INVALID_ACTION,
@@ -316,28 +326,19 @@ export async function POST(request: Request) {
     );
   }
 
-  // Deny-by-default: privileged/destructive actions require explicit confirmation.
-  if (DESTRUCTIVE_ACTIONS.includes(action) && confirmed !== true) {
-    return errorResponse(
-      409,
-      ERROR_CODES.CONFIRMATION_REQUIRED,
-      `Confirmation is required before ${action} can proceed.`,
-      correlationId,
-    );
-  }
-
-  if (action !== "create" && typeof id !== "string") {
+  // Destructive actions require an explicit confirmation guard so a stray click
+  // cannot rotate or revoke a key.
+  if (DESTRUCTIVE_ACTIONS.includes(action) && confirm !== true) {
     return errorResponse(
       400,
-      ERROR_CODES.INVALID_BODY,
-      "id is required for rotate and revoke.",
+      ERROR_CODES.CONFIRMATION_REQUIRED,
+      `action "${action}" requires confirm: true.`,
       correlationId,
     );
   }
 
   if (action !== "create") {
-    const exists = mockApiKeys.some((key) => key.id === id);
-    if (!exists) {
+    if (typeof id !== "string" || !mockApiKeys.some((key) => key.id === id)) {
       return errorResponse(
         404,
         ERROR_CODES.NOT_FOUND,
@@ -347,26 +348,17 @@ export async function POST(request: Request) {
     }
   }
 
-  // Idempotency: replaying a request with the same key returns the prior result
-  // instead of re-running the privileged write.
-  const idempotencyKey = parseIdempotencyKey(request);
+  const result = {
+    correlationId,
+    action,
+    id: typeof id === "string" ? id : null,
+    // Never return raw key material; only a redacted acknowledgement.
+    key: redact(id),
+  };
+
   if (idempotencyKey !== null) {
-    const cached = idempotencyCache.get(idempotencyKey);
-    if (cached) {
-      return NextResponse.json(cached.body, { status: cached.status });
-    }
+    idempotencyCache.set(idempotencyKey, { status: 200, body: result });
   }
 
-  // Fail-closed on writes: surface a stable code instead of leaking upstream detail.
-  const failure = {
-    error: {
-      code: ERROR_CODES.UPSTREAM_UNAVAILABLE,
-      message: `Unable to ${action} API key right now. Please retry.`,
-      correlationId,
-    },
-  };
-  if (idempotencyKey !== null) {
-    idempotencyCache.set(idempotencyKey, { status: 503, body: failure });
-  }
-  return NextResponse.json(failure, { status: 503 });
+  return NextResponse.json(result);
 }

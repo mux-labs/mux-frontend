@@ -1,26 +1,42 @@
-# NetworkBadge Storybook stories — what was implemented
+# Network badge stories
 
-`NetworkBadge.stories.tsx` already existed (Mainnet, Testnet, InvalidFallback,
-WithCustomClass, AllVariants). This change extends it with the scenarios that
-were still missing:
+Manual testing guide for the `NetworkBadge` component and its Storybook stories.
 
-- **DarkMode** — renders the badge inside a `.dark` wrapper to visually verify
-  the `dark:` contrast classes actually used on the wallet detail/table pages.
-- **InWalletRow** — shows the badge next to a truncated address, matching how
-  it's actually composed inside `WalletTable` / `WalletDetail`, as a quick
-  visual regression check for that layout.
-- **CompactSize** — a dense `className` override, guarding against label
-  clipping when the badge is squeezed into tight table cells.
+## Scope
 
-`NetworkBadge.stories.test.tsx` (new) exercises the same fixtures with
-Vitest/Testing Library so the behavior behind the new stories is also covered
-by the automated suite, not just visually in Storybook.
+- Component: `src/components/network-badge.tsx`
+- Stories: `src/components/network-badge.stories.tsx`
+- Storybook title: `Components/NetworkBadge`
+
+The badge is presentational only. It performs no network calls and exposes no
+privileged surfaces.
+
+## Supported states
+
+| Input | Rendered state | Label |
+| --- | --- | --- |
+| `mainnet`, `public`, `pubnet` | `mainnet` | Mainnet |
+| `testnet` | `testnet` | Testnet |
+| `futurenet` | `futurenet` | Futurenet |
+| anything else / missing / non-string | `unknown` | Unknown network |
+
+## Fail-closed behavior
+
+Unrecognized, empty, or missing network values render the neutral
+`Unknown network` badge. The badge never falls back to mainnet styling, so a
+misconfigured or spoofed network value cannot be presented as production.
 
 ## Manual checklist
-- [ ] `npm run storybook`, open `Wallet/NetworkBadge` — confirm all 8 stories
-      render without errors, including the new DarkMode/InWalletRow/CompactSize.
-- [ ] Toggle Storybook's background/theme toolbar on `DarkMode` — badge text
-      stays readable (WCAG AA) against the dark background.
-- [ ] Resize the Storybook viewport to a narrow mobile width — `InWalletRow`
-      doesn't overflow or wrap awkwardly.
-- [ ] Run `npx vitest run NetworkBadge` — all NetworkBadge test files pass.
+
+1. Run Storybook and open `Components/NetworkBadge`.
+2. Verify `Mainnet`, `Testnet`, and `Futurenet` stories show the expected label
+   and color.
+3. Verify `Unknown` and `Missing` stories show the neutral `Unknown network`
+   badge.
+4. Verify `AllStates` renders every state side by side without layout issues.
+5. Confirm the badge exposes `data-network` and an accessible `aria-label`.
+
+## Notes
+
+- No secrets, tokens, or key material are involved.
+- No mainnet-affecting behavior; no feature flag required.

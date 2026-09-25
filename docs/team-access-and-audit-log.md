@@ -18,6 +18,29 @@ is configured, and returns `503 backend_unavailable` instead of mock data
 when running with `NODE_ENV=production` and no backend configured — see
 `isMockFallbackAllowed()` in `src/lib/api/config.ts`.
 
+### Team access authz & error codes
+
+Every `/api/team` entrypoint is deny-by-default and enforces the caller's
+role server-side; the UI hides admin-only controls but the API is the source
+of truth, so a `developer` session cannot bypass policy by calling the route
+directly. Mutations are idempotent on the member id: re-adding an existing
+member is a no-op, and removing an already-removed member succeeds without
+double-applying. Stable error codes:
+
+- `400 invalid_member` — malformed name/email/role payload.
+- `401 unauthorized` — no valid session/JWT.
+- `403 forbidden` — caller's role may not perform the action (only `admin`
+  may add/remove; `developer` is read-only).
+- `409 member_exists` — add conflicts with an existing member under a
+  different id.
+- `503 backend_unavailable` — backend outage; writes fail closed and never
+  fall back to mock data in production.
+
+Every response carries an `x-correlation-id` header (echoing the request's
+`x-correlation-id` when present, otherwise a generated id). Ops logs emit
+only the correlation id, the action, and the affected member id — never raw
+emails, JWTs, API keys, or other secrets.
+
 ## Activity / audit log
 
 `GET /api/activity` previously fell back to a mock-transaction heuristic

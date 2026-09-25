@@ -1,7 +1,5 @@
 # End-to-end tests
 
-# End-to-end tests
-
 Playwright-based end-to-end coverage for mux-frontend critical paths (wallet,
 account abstraction, payments).
 
@@ -35,6 +33,49 @@ npx playwright test --project=full
 
 # Both projects (default)
 npx playwright test
+```
+
+## Recovery timeline component tests
+
+The recovery timeline component renders the ordered set of recovery steps for a
+wallet/account. Its e2e coverage lives in
+`tests/e2e/recovery-timeline.spec.ts` and asserts the invariants below. These
+specs run in the `full` project (they are not part of the fast `smoke` subset).
+
+### Invariants (fail-closed)
+
+- **Ordering**: steps render in the canonical recovery order; the timeline never
+  reorders or drops a step on re-render.
+- **States**: each step renders exactly one terminal state
+  (`pending` / `in-progress` / `complete` / `failed`); no step is left in an
+  ambiguous or blank state.
+- **Idempotency**: replaying a recovery action (double-submit, retried request)
+  does not duplicate steps or advance the timeline twice.
+- **Fail-closed writes**: when the RPC/Horizon dependency is unavailable, the
+  timeline surfaces an actionable error and does not advance a money-path step.
+- **Authz (deny-by-default)**: unauthorized, expired, or revoked
+  owner/delegate/guardian roles cannot see or act on recovery timeline actions.
+- **Adversarial input**: oversized batches and malformed step payloads are
+  rejected without rendering partial or spoofed steps.
+- **Testnet vs mainnet**: the timeline reflects the configured network; a
+  mainnet-affecting action is gated behind the feature flag/kill-switch.
+
+### Assertion pattern
+
+```ts
+await expect(page.getByTestId('recovery-timeline')).toBeVisible();
+await expect(page.getByTestId('recovery-step')).toHaveCount(expectedSteps);
+await expect(page.getByTestId('recovery-step').first()).toHaveAttribute(
+  'data-state',
+  /^(pending|in-progress|complete|failed)$/,
+);
+```
+
+Negative (authz) cases assert the action is absent or disabled and that no
+recovery write is issued:
+
+```ts
+await expect(page.getByTestId('recovery-step-action')).toBeDisabled();
 ```
 
 ## Error boundary support correlation

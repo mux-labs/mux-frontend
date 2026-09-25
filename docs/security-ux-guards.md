@@ -6,6 +6,106 @@ automated tests verify.
 
 ---
 
+## #756 MUX_API_KEY / MUX_API_SECRET never client-bundled
+
+**Guard:** `src/lib/serverEnv.ts`  
+**Tests:** `src/lib/__tests__/serverEnv.test.ts`
+
+### Failure mode
+
+`MUX_API_KEY` and `MUX_API_SECRET` authenticate the frontend to the Mux
+backend. If either is read from a module that is imported by a client
+component, Next.js inlines the value into the client bundle and it is
+shipped to every browser. A leaked `MUX_API_SECRET` lets an attacker mint
+sessions, sign spends, or impersonate the app against the Mux API — a
+money-path and account-takeover gap.
+
+### What the implementation does
+
+- The secrets are read **only** in server-only modules (route handlers,
+  server actions, server utilities). They are never referenced from client
+  components or from shared modules that the client imports.
+- They are **never** exposed via `NEXT_PUBLIC_*` and are not passed through
+  any public-env passthrough in `next.config.ts`.
+- `src/lib/serverEnv.ts` is marked server-only and exposes a fail-closed
+  accessor. Accessing the secret from a client context, or with the required
+  server env missing, throws a typed `ServerEnvError` with a stable `code`
+  and a secret-free `message`:
+
+| Condition | Code |
+|---|---|
+| Secret accessed from a client context | `CLIENT_SECRET_ACCESS` |
+| Required server env missing | `MISSING_SERVER_ENV` |
+
+```ts
+import { getMuxApiCredentials } from '@/lib/serverEnv';
+
+// server-only: route handler / server action / server utility
+const { apiKey, apiSecret } = getMuxApiCredentials();
+```
+
+### Tests
+
+The test suite (`serverEnv.test.ts`) fails if:
+
+- The secret is read from a client context without throwing.
+- Missing required server env does not throw `MISSING_SERVER_ENV`.
+- Error messages leak the key or secret value.
+- The secret is re-exported from a client-importable module.
+
+### Production vs demo/mock split
+
+There is no mock path for credentials. The guard behaves identically in dev
+and production; in production a missing secret fails closed rather than
+falling back to a mock or empty value.
+
+---
+
+## #754 Env validation never serves mocks in production
+
+**File:** `src/lib/envValidation.ts`  
+**Tests:** `src/lib/__tests__/envValidation.test.ts`
+
+### Failure mode
+
+If a production build is misconfigured — a mock flag left on, a mock API
+base URL, or a testnet endpoint in mainnet mode — the app could silently
+serve mock wallet/AA/payment data. That is a money-path correctness and
+security gap: users would see fabricated balances or route real actions
+against mock backends.
+
+### What the implementation does
+
+`validateEnv` is **fail-closed**: in production it throws a typed
+`EnvValidationError` (stable `code`, secret-free `message`) for any
+configuration that would enable mocks. Mock providers/data are gated behind
+non-production checks, so mocks can never be served in production.
+
+| Condition | Code |
+|---|---|
+| Mock flag enabled in production | `MOCK_IN_PRODUCTION` |
+| Mock API base URL in production | `MOCK_URL_IN_PRODUCTION` |
+| Testnet endpoint in mainnet mode | `NETWORK_MISMATCH` |
+| Missing required production var | `MISSING_REQUIRED` |
+
+### Tests
+
+The test suite (`envValidation.test.ts`) fails if:
+
+- Production + mock flag does not throw.
+- Production + mock API base URL does not throw.
+- Mainnet mode + testnet endpoint does not throw.
+- Non-production environments are incorrectly rejected.
+- Error messages leak secret values.
+
+### Production vs demo/mock split
+
+Mock data paths are only reachable when `NODE_ENV !== 'production'` **and**
+the mock flag is explicitly set. Production validation rejects both, so the
+mock path is unreachable in production.
+
+---
+
 ## #701 Balance visibility toggle — DOM leak guard
 
 **File:** `src/hooks/useBalanceVisibility.ts`  

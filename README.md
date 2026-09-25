@@ -80,6 +80,21 @@ Next.js API routes, to requests made to the backend — the browser talks
 only to this app's own same-origin `/api/*` routes and never holds a Mux
 credential.
 
+**API URL alias chain (invariant).** The client resolves the backend base
+URL from a fixed, ordered alias chain — `NEXT_PUBLIC_API_URL` →
+`NEXT_PUBLIC_MUX_API_URL` → `NEXT_PUBLIC_API_BASE` — defined as
+`API_URL_CANDIDATES` in `src/lib/api/config.ts`. Every alias in the chain
+resolves to the *same* canonical base URL: the first alias that is set to a
+non-empty value wins, and the remaining aliases are ignored. An alias set to
+an empty string (e.g. `NEXT_PUBLIC_API_URL=`) is treated as unset and the
+next alias is tried, so a blank value never silently resolves to an
+unintended host. When *no* alias is set, the chain resolves to no base URL
+(`undefined`) — it never falls back to a hardcoded or guessed host. In a
+production build that missing base URL is fail-closed: the API routes return
+`503 backend_unavailable` instead of serving mock data (see
+`isMockFallbackAllowed()` in `src/lib/api/config.ts`). The alias chain is
+covered end-to-end by `tests/api-client.test.js`.
+
 **Testnet vs. mainnet:** which *backend* this frontend talks to is driven
 entirely by `NEXT_PUBLIC_API_URL` (or its aliases above) — point it at a
 testnet-configured Mux backend for staging/testnet work, and at the
@@ -166,4 +181,14 @@ verification checklist.
   behaviour: on a `401` it calls `POST /api/auth/refresh` once and retries the original request with the
   r
 
-/* … truncated 5433 chars — edit only what you need near the top … */
+frontend-env-vars.md`](docs/frontend-env-vars.md) for the full
+reference, including which file reads each variable and a manual
+verification checklist.
+
+### Auth and API client behavior
+
+* `src/lib/api.js` adds request header support with `x-request-id` and automatic session refresh on `401`
+* `src/utils/fetchWithAuth.ts` (used by `useWallets` / `useWallet` / the Send flow) mirrors that
+  behaviour: on a `401` it calls `POST /api/auth/refresh` once and retries the original request with the
+  r
+

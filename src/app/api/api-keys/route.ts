@@ -18,6 +18,11 @@ const ERROR_CODES = {
 const DEFAULT_RANGE_DAYS = 30;
 const MAX_RANGE_DAYS = 90;
 
+// Idempotency: replaying the same request id must not re-run a privileged write.
+const IDEMPOTENCY_HEADER = "idempotency-key";
+const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
+const idempotencyCache = new Map<string, { status: number; body: unknown }>();
+
 function errorResponse(
   status: number,
   code: string,
@@ -50,6 +55,18 @@ function isAuthorized(request: Request): boolean {
   const [scheme, token] = auth.split(" ");
   if (!token) return false;
   return scheme === "Bearer" || scheme === "ApiKey";
+}
+
+// Idempotency keys are opaque client tokens; reject oversized/adversarial input
+// and never log the raw value.
+function parseIdempotencyKey(request: Request): string | null {
+  const raw = request.headers.get(IDEMPOTENCY_HEADER);
+  if (raw === null) return null;
+  const trimmed = raw.trim();
+  if (trimmed.length === 0 || trimmed.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
+    return null;
+  }
+  return trimmed;
 }
 
 function parseRangeDays(value: string | null): number | null {
@@ -140,6 +157,17 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const correlationId = newCorrelationId();
 
+  // Deny-by-default: privileged writes require an owner/API-key/JWT credential.
+  // Require an owner/API-key/JWT credential before any write is considered.
+  if (!isAuthorized(request)) {
+    return errorResponse(
+      401,
+      ERROR_CODES.UNAUTHORIZED,
+      "A valid owner, API key, or JWT credential is required.",
+      correlationId,
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();
@@ -198,11 +226,26 @@ export async function POST(request: Request) {
     }
   }
 
+  // Idempotency: replaying a request with the same key returns the prior result
+  // instead of re-running the privileged write.
+  const idempotencyKey = parseIdempotencyKey(request);
+  if (idempotencyKey !== null) {
+    const cached = idempotencyCache.get(idempotencyKey);
+    if (cached) {
+      return NextResponse.json(cached.body, { status: cached.status });
+    }
+  }
+
   // Fail-closed on writes: surface a stable code instead of leaking upstream detail.
-  return errorResponse(
-    503,
-    ERROR_CODES.UPSTREAM_UNAVAILABLE,
-    `Unable to ${action} API key right now. Please retry.`,
-    correlationId,
-  );
+  const failure = {
+    error: {
+      code: ERROR_CODES.UPSTREAM_UNAVAILABLE,
+      message: `Unable to ${action} API key right now. Please retry.`,
+      correlationId,
+    },
+  };
+  if (idempotencyKey !== null) {
+    idempotencyCache.set(idempotencyKey, { status: 503, body: failure });
+  }
+  return NextResponse.json(failure, { status: 503 });
 }

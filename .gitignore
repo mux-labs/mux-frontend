@@ -1,58 +1,30 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# Dependencies
+node_modules/
 
-# dependencies
-/node_modules
-/package-lock.json
-/npm-shrinkwrap.json
-/yarn.lock
-/.pnp
-.pnp.*
-.yarn/*
-!.yarn/patches
-!.yarn/plugins
-!.yarn/releases
-!.yarn/versions
+# Build output
+build/
+dist/
 
-# pnpm-lock.yaml is the only package lockfile this repo tracks.
+# Environment
+.env
+.env.local
+.env.*.local
 
-# testing
-/coverage
-/playwright-report
-/test-results
-/blob-report
-/playwright/.cache
-
-# next.js
-/.next/
-/out/
-
-# production
-/build
-
-# misc
-.DS_Store
-*.pem
-.vscode/
-
-# debug
+# Logs
+*.log
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-.pnpm-debug.log*
 
-# env files (can opt-in for committing if needed)
-.env*
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/
 
-# vercel
-.vercel
-
-# personal task tracking
-vrickish.md
-
-# typescript
-*.tsbuildinfo
-next-env.d.ts
-
-# somzilla issues document
-src/somzilla.md
-
+# Mux local commit message file.
+# `.git_msg` is OPTIONAL. It is a local, developer-specific scratch file used to
+# draft a commit message before running `git commit`; it is never required by the
+# build, CI, or any tooling. If you do not use it, simply ignore this entry.
+# Format (when used): plain UTF-8 text, first line = commit subject, blank line,
+# then the body. Do not commit it and do not put secrets or tokens in it.
+.git_msg

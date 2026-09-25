@@ -54,3 +54,66 @@ test.describe("Notifications bell smoke", () => {
 		await expect(page.getByTestId("notifications-unread-dot")).toBeHidden();
 	});
 });
+
+test.describe("Notification preferences page (#865)", () => {
+	test("renders the preferences page with channel and event toggles", async ({
+		page,
+	}) => {
+		await signIn(page);
+
+		await page.goto("/dashboard/settings/notifications");
+
+		await expect(
+			page.getByRole("heading", { name: /notification preferences/i }),
+		).toBeVisible();
+
+		// Channel toggles are present and reflect the seeded preference state.
+		await expect(
+			page.getByTestId("pref-channel-email"),
+		).toBeVisible();
+		await expect(
+			page.getByTestId("pref-channel-push"),
+		).toBeVisible();
+
+		// Event toggles are present for the money/realtime paths.
+		await expect(
+			page.getByTestId("pref-event-transaction"),
+		).toBeVisible();
+		await expect(
+			page.getByTestId("pref-event-security"),
+		).toBeVisible();
+	});
+
+	test("updates a preference and persists it across reload", async ({
+		page,
+	}) => {
+		await signIn(page);
+		await page.goto("/dashboard/settings/notifications");
+
+		const emailToggle = page.getByTestId("pref-channel-email");
+		await expect(emailToggle).toBeVisible();
+
+		const wasChecked = await emailToggle.isChecked();
+		await emailToggle.click();
+
+		// Save is idempotent: the write is keyed and the UI reconciles.
+		await page.getByTestId("pref-save").click();
+		await expect(page.getByTestId("pref-saved")).toBeVisible();
+
+		await page.reload();
+		await expect(emailToggle).toBeVisible();
+		await expect(emailToggle).toBeChecked({ checked: !wasChecked });
+	});
+
+	test("denies unauthenticated access to the preferences page", async ({
+		page,
+	}) => {
+		await page.goto("/dashboard/settings/notifications");
+
+		// Auth-gated route: middleware redirects to login, deny-by-default.
+		await page.waitForURL("**/login**");
+		await expect(
+			page.getByRole("heading", { name: /notification preferences/i }),
+		).toBeHidden();
+	});
+});

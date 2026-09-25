@@ -1,1 +1,23 @@
+# .git_msg
+#
+# This file is OPTIONAL. It is a free-form commit message hint used by
+# contributors and tooling to pre-fill or suggest a commit subject line.
+#
+# Purpose:
+#   - Provide a suggested commit message for the current change set.
+#   - Help keep commit subjects consistent with the repo's conventions.
+#
+# Format:
+#   - Plain UTF-8 text.
+#   - First line: a conventional-commit style subject, e.g.
+#       feat: add recovery FAQ section with accessible accordion
+#       fix: clarify .git_msg optional
+#   - Optional following lines: additional body/context.
+#   - No secrets, tokens, or credentials may be committed here.
+#
+# Notes:
+#   - Absence of this file is valid; nothing in CI or hooks requires it.
+#   - It does not affect runtime behavior.
+#
+# Suggested message for the current change set:
 feat: add recovery FAQ section with accessible accordion

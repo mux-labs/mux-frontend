@@ -91,6 +91,82 @@ global.fetch = async (url, opts) => {
 	return { ok: false, status: 401, text: async () => "unauthorized" };
 };
 
+// Envelope parsing invariants for the API client. The client must unwrap
+// the `{ data, error, requestId }` envelope, surface stable error codes,
+// propagate correlation ids, and fail closed on malformed/adversarial
+// responses instead of silently succeeding.
+const {
+	parseEnvelope,
+	ApiError,
+	STABLE_ERROR_CODES,
+} = require("../src/lib/api");
+
+// Successful unwrap: data is returned and the correlation id is exposed.
+const okEnvelope = parseEnvelope({
+	status: 200,
+	body: { data: { walletId: "w-1" }, error: null, requestId: "req-abc-1" },
+});
+assert.deepStrictEqual(okEnvelope.data, { walletId: "w-1" });
+assert.strictEqual(okEnvelope.requestId, "req-abc-1");
+assert.strictEqual(okEnvelope.error, null);
+
+// Correlation id propagation: the request id from the envelope is surfaced
+// on the parsed result so callers can log/trace without leaking secrets.
+const correlated = parseEnvelope({
+	status: 200,
+	body: { data: { ok: true }, error: null, requestId: "req-trace-42" },
+});
+assert.strictEqual(correlated.requestId, "req-trace-42");
+
+// Stable error codes: a well-formed error envelope maps to a typed error
+// carrying the stable code and the correlation id.
+const errEnvelope = parseEnvelope({
+	status: 403,
+	body: {
+		data: null,
+		error: { code: "FORBIDDEN", message: "not allowed" },
+		requestId: "req-err-7",
+	},
+});
+assert.strictEqual(errEnvelope.error.code, "FORBIDDEN");
+assert.strictEqual(errEnvelope.requestId, "req-err-7");
+assert.ok(STABLE_ERROR_CODES.includes("FORBIDDEN"));
+
+// Auth negatives: missing/invalid/expired credentials and wrong role must
+// surface as stable, non-success errors so envelope manipulation cannot
+// bypass policy.
+for (const code of ["UNAUTHORIZED", "TOKEN_EXPIRED", "FORBIDDEN"]) {
+	const denied = parseEnvelope({
+		status: code === "FORBIDDEN" ? 403 : 401,
+		body: { data: null, error: { code, message: code }, requestId: "req-auth-1" },
+	});
+	assert.strictEqual(denied.error.code, code);
+	assert.strictEqual(denied.data, null);
+	assert.ok(STABLE_ERROR_CODES.includes(code));
+}
+
+// Adversarial/malformed input must fail closed: non-JSON bodies, missing or
+// extra envelope fields, oversized payloads, and unexpected status codes
+// must never be treated as success.
+const malformedCases = [
+	{ status: 200, body: "not-json" },
+	{ status: 200, body: null },
+	{ status: 200, body: { data: { ok: true } } },
+	{ status: 200, body: { data: { ok: true }, error: null } },
+	{ status: 200, body: { data: { ok: true }, error: null, requestId: "req-1", extra: true } },
+	{ status: 200, body: { data: "x".repeat(1024 * 1024 + 1), error: null, requestId: "req-1" } },
+	{ status: 500, body: { data: { ok: true }, error: null, requestId: "req-1" } },
+	{ status: 0, body: { data: { ok: true }, error: null, requestId: "req-1" } },
+];
+
+for (const testCase of malformedCases) {
+	assert.throws(
+		() => parseEnvelope(testCase),
+		(err) => err instanceof ApiError,
+		`malformed envelope must fail closed: ${JSON.stringify(testCase).slice(0, 80)}`,
+	);
+}
+
 module.exports = (async () => {
 	saveSession(createExpiredDemoSession());
 

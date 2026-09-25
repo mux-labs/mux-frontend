@@ -48,6 +48,16 @@ export default defineConfig({
 				"src/app/api/**",
 			],
 			exclude: ["src/test/**", "**/*.d.ts"],
+			thresholds: {
+				// Fail-closed coverage gate for the critical-path modules this
+				// config was added to surface (api-client, api routes, session,
+				// middleware). Kept conservative so the existing suite passes
+				// today while still preventing silent coverage regressions.
+				lines: 60,
+				functions: 60,
+				branches: 50,
+				statements: 60,
+			},
 		},
 	},
 	resolve: {

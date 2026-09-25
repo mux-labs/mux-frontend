@@ -1,1 +1,14 @@
+# Pre-commit hook.
+#
+# Optional commit-message file: `.git_msg`
+#   `.git_msg` is NOT required for this hook to run. It is an optional,
+#   developer-local convenience file used to stage a commit message so it can
+#   be reused (e.g. by tooling or a manual `git commit -F .git_msg`).
+#   Format: plain UTF-8 text, same as any git commit message (subject line,
+#   optional blank line, optional body). It is not read, validated, or
+#   required by this hook, and it should not be committed to the repo.
+#
+# If `.git_msg` is absent, the hook still runs normally and git will prompt
+# for a commit message as usual.
+
 npm run lint:fix

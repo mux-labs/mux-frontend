@@ -390,3 +390,42 @@ Automated coverage for these invariants lives in `tests/e2e/` (including
 
 See `README.md` and `tests/e2e/` for how to run the suite.
 
+
+## CSRF strategy
+
+The session cookie is HttpOnly + `SameSite=Lax`, which blocks most cross-site
+writes but not all (e.g. top-level navigations, same-site subdomains). All
+state-changing requests therefore use a **double-submit cookie** defined in
+`src/lib/csrf.ts`:
+
+- The server issues a non-HttpOnly `mux_csrf` cookie alongside the session.
+- The client sends the same value in the `x-csrf-token` header for every
+  non-`GET`/`HEAD`/`OPTIONS` request (`withCsrf()`).
+- The server calls `verifyCsrf()` before any write and fails closed with
+  `CSRF_MISSING` (no cookie/header) or `CSRF_MISMATCH` (values differ). Tokens
+  are compared in constant time and never logged.
+- Rollback: removing the `verifyCsrf()` call restores the previous behavior; no
+  data migration is required.
+
+## Optimistic UI
+
+Optimistic updates are allowed **only** for idempotent mutations
+(`src/lib/optimistic.ts`):
+
+- A mutation may render optimistically only when it carries an idempotency key.
+- Money-path writes (spends, recovery, admin) are never optimistic; the UI
+  waits for the server result.
+- On failure the previous state is restored and the error surfaced; a failed
+  write is never displayed as success.
+
+## Revoked API keys
+
+Revoked API keys must be visually distinct from active keys
+(`src/components/ApiKeyStatusBadge.tsx`): muted and struck-through, marked
+`aria-disabled`, and labelled with a "Revoked" badge so the state does not rely
+on color alone. Only masked key prefixes are rendered, never raw key material.
+
+## Storybook theme tokens
+
+Storybook backgrounds are sourced from `src/theme/tokens.ts`, the single source
+of truth for light/dark palette values, so stories match production styling.

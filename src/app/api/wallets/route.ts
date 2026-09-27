@@ -19,6 +19,8 @@ export const OnboardingErrorCode = {
   UNAUTHORIZED: 'ONBOARDING_UNAUTHORIZED',
   FORBIDDEN: 'ONBOARDING_FORBIDDEN',
   INVALID_REQUEST: 'ONBOARDING_INVALID_REQUEST',
+  INVALID_NETWORK: 'ONBOARDING_INVALID_NETWORK',
+  NETWORK_DISABLED: 'ONBOARDING_NETWORK_DISABLED',
   IDEMPOTENCY_CONFLICT: 'ONBOARDING_IDEMPOTENCY_CONFLICT',
   UPSTREAM_UNAVAILABLE: 'ONBOARDING_UPSTREAM_UNAVAILABLE',
   INTERNAL: 'ONBOARDING_INTERNAL',
@@ -29,11 +31,20 @@ export type OnboardingErrorCodeValue =
 
 export type OnboardingRole = 'owner' | 'delegate' | 'guardian';
 
+export type OnboardingNetwork = 'testnet' | 'mainnet';
+
+/** Mainnet onboarding is off unless explicitly enabled (kill-switch). */
+function isMainnetEnabled(): boolean {
+  return process.env.MUX_MAINNET_ENABLED === 'true';
+}
+
 export interface OnboardingRequest {
   /** Stable client-supplied wallet label; not a secret. */
   label?: string;
   /** Optional owner subject; defaults to the authenticated subject. */
   owner?: string;
+  /** Target Stellar network; defaults to `testnet`. */
+  network?: OnboardingNetwork;
 }
 
 export interface OnboardingKey {
@@ -49,6 +60,7 @@ export interface OnboardingWallet {
   walletId: string;
   owner: string;
   label: string | null;
+  network: OnboardingNetwork;
   status: 'active';
   createdAt: string;
   firstKey: OnboardingKey;
@@ -111,6 +123,10 @@ function isAuthorizedForOwner(auth: AuthContext, owner: string): boolean {
   return auth.ownerScopes.includes(owner);
 }
 
+function isNetwork(value: unknown): value is OnboardingNetwork {
+  return value === 'testnet' || value === 'mainnet';
+}
+
 function parseBody(raw: unknown): OnboardingRequest | null {
   if (raw === null || typeof raw !== 'object') return null;
   const body = raw as Record<string, unknown>;
@@ -122,6 +138,10 @@ function parseBody(raw: unknown): OnboardingRequest | null {
   if (body.owner !== undefined) {
     if (typeof body.owner !== 'string' || body.owner.length === 0) return null;
     out.owner = body.owner;
+  }
+  if (body.network !== undefined) {
+    if (typeof body.network !== 'string') return null;
+    out.network = body.network as OnboardingNetwork;
   }
   return out;
 }
@@ -146,6 +166,7 @@ function errorResponse(
 async function provisionFirstWallet(
   _owner: string,
   _label: string | null,
+  _network: OnboardingNetwork,
   _idempotencyKey: string,
 ): Promise<{ wallet: OnboardingWallet; replayed: boolean }> {
   // Placeholder provisioning seam. Real implementation creates the wallet and
@@ -202,6 +223,24 @@ export async function POST(
     );
   }
 
+  const network = body.network ?? 'testnet';
+  if (!isNetwork(network)) {
+    return errorResponse(
+      OnboardingErrorCode.INVALID_NETWORK,
+      'network must be "testnet" or "mainnet".',
+      400,
+      correlationId,
+    );
+  }
+  if (network === 'mainnet' && !isMainnetEnabled()) {
+    return errorResponse(
+      OnboardingErrorCode.NETWORK_DISABLED,
+      'Mainnet onboarding is not enabled.',
+      403,
+      correlationId,
+    );
+  }
+
   const owner = body.owner ?? auth.subject;
   if (!isAuthorizedForOwner(auth, owner)) {
     return errorResponse(
@@ -217,6 +256,7 @@ export async function POST(
     result = await provisionFirstWallet(
       owner,
       body.label ?? null,
+      network,
       idempotencyKey,
     );
   } catch {

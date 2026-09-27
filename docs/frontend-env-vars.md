@@ -128,8 +128,14 @@ These never reach the browser and are safe for secrets.
   client cannot bypass spending-limit policy by hitting the proxy directly.
   Error responses and logs redact sensitive values (backend URL, keys,
   `Authorization` headers). See `docs/security-ux-guards.md` for the
-  guard/UX rationale and `tests/e2e/` for the misconfiguration and auth
+  guard/UX rationale, `src/lib/api/config.test.ts` for `MUX_BACKEND_URL`
+  parsing unit tests, and `tests/e2e/` for the misconfiguration and auth
   negative coverage.
+- **`MUX_MAINNET_ENABLED`** — server-only kill-switch for mainnet wallet
+  onboarding. `/api/wallets` rejects `network: "mainnet"` with `403
+  ONBOARDING_NETWORK_DISABLED` unless this is exactly `true`; `network`
+  defaults to `testnet` and any other value returns `400
+  ONBOARDING_INVALID_NETWORK`. Covered by `src/app/api/wallets/route.test.ts`.
 
 ### Implicit
 

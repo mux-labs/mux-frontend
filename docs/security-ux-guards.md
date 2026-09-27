@@ -3,7 +3,8 @@
 This document describes the security and UX guardrails that protect Mux
 Protocol users, wallets, and money-path operations. It is the canonical
 reference for contributors working on session handling, authz, and
-fail-closed behavior.
+fail-closed behavior. For user-facing wording of these guards see
+`docs/invisible-wallet-ui-copy-guide.md`.
 
 ## Session handling cookie parity
 

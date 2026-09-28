@@ -74,6 +74,16 @@ the browser bundle for every visitor to read — see #636. `ApiContext.tsx`
 constructs an unauthenticated client that talks to this app's own
 same-origin `/api/*` routes.
 
+- **`NEXT_PUBLIC_STELLAR_NETWORK`** — `testnet`, `futurenet`, or
+  `mainnet` (`public` is an alias). Used by the send-flow UI gate and as the
+  fallback for `MUX_STELLAR_NETWORK`. When it is `mainnet`, mock fallbacks
+  (e.g. `/api/activity`) are disabled.
+- **`NEXT_PUBLIC_SEND_FLOWS_ENABLED`**, **`NEXT_PUBLIC_SEND_KILL_SWITCH`**,
+  **`NEXT_PUBLIC_SEND_MAINNET_ENABLED`** — UI-only mirrors of the server
+  send flags below. They decide whether `SendFlowGate` renders the send
+  form; they **cannot** enable sending. See
+  [Feature-flagged send flows](security-ux-guards.md#feature-flagged-send-flows).
+
 ### Server-only
 
 These never reach the browser and are safe for secrets.
@@ -128,8 +138,33 @@ These never reach the browser and are safe for secrets.
   client cannot bypass spending-limit policy by hitting the proxy directly.
   Error responses and logs redact sensitive values (backend URL, keys,
   `Authorization` headers). See `docs/security-ux-guards.md` for the
-  guard/UX rationale and `tests/e2e/` for the misconfiguration and auth
+  guard/UX rationale, `src/lib/api/config.test.ts` for `MUX_BACKEND_URL`
+  parsing unit tests, and `tests/e2e/` for the misconfiguration and auth
   negative coverage.
+- **`MUX_MAINNET_ENABLED`** — server-only kill-switch for mainnet wallet
+  onboarding. `/api/wallets` rejects `network: "mainnet"` with `403
+  ONBOARDING_NETWORK_DISABLED` unless this is exactly `true`; `network`
+  defaults to `testnet` and any other value returns `400
+  ONBOARDING_INVALID_NETWORK`. Covered by `src/app/api/wallets/route.test.ts`.
+
+- **`MUX_SEND_FLOWS_ENABLED`** — server-authoritative opt-in for
+  `POST /api/transactions/send`. Only `true`/`1` enables; unset means sends
+  are refused with `403 SEND_DISABLED`.
+- **`MUX_SEND_KILL_SWITCH`** — overrides every other send flag. Unset,
+  `false`, or `0` means off; **any other value engages it** (fail closed).
+  Engaged → `503 SEND_KILL_SWITCH_ENGAGED`.
+- **`MUX_SEND_MAINNET_ENABLED`** — second opt-in required before sends are
+  allowed when the network is mainnet.
+- **`MUX_STELLAR_NETWORK`** — server-side network (`testnet`/`futurenet`/
+  `mainnet`); falls back to `NEXT_PUBLIC_STELLAR_NETWORK`. Blank counts as
+  unset. Unknown or unset → sends fail with
+  `503 SEND_NETWORK_MISCONFIGURED`.
+
+  `MUX_BACKEND_URL` (above) is also the first candidate used by
+  `/api/transactions/send` and `/api/activity`
+  (`getBackendBaseUrl()` in `src/lib/http/backend-url.ts`), followed by
+  the `NEXT_PUBLIC_API_URL` alias chain. A set-but-invalid (non-http(s))
+  value fails closed rather than falling through.
 
 ### Implicit
 

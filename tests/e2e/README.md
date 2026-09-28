@@ -35,6 +35,32 @@ npx playwright test --project=full
 npx playwright test
 ```
 
+## Rate limit, maintenance, send-flag, and audit pagination specs
+
+These specs run in the `full` project:
+
+- `tests/e2e/audit-log-pagination.spec.ts` — `/api/activity` authz and
+  validation, a full cursor walk with no duplicates, cursor replay
+  idempotency, and the `/dashboard/activity` UI with `page.route`-mocked
+  429 (gated retry, rows kept) and 503 maintenance (fixed copy, no server
+  text). The UI tests skip when the page is not reachable.
+- `tests/e2e/send-flow-flags.spec.ts` — `/api/transactions/send` is
+  deny-by-default under the dev server's default env (no `MUX_SEND_*`
+  flags): anonymous → 401, authenticated → flag refusal, and cookie-only
+  cross-origin → 403 (CSRF). Enabled-path behaviour is covered by the unit
+  tests in `src/app/api/transactions/send/route.test.ts`.
+
+Assertion pattern for the gated retry:
+
+```ts
+await expect(page.getByTestId("rate-limit-notice")).toBeVisible();
+await expect(page.getByTestId("rate-limit-retry")).toBeDisabled();
+await expect(page.getByTestId("maintenance-notice")).toHaveAttribute(
+  "data-code",
+  "MAINTENANCE",
+);
+```
+
 ## Recovery timeline component tests
 
 The recovery timeline component renders the ordered set of recovery steps for a

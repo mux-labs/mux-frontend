@@ -191,3 +191,24 @@ the keyboard:
 See [`docs/security-ux-guards.md`](docs/security-ux-guards.md) for the
 security/UX invariants and `tests/e2e/` for the end-to-end coverage of the
 spending-limits flow.
+
+## Rate limits, maintenance, and feature-flagged sends
+
+- **429 Retry-After UX:** reads auto-retry briefly and writes never do. The
+  UI shows a countdown and gates the retry control on `Retry-After`. See
+  [docs/security-ux-guards.md#429-retry-after-ux](docs/security-ux-guards.md#429-retry-after-ux).
+- **Maintenance 503 UX:** planned maintenance (`x-mux-maintenance: true`)
+  and dependency outages both keep writes disabled, and the UI shows fixed
+  copy (never server text). See
+  [docs/security-ux-guards.md#maintenance-503-ux](docs/security-ux-guards.md#maintenance-503-ux).
+- **Feature-flagged send flows:** `POST /api/transactions/send` is off
+  unless `MUX_SEND_FLOWS_ENABLED=true`. `MUX_SEND_KILL_SWITCH` overrides
+  everything, and mainnet needs `MUX_SEND_MAINNET_ENABLED=true`. See
+  [docs/security-ux-guards.md#feature-flagged-send-flows](docs/security-ux-guards.md#feature-flagged-send-flows)
+  and [docs/frontend-env-vars.md](docs/frontend-env-vars.md).
+- **Audit log pagination:** `GET /api/activity` uses opaque, filter-bound
+  keyset cursors. See
+  [docs/team-access-and-audit-log.md#audit-log-pagination](docs/team-access-and-audit-log.md#audit-log-pagination).
+
+E2E coverage: `tests/e2e/send-flow-flags.spec.ts` and
+`tests/e2e/audit-log-pagination.spec.ts`.

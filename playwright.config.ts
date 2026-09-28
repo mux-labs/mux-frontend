@@ -41,7 +41,9 @@ export default defineConfig({
 	},
 	use: {
 		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
-		trace: "on-first-retry",
+		// Keep traces for every failed test on CI so the uploaded artifact
+		// is useful even when the retry passes; locally only on first retry.
+		trace: process.env.CI ? "retain-on-failure" : "on-first-retry",
 		screenshot: "only-on-failure",
 		video: "retain-on-failure",
 	},
@@ -80,5 +82,18 @@ export default defineConfig({
 			name: "full-mobile",
 			use: { ...devices["Pixel 7"] },
 		},
+		// Optional visual regression tier (issue #840). Opt-in only via
+		// `VISUAL_REGRESSION=1` (see `pnpm run test:visual`) so screenshot
+		// baselines never gate the smoke/full tiers.
+		...(process.env.VISUAL_REGRESSION === "1"
+			? [
+					{
+						name: "visual",
+						testDir: "./tests/visual",
+						testMatch: "**/*.visual.ts",
+						use: { ...devices["Desktop Chrome"] },
+					},
+				]
+			: []),
 	],
 });

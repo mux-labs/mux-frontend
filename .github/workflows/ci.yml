@@ -115,6 +115,19 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ""
 
+      # Upload Playwright traces, screenshots and the HTML report when the run
+      # fails. Open traces locally with `pnpm exec playwright show-trace <zip>`.
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-smoke
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   # Full suite: every spec under tests/e2e. Runs on the nightly schedule and on
   # demand, but is not a required PR check so it can't block unrelated work.
   e2e-full:
@@ -172,6 +185,19 @@ jobs:
       - name: Run full coverage config
         run: pnpm exec vitest run --config vitest.coverage.full.config.ts --coverage
 
+      # Upload Playwright traces, screenshots and the HTML report when the run
+      # fails. Open traces locally with `pnpm exec playwright show-trace <zip>`.
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces-full
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
+
   build:
     name: Build (${{ matrix.network }})
     needs: [typecheck, unit-tests]
@@ -212,3 +238,8 @@ jobs:
         run: pnpm run build
         env:
           NEXT_PUBLIC_API_URL: ${{ matrix.api_url }}
+
+      # Bundle budget (issue #841): fails when client JS exceeds the gzip
+      # budgets in scripts/check-bundle-budget.mjs.
+      - name: Bundle budget
+        run: pnpm run analyze:bundle

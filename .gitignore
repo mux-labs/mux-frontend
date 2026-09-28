@@ -28,3 +28,6 @@ yarn-error.log*
 # Format (when used): plain UTF-8 text, first line = commit subject, blank line,
 # then the body. Do not commit it and do not put secrets or tokens in it.
 .git_msg
+
+# pnpm content-addressable store (never commit)
+.pnpm-store/

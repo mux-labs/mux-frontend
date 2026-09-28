@@ -191,3 +191,33 @@ the keyboard:
 See [`docs/security-ux-guards.md`](docs/security-ux-guards.md) for the
 security/UX invariants and `tests/e2e/` for the end-to-end coverage of the
 spending-limits flow.
+
+## Quality gates
+
+| Command | Purpose |
+| --- | --- |
+| `pnpm run lint` | ESLint, including `jsx-a11y` rules for interactive elements (keyboard handlers, focusability, roles). |
+| `pnpm run typecheck:unused` | Type-check with `noUnusedLocals` / `noUnusedParameters` (`tsconfig.unused.json`). Opt-in until existing unused code is cleaned up. |
+| `pnpm run analyze:bundle` | After `pnpm run build`, prints the largest client chunks and fails if gzip size exceeds `BUNDLE_BUDGET_TOTAL_KB` (default 1500) or `BUNDLE_BUDGET_CHUNK_KB` (default 350). Runs in CI after the build. |
+| `pnpm run test:visual` | Optional Playwright screenshot comparison (`tests/visual/`). Never part of the smoke/full tiers; refresh baselines with `pnpm run test:visual:update`. |
+
+## Rate limits, maintenance, and feature-flagged sends
+
+- **429 Retry-After UX:** reads auto-retry briefly and writes never do. The
+  UI shows a countdown and gates the retry control on `Retry-After`. See
+  [docs/security-ux-guards.md#429-retry-after-ux](docs/security-ux-guards.md#429-retry-after-ux).
+- **Maintenance 503 UX:** planned maintenance (`x-mux-maintenance: true`)
+  and dependency outages both keep writes disabled, and the UI shows fixed
+  copy (never server text). See
+  [docs/security-ux-guards.md#maintenance-503-ux](docs/security-ux-guards.md#maintenance-503-ux).
+- **Feature-flagged send flows:** `POST /api/transactions/send` is off
+  unless `MUX_SEND_FLOWS_ENABLED=true`. `MUX_SEND_KILL_SWITCH` overrides
+  everything, and mainnet needs `MUX_SEND_MAINNET_ENABLED=true`. See
+  [docs/security-ux-guards.md#feature-flagged-send-flows](docs/security-ux-guards.md#feature-flagged-send-flows)
+  and [docs/frontend-env-vars.md](docs/frontend-env-vars.md).
+- **Audit log pagination:** `GET /api/activity` uses opaque, filter-bound
+  keyset cursors. See
+  [docs/team-access-and-audit-log.md#audit-log-pagination](docs/team-access-and-audit-log.md#audit-log-pagination).
+
+E2E coverage: `tests/e2e/send-flow-flags.spec.ts` and
+`tests/e2e/audit-log-pagination.spec.ts`.

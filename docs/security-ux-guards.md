@@ -3,7 +3,8 @@
 This document describes the security and UX guardrails that protect Mux
 Protocol users, wallets, and money-path operations. It is the canonical
 reference for contributors working on session handling, authz, and
-fail-closed behavior.
+fail-closed behavior. For user-facing wording of these guards see
+`docs/invisible-wallet-ui-copy-guide.md`.
 
 ## Session handling cookie parity
 
@@ -390,3 +391,250 @@ Automated coverage for these invariants lives in `tests/e2e/` (including
 
 See `README.md` and `tests/e2e/` for how to run the suite.
 
+
+## Login logging, faucet gating, balance refresh, and dark-mode contrast
+
+- `/api/auth/login` (`src/app/api/auth/login/route.ts`) never logs request
+  bodies, passwords, tokens, or cookies. Logs carry only the correlation id,
+  a stable `AUTH_LOGIN_*` error code, and a masked email. Upstream failures
+  fail closed with `AUTH_LOGIN_UPSTREAM_UNAVAILABLE` and no session cookie.
+- The faucet CTA is gated by `shouldShowFaucet` (`src/utils/faucet.ts`): it is
+  hidden on mainnet and on unknown/missing networks. Set
+  `NEXT_PUBLIC_FAUCET_ENABLED=false` as a kill switch on every network.
+- Balances refresh via `useBalanceRefresh` (`src/utils/balance-refresh.ts`),
+  which keeps the last known balance visible while refreshing or on failure
+  and drops out-of-order responses.
+- Dark-mode text/background pairs live in `src/utils/contrast.ts` and are
+  asserted to meet WCAG AA (4.5:1) by `src/utils/contrast.test.ts`. Add new
+  dark-mode color pairs there.
+
+## Network badge contrast (#826)
+
+`src/components/NetworkBadge.tsx` renders the active network with color pairs
+that meet WCAG 2.1 AA (>= 4.5:1). The network is always stated in text, never
+by color alone, and an unrecognized network fails closed to an "Unknown
+network" warning style so mainnet/testnet misconfiguration is visible.
+
+## Disable CTAs while in-flight (#828)
+
+Money-path buttons use `useInFlightAction` (`src/utils/in-flight-action.ts`).
+While a request is pending the CTA is `disabled` and `aria-busy`, and repeat
+invocations are dropped by a ref guard so a double-click cannot submit twice.
+This complements (not replaces) server-side idempotency keys.
+
+## Limits validation mirrors server (#832)
+
+`validateLimits` (`src/utils/limits-validation.ts`) mirrors server rules:
+required, numeric, non-negative, <= 7 decimals (stroops), <= int64 stroops,
+`perTransaction <= daily <= monthly`, and unknown keys denied. Errors use
+stable `LIMIT_*` codes. The server remains the source of truth; client
+validation only gives earlier feedback.
+
+## todayUsage refresh without stampede (#833)
+
+`createTodayUsageRefresher` (`src/utils/today-usage-refresh.ts`) collapses
+concurrent refreshes into one in-flight request per key, serves fresh values
+from a short TTL cache, never caches failures as success
+(`USAGE_DEPENDENCY_UNAVAILABLE` with a correlation id), and rate-limits retries
+after failure (`USAGE_RATE_LIMITED`). An optional `onMetric` hook reports
+hit/miss/shared/error counts without logging key material.
+
+**Rollback:** each change is additive and unused by existing flows until wired
+in; reverting the commit removes it with no data migration.
+
+## CSRF strategy
+
+The session cookie is HttpOnly + `SameSite=Lax`, which blocks most cross-site
+writes but not all (e.g. top-level navigations, same-site subdomains). All
+state-changing requests therefore use a **double-submit cookie** defined in
+`src/lib/csrf.ts`:
+
+- The server issues a non-HttpOnly `mux_csrf` cookie alongside the session.
+- The client sends the same value in the `x-csrf-token` header for every
+  non-`GET`/`HEAD`/`OPTIONS` request (`withCsrf()`).
+- The server calls `verifyCsrf()` before any write and fails closed with
+  `CSRF_MISSING` (no cookie/header) or `CSRF_MISMATCH` (values differ). Tokens
+  are compared in constant time and never logged.
+- Rollback: removing the `verifyCsrf()` call restores the previous behavior; no
+  data migration is required.
+
+## Optimistic UI
+
+Optimistic updates are allowed **only** for idempotent mutations
+(`src/lib/optimistic.ts`):
+
+- A mutation may render optimistically only when it carries an idempotency key.
+- Money-path writes (spends, recovery, admin) are never optimistic; the UI
+  waits for the server result.
+- On failure the previous state is restored and the error surfaced; a failed
+  write is never displayed as success.
+
+## Revoked API keys
+
+Revoked API keys must be visually distinct from active keys
+(`src/components/ApiKeyStatusBadge.tsx`): muted and struck-through, marked
+`aria-disabled`, and labelled with a "Revoked" badge so the state does not rely
+on color alone. Only masked key prefixes are rendered, never raw key material.
+
+## Storybook theme tokens
+
+Storybook backgrounds are sourced from `src/theme/tokens.ts`, the single source
+of truth for light/dark palette values, so stories match production styling.
+
+## 429 Retry-After UX
+
+Issue #801. Rate limits are enforced by the server; the client's job is to
+respect them without hammering the endpoint or losing work. Implementation:
+`src/lib/http/retry-after.ts`, `src/components/RateLimitNotice.tsx`,
+`src/hooks/useRetryCountdown.ts`.
+
+### Invariants
+
+- **Parsing.** `Retry-After` is accepted as delta-seconds or an HTTP-date.
+  The resolved wait is clamped to **1 s – 5 min**. A missing or malformed
+  header falls back to **30 s**, never to "retry immediately", so a
+  misbehaving proxy cannot trigger a retry storm.
+- **Automatic retry is for idempotent reads only.** `fetchWithRetryAfter()`
+  retries `GET`/`HEAD`/`OPTIONS` at most 3 attempts in total, and only when
+  the server asks for ≤ 10 s. Longer waits are surfaced to the user.
+- **Writes are never auto-retried.** Spends, recovery, and admin actions
+  surface a `RATE_LIMITED` state; the user re-submits with the *same*
+  `Idempotency-Key`, so a retry cannot double-apply.
+- **Gated retry.** `RateLimitNotice` shows a countdown and keeps its Retry
+  control disabled until the wait has elapsed. The countdown is recomputed
+  from the wall clock (not decremented), so throttled background tabs never
+  enable retry early.
+- **Our own limits.** `/api/transactions/send` (10/min) and `/api/activity`
+  (60/min) apply per-instance griefing guards keyed by a SHA-256 of the
+  caller credential + IP (`src/lib/http/rate-limiter.ts`). The backend's
+  limits remain authoritative; upstream 429s are passed through with a
+  clamped `Retry-After`.
+
+### Observability
+
+- The `onMetric` hook emits `{ name: "http.rate_limited", method, path,
+  retryAfterMs, autoRetried, correlationId }`. `path` is the pathname only:
+  query strings can carry cursors or tokens and are never included.
+- The notice renders the correlation id as a support reference. Correlation
+  ids from headers are only displayed when they match
+  `^[A-Za-z0-9._:-]{1,128}$` (`src/lib/http/correlation.ts`).
+
+## Maintenance 503 UX
+
+Issue #802. A `503` is either planned maintenance or an unplanned
+dependency outage (RPC/DB/Horizon). Implementation:
+`src/lib/http/maintenance.ts`, `src/components/MaintenanceNotice.tsx`.
+
+### Invariants
+
+- **Signal.** Maintenance is `x-mux-maintenance: true` (or `1`) or a JSON
+  body `{ "error": { "code": "MAINTENANCE" } }`. Every other `503` is
+  classified `DEPENDENCY_UNAVAILABLE`. Neither is ever treated as success
+  or satisfied from a cache.
+- **Writes stay disabled** for both codes until a later request succeeds.
+  Pages must not render privileged actions while the notice is shown.
+- **Fixed copy only.** The notice never renders server-provided text, so a
+  spoofed or proxied 503 cannot inject phishing copy or links.
+- **Retry-After** is clamped exactly as for 429s, and "Check again" stays
+  disabled until it elapses.
+- **Proxy routes preserve the signal.** `/api/transactions/send` and
+  `/api/activity` re-emit `x-mux-maintenance: true` and a clamped
+  `Retry-After` when the backend is in maintenance, and map every other
+  upstream 5xx to their stable unavailable codes (`SEND_BACKEND_UNAVAILABLE`,
+  `backend_unavailable`).
+
+## Feature-flagged send flows
+
+Issue #803. Send is a money path, so it is deny-by-default and guarded by a
+kill switch. Implementation: `src/lib/feature-flags/send-flows.ts`,
+`src/lib/send/send-request.ts`, `src/app/api/transactions/send/route.ts`,
+`src/components/SendFlowGate.tsx`.
+
+### Flags
+
+| Server (authoritative) | Client (UI only) | Semantics |
+| --- | --- | --- |
+| `MUX_SEND_FLOWS_ENABLED` | `NEXT_PUBLIC_SEND_FLOWS_ENABLED` | Opt-in. Only `true`/`1` enables. |
+| `MUX_SEND_KILL_SWITCH` | `NEXT_PUBLIC_SEND_KILL_SWITCH` | Wins over everything. Unset/`false`/`0` is off; **any other value engages it** (fail closed on typos). |
+| `MUX_SEND_MAINNET_ENABLED` | `NEXT_PUBLIC_SEND_MAINNET_ENABLED` | Second opt-in required on mainnet. |
+| `MUX_STELLAR_NETWORK` → `NEXT_PUBLIC_STELLAR_NETWORK` | `NEXT_PUBLIC_STELLAR_NETWORK` | Must be `testnet`, `futurenet`, or `mainnet`/`public`. Anything else is `SEND_NETWORK_MISCONFIGURED`. Blank values count as unset. |
+
+Client flags only decide whether `SendFlowGate` renders the send UI. The
+route reads **only** the server flags on every request, so flipping a
+client flag (or sending hint headers) cannot bypass the gate.
+
+### Entrypoint: `POST /api/transactions/send`
+
+Checks run in this order, and each one fails closed before the next:
+
+1. Credential present (`Authorization: Bearer|ApiKey`, `x-api-key`, or the
+   `mux_session` cookie) → else `401 SEND_UNAUTHORIZED`.
+2. CSRF: a cookie-only request must carry a same-origin `Origin` → else
+   `403 SEND_FORBIDDEN`.
+3. Per-caller rate limit → `429 SEND_RATE_LIMITED` + `Retry-After`.
+4. Server flag gate → `503 SEND_KILL_SWITCH_ENGAGED`,
+   `403 SEND_DISABLED`, `503 SEND_NETWORK_MISCONFIGURED`,
+   `403 SEND_MAINNET_NOT_ENABLED`.
+5. `Idempotency-Key` (16–128 URL-safe chars) → else
+   `400 SEND_IDEMPOTENCY_KEY_REQUIRED`.
+6. Body ≤ 4 KiB, strict schema, no unknown keys → else
+   `413`/`400 SEND_INVALID_INPUT`. Amounts are positive decimal strings with
+   ≤ 7 fractional digits, and never JS numbers.
+7. `body.network` must equal the configured network → else
+   `400 SEND_NETWORK_MISMATCH` (a mainnet send is never satisfied by
+   testnet config, and vice versa).
+8. Backend configured → else `503 SEND_BACKEND_UNAVAILABLE`. **Sends are
+   never mocked, including in local dev.**
+9. A concurrent duplicate (same caller + key) on this instance →
+   `409 SEND_REQUEST_IN_PROGRESS`. Sequential replays are forwarded so the
+   backend returns the original outcome.
+
+The route forwards the credential, `Idempotency-Key`, and correlation id to
+`${backend}/transactions`. The backend decides authorization, and its
+verdict is mapped to stable codes: `SEND_AUTH_EXPIRED`,
+`SEND_UNAUTHORIZED`, `SEND_DELEGATE_REVOKED`, `SEND_FORBIDDEN`,
+`SEND_IDEMPOTENCY_CONFLICT`, `SEND_INVALID_INPUT`, `SEND_RATE_LIMITED`,
+`SEND_MAINTENANCE`, and `SEND_BACKEND_UNAVAILABLE`. An unrecognised status or
+a non-JSON 2xx is `502 SEND_UPSTREAM_ERROR` ("check activity before
+retrying"), never a success. Upstream message text is never echoed.
+
+### Observability
+
+Each request logs `{ event: "send.request", correlationId, code, status,
+network }`. Credentials, addresses, amounts, memos, and idempotency keys
+are never logged. Alert on the `SEND_*` code distribution. A spike in
+`SEND_UPSTREAM_ERROR` or `SEND_BACKEND_UNAVAILABLE` warrants engaging the
+kill switch.
+
+### Rollout and rollback
+
+- Ship with every flag unset, which leaves sends disabled. Enable on testnet
+  (`MUX_SEND_FLOWS_ENABLED=true`, `MUX_STELLAR_NETWORK=testnet`), then on
+  mainnet by also setting `MUX_SEND_MAINNET_ENABLED=true` after the mainnet
+  readiness checklist.
+- **Rollback:** set `MUX_SEND_KILL_SWITCH=true` or unset
+  `MUX_SEND_FLOWS_ENABLED`. The route reads flags on every request, so the
+  change applies as soon as the server process sees the new environment
+  (on most hosts, the next restart/redeploy). Also flip the matching
+  `NEXT_PUBLIC_*` flag so the UI hides the form. No data migration is
+  involved.
+
+### Tests
+
+- Unit: `src/lib/**/*.test.ts`, `src/app/api/transactions/send/route.test.ts`,
+  `src/app/api/activity/route.test.ts`, `src/components/*.test.tsx`
+  (authz negatives, flag/kill-switch matrix, idempotency, fail-closed
+  mapping, log redaction).
+- E2E: `tests/e2e/send-flow-flags.spec.ts`,
+  `tests/e2e/audit-log-pagination.spec.ts`.
+
+Coverage for these invariants lives in `tests/e2e/` (including
+`tests/e2e/real-backend/`). Required cases:
+
+- cookie parity: login set attributes match logout clear attributes
+- auth negatives: expired session, tampered cookie, revoked delegate
+- idempotency: replayed request does not double-execute
+- notifications: list renders, mark-as-read and clear-all are idempotent,
+  and the empty state is shown and announced when there are none
+
+See `README.md` and `tests/e2e/` for how to run the suite.

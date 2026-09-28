@@ -1,5 +1,6 @@
 import { Meta, StoryObj } from '@storybook/react';
 import { ComponentStory } from '@storybook/react';
+import { criticalComponentFixtures } from '../src/mocks/wallet-fixtures';
 
 interface CriticalComponent {
   id: string;
@@ -26,11 +27,8 @@ const CriticalComponentStories: Meta<CriticalComponent> = {
 
 export const WalletComponent: ComponentStory<CriticalComponent> = {
   args: {
-    id: 'wallet-001',
-    name: 'ConnectWallet',
-    status: 'critical',
+    ...criticalComponentFixtures[0],
     lastModified: '2026-09-26',
-    type: 'wallet',
   },
   render: (args) => (
     <div className="p-4 border border-red-500 rounded-lg">
@@ -42,11 +40,8 @@ export const WalletComponent: ComponentStory<CriticalComponent> = {
 
 export const TransactionComponent: ComponentStory<CriticalComponent> = {
   args: {
-    id: 'tx-001',
-    name: 'ProcessTransaction',
-    status: 'critical',
+    ...criticalComponentFixtures[1],
     lastModified: '2026-09-26',
-    type: 'transaction',
   },
   render: (args) => (
     <div className="p-4 border border-red-500 rounded-lg">
@@ -58,11 +53,8 @@ export const TransactionComponent: ComponentStory<CriticalComponent> = {
 
 export const AuthComponent: ComponentStory<CriticalComponent> = {
   args: {
-    id: 'auth-001',
-    name: 'JWTVerification',
-    status: 'critical',
+    ...criticalComponentFixtures[2],
     lastModified: '2026-09-26',
-    type: 'auth',
   },
   render: (args) => (
     <div className="p-4 border border-red-500 rounded-lg">
@@ -74,11 +66,8 @@ export const AuthComponent: ComponentStory<CriticalComponent> = {
 
 export const PaymentComponent: ComponentStory<CriticalComponent> = {
   args: {
-    id: 'pay-001',
-    name: 'ProcessPayment',
-    status: 'warning',
+    ...criticalComponentFixtures[3],
     lastModified: '2026-09-26',
-    type: 'payment',
   },
   render: (args) => (
     <div className="p-4 border border-yellow-500 rounded-lg">

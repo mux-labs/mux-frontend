@@ -43,19 +43,21 @@ emails, JWTs, API keys, or other secrets.
 
 ## Activity / audit log
 
-`GET /api/activity` previously fell back to a mock-transaction heuristic
-regardless of `NODE_ENV`, unlike `/api/wallets` and friends. It now follows
-the same production gate as the rest of the app: with a backend configured,
-it proxies to the backend's real event/activity feed; with no backend and
-`NODE_ENV=production`, it returns `503 backend_unavailable` instead of mock
-data; only outside production does it fall back to mock data, which it now
-also appends to an in-memory append-only store (`src/lib/audit/log.ts`) as a
-placeholder shape for the real immutable audit log the backend should serve.
+`GET /api/activity` (`src/app/api/activity/route.ts`) follows the same
+production gate as the rest of the app: with a backend configured
+(`MUX_BACKEND_URL`, then the `NEXT_PUBLIC_API_URL` alias chain), it proxies
+to the backend's real event/activity feed; with no backend and
+`NODE_ENV=production` or a mainnet network, it returns
+`503 backend_unavailable` instead of mock data; only outside production does
+it serve a deterministic fixture (`src/lib/audit/mock-entries.ts`) so local
+dev and CI exercise the same pagination semantics. The gate is
+`isMockFallbackAllowed()` in `src/lib/http/backend-url.ts`. The UI lives at
+`/dashboard/activity` (`src/components/AuditLogPagination.tsx`).
 
 ### Audit log filters
 
 `GET /api/activity` accepts the following query parameters. They are parsed
-and validated by `parseAuditLogFilters()` in `src/lib/audit/filters.ts` and
+and validated by `parseAuditPageParams()` in `src/lib/audit/pagination.ts` and
 forwarded verbatim to the backend when one is configured; the mock fallback
 applies the same filters in-memory so local dev/CI matches production
 semantics.
@@ -78,7 +80,9 @@ error code rather than silently returning unfiltered data:
   this endpoint.
 - `401 unauthorized` — no valid session/JWT.
 - `403 forbidden` — the caller's role may not read the audit log (only
-  `admin`; `developer` is denied by default).
+  `admin`; `developer` is denied by default). The backend decides the role;
+  the route never trusts client-supplied role headers.
+- `429 rate_limited` — too many requests; honour the `Retry-After` header.
 - `503 backend_unavailable` — backend/RPC outage; reads never fall back to
   mock data in production.
 
@@ -101,3 +105,55 @@ networks in one response. When `NEXT_PUBLIC_STELLAR_NETWORK` (or the backend's
 network config) is `mainnet`, the mock fallback is disabled entirely, so a
 misconfigured mainnet deploy fails closed with `503 backend_unavailable`
 rather than serving testnet-shaped mock events.
+
+### Audit log pagination
+
+Issue #804. Pagination is **keyset (cursor) based**, ordered by
+`(createdAt desc, id desc)`. Implementation: `src/lib/audit/pagination.ts`
+(server + shared), `src/lib/audit/pagination-state.ts` and
+`src/hooks/useAuditLogPagination.ts` (client).
+
+Response shape:
+
+```json
+{ "items": [AuditEntry], "nextCursor": "opaque" | null, "hasMore": true, "correlationId": "…" }
+```
+
+Invariants:
+
+- **No duplicates, no skips.** A cursor names the last row served, not an
+  offset, so entries written while a user is paging never shift a page.
+  Timestamp ties are broken by `id`.
+- **Idempotent reads.** Replaying the same query + cursor returns the same
+  page. The client retries a failed page with the *same* cursor.
+- **Cursors are opaque and bound to their filters.** A cursor issued for one
+  filter set is rejected with `400 invalid_cursor` when replayed with
+  different filters, so a cursor can never widen a query. Clients must treat
+  cursors as opaque (≤ 512 URL-safe characters) and never construct them.
+- **Adversarial input fails closed.** `limit` must be `1`–`100`; duplicated
+  parameters (`?limit=1&limit=100`), inverted ranges, and ranges longer than
+  366 days are `400 invalid_filter`; nothing is ever silently widened to an
+  unfiltered page.
+- **Upstream pages are validated.** A backend page that is malformed, larger
+  than the requested `limit`, or contains duplicate ids is treated as an
+  outage (`503 backend_unavailable`) rather than passed through, because a
+  partial page could hide activity.
+- **Rate limiting.** The route applies a per-caller griefing guard (60
+  requests/min per credential + IP hash, per instance) on top of the
+  backend's authoritative limits. 429s carry `Retry-After`; the UI shows a
+  countdown and keeps already-loaded rows (see
+  [429 Retry-After UX](security-ux-guards.md#429-retry-after-ux)).
+- **Maintenance/outage.** 503s render the fixed-copy maintenance notice
+  and keep loaded rows (see
+  [Maintenance 503 UX](security-ux-guards.md#maintenance-503-ux)).
+- **Client state.** Changing filters starts a new generation; late
+  responses for old filters are dropped. Only one page request is in flight
+  at a time, and appended rows are de-duplicated by id. On `invalid_cursor`
+  the UI offers "Start over" rather than guessing a new position.
+- **Observability.** Each response logs `{ event: "audit.page",
+  correlationId, code, status, filterKeys, count }` — filter *keys* only,
+  never values, credentials, or cursors.
+
+Rollback: the route and page are read-only and additive. Reverting the PR
+removes `/api/activity` and `/dashboard/activity`; no data migration is
+involved.

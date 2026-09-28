@@ -29,11 +29,20 @@ export function readRealBackendEnv(): RealBackendEnv | null {
 	const email = process.env.E2E_TEST_EMAIL?.trim();
 	const password = process.env.E2E_TEST_PASSWORD?.trim();
 
-	if (!apiUrl || !email || !password) {
+	if (!apiUrl || !email || !password || !isHttpOrigin(apiUrl)) {
 		return null;
 	}
 
 	return { apiUrl, email, password };
+}
+
+function isHttpOrigin(value: string): boolean {
+	try {
+		const { protocol } = new URL(value);
+		return protocol === "http:" || protocol === "https:";
+	} catch {
+		return false;
+	}
 }
 
 export const REAL_BACKEND_SKIP_REASON =

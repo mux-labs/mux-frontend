@@ -26,6 +26,19 @@ asserts `productionBrowserSourceMaps` is `false`, so the guarantee cannot
 regress unnoticed. See [`docs/security-ux-guards.md`](docs/security-ux-guards.md)
 for the broader security/UX invariants and `tests/e2e/` for end-to-end coverage.
 
+## Toolchain and CI docs
+
+- [`docs/node-engine.md`](docs/node-engine.md) — Node.js version policy
+  (`engines.node`, enforced at install time; never below Node 18).
+- [`docs/deterministic-css-build.md`](docs/deterministic-css-build.md) —
+  invariants that keep the Tailwind/PostCSS output byte-identical.
+- [`docs/e2e-real-backend-testing.md`](docs/e2e-real-backend-testing.md#secrets-handling)
+  — real-backend e2e variables and secrets handling.
+
+All three are guarded by `tests/ci-workflow.test.ts` and
+`tests/e2e-real-backend.config.test.ts`, which run in the required
+`Unit tests (Vitest)` CI job.
+
 ## Error boundary behaviors
 
 Wallet, account-abstraction, and payment surfaces are wrapped in a typed **error

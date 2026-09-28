@@ -35,8 +35,9 @@ tests/e2e/                 # shared harness + fixtures
 tests/e2e/real-backend/    # specs that require a live backend
 ```
 
-Specs in `tests/e2e/real-backend/` are gated behind the `REAL_BACKEND=1`
-environment flag so the default `tests/e2e/` run stays hermetic.
+Specs in `tests/e2e/real-backend/` run only through
+`playwright.real-backend.config.ts`, so the default `tests/e2e/` run stays
+hermetic.
 
 ## Running
 
@@ -44,14 +45,15 @@ environment flag so the default `tests/e2e/` run stays hermetic.
 # Hermetic suite (mocks) — always safe
 pnpm test:e2e
 
-# Real-backend suite — requires a reachable testnet backend
-REAL_BACKEND=1 \
-  MUX_RPC_URL="https://soroban-testnet.stellar.org" \
-  MUX_AUTH_URL="https://auth.testnet.mux.example" \
-  pnpm test:e2e:real-backend
+# Real-backend suite — requires a reachable testnet backend and a QA account
+NEXT_PUBLIC_API_URL="https://testnet-api.example.com" \
+  E2E_TEST_EMAIL="qa@example.com" \
+  E2E_TEST_PASSWORD="<from your secret store>" \
+  pnpm exec playwright test --config=playwright.real-backend.config.ts
 ```
 
-Required environment variables for the real-backend suite:
+See [Required environment variables](#required-environment-variables) and
+[Secrets handling](#secrets-handling) before wiring this into CI.
 
 ## Runbook: provisioning a real-backend environment
 
@@ -103,23 +105,70 @@ partially-configured backend.
 
 ## Required environment variables
 
-| Variable        | Purpose                                   |
-| --------------- | ----------------------------------------- |
-| `REAL_BACKEND`  | Must be `1` to enable the suite.          |
-| `MUX_RPC_URL`   | Soroban RPC endpoint (testnet by default).|
-| `MUX_AUTH_URL`  | Auth service base URL.                    |
-| `MUX_NETWORK`   | `testnet` (default) or `mainnet`.         |
+These are the only variables the real-backend suite reads
+(`playwright.real-backend.config.ts`, `tests/e2e/real-backend/helpers.ts`).
 
-If any required variable is missing the suite **skips with a clear message**
+| Variable                                 | Secret? | Purpose                                                                 |
+| ---------------------------------------- | ------- | ----------------------------------------------------------------------- |
+| `NEXT_PUBLIC_API_URL`                    | no      | Absolute `http(s)` URL of the real `mux-backend` (testnet by default).  |
+| `E2E_TEST_EMAIL`                         | low     | Login of the dedicated low-privilege QA account.                        |
+| `E2E_TEST_PASSWORD`                      | **yes** | Password of that account. CI secret store only.                         |
+| `PLAYWRIGHT_BASE_URL`                    | no      | Optional. Run against an already-deployed frontend instead of `next dev`. |
+| `E2E_REAL_BACKEND_ALLOW_MISSING_API_URL` | no      | Optional. `1` lets the config load without the vars above (listing specs only). |
+
+The config is **fail-closed**: it throws at load time if
+`NEXT_PUBLIC_API_URL`, `E2E_TEST_EMAIL`, or `E2E_TEST_PASSWORD` is missing,
+and the error names the missing variables but never their values. A
+non-`http(s)` API URL makes the specs skip with `REAL_BACKEND_SKIP_REASON`
 rather than falling back to mocks — a real-backend spec must never pass by
-accident against a stub.
+accident against a stub. Both behaviors are asserted in
+`tests/e2e-real-backend.config.test.ts`.
+
+## Secrets handling
+
+Invariants (issue #814):
+
+1. **Storage.** `E2E_TEST_PASSWORD` lives only in the CI secret store
+   (ideally a GitHub *environment* secret scoped to the testnet environment,
+   with required reviewers) or the operator's shell. Never in the repo, a
+   committed `.env*` file, an issue, a PR, or a chat message.
+2. **Never public.** No real-backend credential is ever put in a
+   `NEXT_PUBLIC_*` variable — those are inlined into the browser bundle.
+   `NEXT_PUBLIC_API_URL` is a URL, not a secret.
+3. **No plaintext artifacts.** Playwright traces record `fill()` values and
+   request bodies verbatim, so `playwright.real-backend.config.ts` sets
+   `trace: "off"` (asserted by the config test). Screenshots and videos only
+   show the masked password field. Do not re-enable traces for this config;
+   debug locally with a throwaway account instead.
+4. **No logging.** Specs never `console.log` credentials or tokens; use
+   `redactToken()` from `helpers.ts` if a token must appear in failure
+   output. GitHub masks registered secrets in logs, but anything derived from
+   them (e.g. a base64 of the password) must be masked with
+   `::add-mask::` before it is printed.
+5. **Least privilege.** The QA account has the minimum role needed for login
+   and wallet reads, holds no custody or mainnet funds, and is used by
+   nothing else.
+6. **Deny-by-default in CI.** Fork PRs do not receive secrets, so the suite
+   never runs for untrusted code; the scheduled/manual job is the only
+   consumer.
+
+### Rotation and incident response
+
+- Rotate `E2E_TEST_PASSWORD` on a fixed schedule and whenever someone with
+  access to the secret leaves the project.
+- If the password or a session token appears anywhere it should not (log,
+  artifact, PR), **revoke first**: reset the password and revoke the QA
+  account's sessions on the backend, then delete the artifact/log, then
+  update the CI secret. Record the correlation id of any affected run.
+- Rollback for this suite is always safe: unset the variables and the
+  config refuses to load, so no real backend is touched.
 
 ## Login critical path
 
 The real-backend login spec asserts the following invariants:
 
 1. **Challenge is server-issued.** The client never fabricates a nonce; it
-   requests one from `MUX_AUTH_URL` and echoes it back verbatim.
+   requests one from the backend auth service and echoes it back verbatim.
 2. **Signature is verified server-side.** A tampered or replayed signature is
    rejected with a stable error code (see below).
 3. **Session is fail-closed.** If the auth service or RPC is unreachable, the
@@ -157,8 +206,8 @@ and that a correlation id is present, never on free-form messages.
   or `AUTH_SESSION_REVOKED` respectively.
 - **Adversarial input.** Oversized or malformed payloads are rejected before
   reaching the backend.
-- **Testnet vs mainnet misconfig.** Mismatched `MUX_NETWORK` and endpoint
-  returns `AUTH_CONFIG_INVALID`.
+- **Testnet vs mainnet misconfig.** A backend that detects a network
+  mismatch returns `AUTH_CONFIG_INVALID`.
 
 ## Observability
 
@@ -169,9 +218,10 @@ and that a correlation id is present, never on free-form messages.
 
 ## Mainnet safety
 
-The real-backend suite defaults to **testnet**. Running against mainnet
-requires `MUX_NETWORK=mainnet` **and** an explicit opt-in flag; without both,
-`AUTH_CONFIG_INVALID` is returned and the run aborts. Any money-path or
+The real-backend suite targets **testnet**. Never point
+`NEXT_PUBLIC_API_URL` at mainnet or a production money-path deployment
+without an explicit readiness checklist sign-off (see
+`docs/security-ux-guards.md`). Any money-path or
 mainnet-affecting change must land behind a feature flag with a documented
 rollback in the PR description.
 

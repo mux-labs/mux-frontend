@@ -1,6 +1,6 @@
 import path from "path";
 import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 /**
  * Extended coverage config for the gap described in the "Expand Vitest
@@ -25,7 +25,9 @@ export default defineConfig({
 	test: {
 		environment: "jsdom",
 		globals: true,
-		setupFiles: ["./src/test/setup.tsx"],
+		setupFiles: ["./vitest.setup.ts"],
+		// Playwright specs run under `playwright test`, not Vitest.
+		exclude: [...configDefaults.exclude, "tests/e2e/**/*.spec.ts"],
 		coverage: {
 			provider: "v8",
 			reporter: ["text", "lcov", "html"],

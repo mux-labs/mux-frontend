@@ -6,7 +6,7 @@
 		"node": ">=22"
 	},
 	"scripts": {
-		"preinstall": "node ./scripts/verify-pnpm.js",
+		"preinstall": "node ./scripts/check-node-engine.mjs && node ./scripts/check-package-manager.mjs",
 		"dev": "next dev",
 		"build": "next build",
 		"analyze:bundle": "node scripts/check-bundle-budget.mjs",

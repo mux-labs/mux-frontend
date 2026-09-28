@@ -94,7 +94,10 @@ export default defineConfig({
 	},
 	use: {
 		baseURL: process.env.PLAYWRIGHT_BASE_URL ?? "http://localhost:3000",
-		trace: "on-first-retry",
+		// Traces record `fill()` values and request bodies in plain text, so
+		// they would capture E2E_TEST_PASSWORD. Keep them off for this suite
+		// (see "Secrets handling" in docs/e2e-real-backend-testing.md).
+		trace: "off",
 		screenshot: "only-on-failure",
 		video: "retain-on-failure",
 	},

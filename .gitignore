@@ -1,9 +1,17 @@
 # Dependencies
 node_modules/
 
-# Build output
+# Build output. Tailwind skips git-ignored paths during source detection,
+# so these must stay listed for a deterministic CSS build
+# (see docs/deterministic-css-build.md).
 build/
 dist/
+.next/
+out/
+coverage/
+storybook-static/
+playwright-report/
+test-results/
 
 # Environment
 .env

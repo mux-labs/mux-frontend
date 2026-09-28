@@ -81,7 +81,7 @@ provider-agnostic and does not add any SaaS dependency.
 
 ### Prerequisites
 
-- Node.js ≥ 18
+- Node.js ≥ 22 (see `engines` in `package.json` and [`node-engine.md`](./node-engine.md))
 - `npm install` (or `pnpm install` / `yarn`)
 
 ### Start the dev server

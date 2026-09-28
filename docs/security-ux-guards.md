@@ -392,6 +392,14 @@ Automated coverage for these invariants lives in `tests/e2e/` (including
 See `README.md` and `tests/e2e/` for how to run the suite.
 
 
+## Real-backend e2e secrets
+
+The real-backend Playwright suite authenticates with a real QA account, so
+its password is a production-grade secret: CI secret store only, never a
+`NEXT_PUBLIC_*` variable, never in traces (disabled for that config) or logs.
+The full policy, rotation, and incident runbook live in
+[`e2e-real-backend-testing.md`](./e2e-real-backend-testing.md#secrets-handling).
+
 ## Login logging, faucet gating, balance refresh, and dark-mode contrast
 
 - `/api/auth/login` (`src/app/api/auth/login/route.ts`) never logs request

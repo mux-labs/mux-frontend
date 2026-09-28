@@ -144,6 +144,34 @@ jobs:
         env:
           NEXT_PUBLIC_API_URL: ""
 
+  # Nightly full-coverage run: exercises the wider coverage surface defined in
+  # vitest.coverage.full.config.ts (recovery, login, transactions-table,
+  # middleware, api routes). Not a required PR gate — runs on schedule and
+  # workflow_dispatch only so it cannot block unrelated work.
+  coverage-full:
+    name: Coverage full config (Vitest)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          HUSKY: "0"
+
+      - name: Run full coverage config
+        run: pnpm exec vitest run --config vitest.coverage.full.config.ts --coverage
+
   build:
     name: Build (${{ matrix.network }})
     needs: [typecheck, unit-tests]

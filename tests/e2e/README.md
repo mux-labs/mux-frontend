@@ -3,6 +3,62 @@
 Playwright-based end-to-end coverage for mux-frontend critical paths (wallet,
 account abstraction, payments).
 
+## Contributor quickstart
+
+### Prerequisites
+
+- Node.js ≥ 22 and pnpm 9 (`corepack enable && corepack prepare pnpm@9 --activate`)
+- Chromium browser for Playwright (`pnpm exec playwright install --with-deps chromium`)
+
+### First-time setup
+
+```bash
+git clone <repo>
+cd mux-frontend
+pnpm install
+pnpm exec playwright install --with-deps chromium
+```
+
+No secrets are required for the default mock-backed suite. Copy `.env.example`
+to `.env.local` if you need to override `NEXT_PUBLIC_API_URL`; leave it empty
+to use the in-repo mock routes.
+
+### Running the suite
+
+```bash
+# Fast critical-path subset — required check on every PR
+pnpm run test:e2e:smoke
+
+# Full suite (all specs under tests/e2e/)
+pnpm run test:e2e:full
+
+# Interactive UI mode
+pnpm run test:e2e:ui
+```
+
+The dev server starts automatically via `webServer` in `playwright.config.ts`.
+If a server is already running on port 3000 it will be reused locally.
+
+### Real-backend suite
+
+Specs under `tests/e2e/real-backend/` run against a live Soroban/Horizon
+stack and require additional env vars. See `tests/e2e/real-backend/README.md`
+for the full runbook. Run the config guard first:
+
+```bash
+pnpm exec vitest run tests/e2e-real-backend.config.test.ts
+```
+
+### CI context
+
+| Job | Trigger | Blocking |
+| --- | --- | --- |
+| `e2e-smoke` | every PR / push | yes — required check |
+| `e2e-full` | nightly schedule + `workflow_dispatch` | no |
+| `coverage-full` | nightly schedule + `workflow_dispatch` | no |
+
+See `.github/workflows/ci.yml` for the full job definitions.
+
 ## Smoke vs full projects
 
 The suite is split into two Playwright projects so contributors and CI can run a

@@ -10,26 +10,37 @@
 export const BACKEND_NOT_CONFIGURED = "backend_not_configured" as const;
 
 /**
+ * Normalize a raw backend base URL string, returning `null` when invalid.
+ * Only `http:`/`https:` URLs without embedded credentials are accepted.
+ * The output uses lowercase origin + pathname with trailing slashes stripped.
+ */
+export function normalizeBackendUrl(raw: string): string | null {
+    const trimmed = raw.trim();
+    if (!trimmed) return null;
+
+    let url: URL;
+    try {
+        url = new URL(trimmed);
+    } catch {
+        return null;
+    }
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    if (url.username || url.password) return null;
+
+    return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+}
+
+/**
  * Resolve the normalized backend base URL (no trailing slash), or `null`
  * when unset/invalid. Only `http:`/`https:` URLs without embedded
  * credentials are accepted.
  */
 export function getBackendApiBaseUrl(
-	env: Record<string, string | undefined> = process.env,
+    env: Record<string, string | undefined> = process.env,
 ): string | null {
-	const raw = env.MUX_BACKEND_URL?.trim();
-	if (!raw) return null;
-
-	let url: URL;
-	try {
-		url = new URL(raw);
-	} catch {
-		return null;
-	}
-	if (url.protocol !== "http:" && url.protocol !== "https:") return null;
-	if (url.username || url.password) return null;
-
-	return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+    const raw = env.MUX_BACKEND_URL;
+    if (!raw) return null;
+    return normalizeBackendUrl(raw);
 }
 
 /**
@@ -38,13 +49,13 @@ export function getBackendApiBaseUrl(
  * callers cannot redirect the proxy to another host.
  */
 export function buildBackendUrl(
-	path: string,
-	env: Record<string, string | undefined> = process.env,
+    path: string,
+    env: Record<string, string | undefined> = process.env,
 ): string | null {
-	const base = getBackendApiBaseUrl(env);
-	if (!base) return null;
-	if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
-		return null;
-	}
-	return `${base}${path}`;
+    const base = getBackendApiBaseUrl(env);
+    if (!base) return null;
+    if (!path.startsWith("/") || path.startsWith("//") || path.includes("..")) {
+        return null;
+    }
+    return `${base}${path}`;
 }

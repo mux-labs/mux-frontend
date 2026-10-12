@@ -16,21 +16,36 @@ const TESTNET_ON: SendFlowFlags = {
 };
 
 describe("flag parsing", () => {
-	it("opt-in flags are deny-by-default", () => {
-		expect(parseOptInFlag(undefined)).toBe(false);
-		expect(parseOptInFlag("")).toBe(false);
-		expect(parseOptInFlag("yes")).toBe(false);
-		expect(parseOptInFlag("TRUE ")).toBe(true);
-		expect(parseOptInFlag("1")).toBe(true);
+	it("parseOptInFlag handles whitespace, casing, and deny-by-default values", () => {
+		const cases: Array<[string | undefined, boolean]> = [
+			[undefined, false],
+			["", false],
+			["TRUE ", true],
+			[" 1 ", true],
+			["yes", false],
+			["0", false],
+		];
+
+		for (const [value, expected] of cases) {
+			expect(parseOptInFlag(value)).toBe(expected);
+		}
 	});
 
-	it("kill switch fails closed on unrecognised values", () => {
-		expect(parseKillSwitch(undefined)).toBe(false);
-		expect(parseKillSwitch("")).toBe(false);
-		expect(parseKillSwitch("false")).toBe(false);
-		expect(parseKillSwitch("0")).toBe(false);
-		expect(parseKillSwitch("true")).toBe(true);
-		expect(parseKillSwitch("flase")).toBe(true);
+	it("parseKillSwitch handles defaults and fails closed on unrecognised values", () => {
+		const cases: Array<[string | undefined, boolean]> = [
+			[undefined, false],
+			["", false],
+			["false", false],
+			["FALSE ", false],
+			["0", false],
+			[" true ", true],
+			["off", true],
+			["typo", true],
+		];
+
+		for (const [value, expected] of cases) {
+			expect(parseKillSwitch(value)).toBe(expected);
+		}
 	});
 
 	it("network must be explicit", () => {

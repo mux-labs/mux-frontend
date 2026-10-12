@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 /** Returns an error message, or null when `userAgent` is pnpm's. */
 export function checkPackageManager(userAgent) {
 	const agent = String(userAgent || "");
-	if (agent.startsWith("pnpm/")) return null;
+	if (/^pnpm\/\d/.test(agent)) return null;
 	return `PACKAGE_MANAGER_UNSUPPORTED: this repository only supports pnpm (detected: ${agent.split("/")[0] || "unknown"}). Run: pnpm install`;
 }
 

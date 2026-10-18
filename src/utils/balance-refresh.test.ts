@@ -1,28 +1,51 @@
 import { describe, expect, it } from "vitest";
-import { balanceReducer, initialBalanceState } from "./balance-refresh";
+import {
+	balanceReducer,
+	initialBalanceState,
+	type BalanceAction,
+	type BalanceState,
+} from "./balance-refresh";
+
+const start = (requestId: number): BalanceAction => ({ type: "start", requestId });
+const success = (requestId: number, balance: number): BalanceAction => ({
+	type: "success",
+	requestId,
+	balance,
+});
+const failure = (requestId: number): BalanceAction => ({ type: "failure", requestId });
+
+const reduce = (actions: BalanceAction[], from: BalanceState = initialBalanceState) =>
+	actions.reduce(balanceReducer, from);
 
 describe("balanceReducer", () => {
-	const loaded = { ...initialBalanceState, balance: "100", requestId: 1 };
+	it("drops a stale success whose requestId does not match the current request", () => {
+		const state = reduce([start(1), start(2), success(1, 999)]);
 
-	it("keeps the previous balance while refreshing", () => {
-		const next = balanceReducer(loaded, { type: "start", requestId: 2 });
-		expect(next.balance).toBe("100");
-		expect(next.refreshing).toBe(true);
+		expect(state.balance).toBe(initialBalanceState.balance);
+		expect(state.refreshing).toBe(true);
 	});
 
-	it("drops stale responses", () => {
-		const refreshing = balanceReducer(loaded, { type: "start", requestId: 3 });
-		const stale = balanceReducer(refreshing, { type: "success", requestId: 2, balance: "1" });
-		expect(stale.balance).toBe("100");
-		const fresh = balanceReducer(stale, { type: "success", requestId: 3, balance: "250" });
-		expect(fresh.balance).toBe("250");
-		expect(fresh.refreshing).toBe(false);
+	it("applies a success for the current requestId", () => {
+		const state = reduce([start(1), success(1, 250)]);
+
+		expect(state.balance).toBe(250);
+		expect(state.refreshing).toBe(false);
+		expect(state.error).toBeNull();
 	});
 
-	it("keeps the last balance on failure", () => {
-		const refreshing = balanceReducer(loaded, { type: "start", requestId: 2 });
-		const failed = balanceReducer(refreshing, { type: "failure", requestId: 2, error: "BALANCE_REFRESH_FAILED" });
-		expect(failed.balance).toBe("100");
-		expect(failed.error).toBe("BALANCE_REFRESH_FAILED");
+	it("keeps the last known balance when the current request fails", () => {
+		const loaded = reduce([start(1), success(1, 250)]);
+		const state = reduce([start(2), failure(2)], loaded);
+
+		expect(state.balance).toBe(250);
+		expect(state.refreshing).toBe(false);
+		expect(state.error).toBe("BALANCE_REFRESH_FAILED");
+	});
+
+	it("returns the state unchanged for a stale failure", () => {
+		const loaded = reduce([start(1), success(1, 250)]);
+		const state = reduce([start(2), failure(1)], loaded);
+
+		expect(state).toBe(loaded);
 	});
 });

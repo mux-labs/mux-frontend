@@ -5,11 +5,22 @@ import React, { useState, useEffect, useCallback } from 'react';
 interface OfflineBannerProps {
   onRetry?: () => void;
   className?: string;
+  /** Force the offline state (useful for stories/tests). */
+  forceOffline?: boolean;
+  /** Force an error message to display (useful for stories/tests). */
+  forceError?: string | null;
 }
 
-export function OfflineBanner({ onRetry, className = '' }: OfflineBannerProps) {
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [error, setError] = useState<string | null>(null);
+export function OfflineBanner({
+  onRetry,
+  className = '',
+  forceOffline,
+  forceError,
+}: OfflineBannerProps) {
+  const [isOffline, setIsOffline] = useState(
+    forceOffline ?? (typeof navigator !== 'undefined' ? !navigator.onLine : false)
+  );
+  const [error, setError] = useState<string | null>(forceError ?? null);
 
   useEffect(() => {
     const handleOnline = () => setIsOffline(false);

@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import React from 'react';
 import { criticalComponentFixtures } from '../src/mocks/wallet-fixtures';
+import NoMockWallets from '../src/components/NoMockWallets';
+import OfflineBanner from '../src/components/OfflineBanner';
 
 interface CriticalComponentProps {
   id: string;
@@ -65,4 +67,14 @@ export const PaymentComponent: Story = {
     ...criticalComponentFixtures[3],
     lastModified: '2026-09-26',
   },
+};
+
+// Shell-level overlays registered in the critical-components suite so the
+// a11y addon and interaction tests run against them.
+export const NoMockWalletsOverlay: Story = {
+  render: () => <NoMockWallets />,
+};
+
+export const OfflineBannerOverlay: Story = {
+  render: () => <OfflineBanner offline />,
 };

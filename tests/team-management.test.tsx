@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TeamManagement } from '@/components/TeamManagement';
@@ -10,6 +10,10 @@ const MEMBERS: TeamMember[] = [
 ];
 
 describe('TeamManagement', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('admin sees the invite form', () => {
     render(
       <TeamManagement
@@ -140,5 +144,59 @@ describe('TeamManagement', () => {
     const text = screen.getByTestId('team-management').textContent ?? '';
     expect(text).not.toMatch(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/);
     expect(text).not.toMatch(/S[A-Z2-7]{55}/);
+  });
+
+  it('does not enable the remove control for a non-admin role', () => {
+    render(
+      <TeamManagement
+        callerRole="developer"
+        initialMembers={MEMBERS}
+        onInvite={async () => ({ id: 'x', name: 'X', email: 'x@x.com', role: 'developer', addedAt: '' })}
+        onRemove={async () => {}}
+      />,
+    );
+
+    const removeBtns = screen.queryAllByTestId('team-remove-btn');
+    expect(removeBtns).toHaveLength(0);
+    for (const btn of removeBtns) {
+      expect(btn).toBeDisabled();
+    }
+  });
+
+  it('renders a visible error when DELETE /api/team/[id] returns 403 forbidden', async () => {
+    const forbiddenBody = {
+      error: { code: 'forbidden', message: 'Only admins may remove team members.' },
+    };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => forbiddenBody,
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const onRemove = vi.fn(async (id: string) => {
+      const res = await fetch(`/api/team/${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const body = await res.json();
+        throw Object.assign(new Error(body.error.message), { code: body.error.code });
+      }
+    });
+
+    render(
+      <TeamManagement
+        callerRole="admin"
+        initialMembers={MEMBERS}
+        onInvite={async () => ({ id: 'x', name: 'X', email: 'x@x.com', role: 'developer', addedAt: '' })}
+        onRemove={onRemove}
+      />,
+    );
+
+    const removeBtns = screen.getAllByTestId('team-remove-btn');
+    await userEvent.click(removeBtns[0]);
+
+    await waitFor(() => expect(screen.getByTestId('team-error')).toBeInTheDocument());
+    expect(screen.getByTestId('team-error')).toHaveTextContent('Only admins may remove team members.');
+    expect(fetchMock).toHaveBeenCalledWith('/api/team/m1', { method: 'DELETE' });
+    expect(screen.getByText('Alice Admin')).toBeInTheDocument();
   });
 });

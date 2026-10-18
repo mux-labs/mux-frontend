@@ -27,10 +27,13 @@ export function AuditLogPagination(props: UseAuditLogPaginationOptions) {
 	const { error } = log;
 	const cursorRejected =
 		error?.kind === "failed" && error.code === "invalid_cursor";
+	const unauthorized =
+		error?.kind === "failed" &&
+		(error.code === "unauthorized" || error.code === "forbidden");
 
 	return (
 		<section aria-label="Audit log" data-testid="audit-log">
-			{log.started && log.items.length === 0 ? (
+			{unauthorized ? null : log.started && log.items.length === 0 ? (
 				<p role="status" data-testid="audit-log-empty">
 					No audit events match these filters.
 				</p>
@@ -99,7 +102,8 @@ export function AuditLogPagination(props: UseAuditLogPaginationOptions) {
 						You&apos;ve reached the oldest entry.
 					</p>
 				) : error?.kind === "rate_limited" ||
-					error?.kind === "unavailable" ? null : (
+					error?.kind === "unavailable" ||
+					unauthorized ? null : (
 					<button
 						type="button"
 						onClick={log.loadMore}

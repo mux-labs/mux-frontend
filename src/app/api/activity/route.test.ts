@@ -12,6 +12,13 @@ async function loadGet(): Promise<Handler> {
 	return (await import("./route")).GET as Handler;
 }
 
+async function loadIsMockFallbackAllowed(): Promise<
+	(env: Record<string, string | undefined>) => boolean
+> {
+	vi.resetModules();
+	return (await import("./route")).isMockFallbackAllowed;
+}
+
 function activityRequest(
 	query = "",
 	headers: Record<string, string> = { authorization: "Bearer test-token" },
@@ -102,6 +109,17 @@ describe("GET /api/activity — mock fallback pagination", () => {
 		expect(new Set(ids).size).toBe(MOCK_AUDIT_ENTRY_COUNT);
 	});
 
+	it("serves the mock fixture when allowed (NODE_ENV=test, no backend)", async () => {
+		const GET = await loadGet();
+		const res = await GET(activityRequest("?limit=10"));
+		expect(res.status).toBe(200);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		const body = await json(res);
+		expect(body.items.length).toBeGreaterThan(0);
+		const fixtureIds = new Set(MOCK_AUDIT_ENTRIES.map((entry) => entry.id));
+		for (const item of body.items) expect(fixtureIds.has(item.id)).toBe(true);
+	});
+
 	it("rejects a cursor reused with different filters", async () => {
 		const GET = await loadGet();
 		const first = await json(await GET(activityRequest("?limit=5")));
@@ -123,6 +141,36 @@ describe("GET /api/activity — mock fallback pagination", () => {
 		vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "mainnet");
 		const GET = await loadGet();
 		expect((await GET(activityRequest())).status).toBe(503);
+	});
+});
+
+describe("isMockFallbackAllowed predicate", () => {
+	it("allows test/development with no backend and non-mainnet", async () => {
+		const allowed = await loadIsMockFallbackAllowed();
+		expect(allowed({ NODE_ENV: "test" })).toBe(true);
+		expect(allowed({ NODE_ENV: "development" })).toBe(true);
+	});
+
+	it("denies production", async () => {
+		const allowed = await loadIsMockFallbackAllowed();
+		expect(allowed({ NODE_ENV: "production" })).toBe(false);
+	});
+
+	it("denies a mainnet deploy", async () => {
+		const allowed = await loadIsMockFallbackAllowed();
+		expect(
+			allowed({ NODE_ENV: "test", NEXT_PUBLIC_STELLAR_NETWORK: "mainnet" }),
+		).toBe(false);
+		expect(
+			allowed({ NODE_ENV: "test", MUX_STELLAR_NETWORK: "mainnet" }),
+		).toBe(false);
+	});
+
+	it("denies when a backend URL is configured", async () => {
+		const allowed = await loadIsMockFallbackAllowed();
+		expect(
+			allowed({ NODE_ENV: "test", MUX_BACKEND_URL: "https://backend.test/" }),
+		).toBe(false);
 	});
 });
 

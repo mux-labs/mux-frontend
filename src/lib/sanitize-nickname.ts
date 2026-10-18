@@ -1,28 +1,31 @@
-const HTML_ESCAPE_MAP: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&#39;',
+export const MAX_NICKNAME_LENGTH = 32;
+
+const HTML_ESCAPES: Record<string, string> = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
 };
 
-const MAX_NICKNAME_LENGTH = 32;
-
 /**
- * Strips control characters and HTML-escapes a user-supplied wallet nickname
- * before it is rendered, so a nickname like `<img src=x onerror=...>` can
- * never execute in the DOM.
+ * Normalizes a nickname into its canonical stored/rendered form.
+ *
+ * Pipeline: strip control characters, trim, HTML-escape `& < > " '`, then
+ * enforce MAX_NICKNAME_LENGTH on the *escaped* result. The cap applies
+ * post-escaping so the persisted/rendered value never exceeds the limit.
  */
-export function sanitizeNickname(input: string): string {
-  const trimmed = input
-    // eslint-disable-next-line no-control-regex
-    .replace(/[\u0000-\u001F\u007F]/g, '')
-    .trim()
-    .slice(0, MAX_NICKNAME_LENGTH);
+export function normalizeNickname(input: string): string {
+  const stripped = input.replace(/[\u0000-\u001F\u007F]/g, "").trim();
+  const escaped = stripped.replace(/[&<>"']/g, (ch) => HTML_ESCAPES[ch]);
+  return escaped.slice(0, MAX_NICKNAME_LENGTH);
+}
 
-  return trimmed.replace(/[&<>"']/g, (char) => HTML_ESCAPE_MAP[char] ?? char);
+export function sanitizeNickname(input: string): string {
+  return normalizeNickname(input);
 }
 
 export function isValidNickname(input: string): boolean {
-  return input.trim().length > 0 && input.trim().length <= MAX_NICKNAME_LENGTH;
+  const sanitized = normalizeNickname(input);
+  return sanitized.length > 0 && sanitized.length <= MAX_NICKNAME_LENGTH;
 }

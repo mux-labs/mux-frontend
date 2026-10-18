@@ -79,6 +79,12 @@ jobs:
       - name: Run unit/component tests
         run: pnpm test
 
+      # Smoke runner (issue #1029): tests/run-tests.js exercises the session
+      # store and API client envelope parsing. It is not picked up by vitest,
+      # so it must be invoked explicitly via the `test:smoke` script.
+      - name: Run smoke tests
+        run: pnpm run test:smoke
+
   # Required fast check: only the curated critical-path specs (login, wallets,
   # wallet-send-receive) run in the `smoke` Playwright project. See
   # tests/e2e/README.md for the smoke vs full project split.

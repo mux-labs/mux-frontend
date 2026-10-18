@@ -97,6 +97,14 @@ export function readClientSendFlowFlags(): SendFlowFlags {
  * Evaluate the send gate. Order matters: the kill switch wins over every
  * other flag, and a request for a network other than the configured one is
  * rejected so a mainnet send is never satisfied by testnet config.
+ *
+ * `requestedNetwork` handling is intentionally asymmetric:
+ *  - `undefined` means "no network requested" and is allowed; the configured
+ *    network is used.
+ *  - `null` or a blank string (e.g. `''` forwarded from a query parameter)
+ *    means a network was requested but is blank; it is treated as a requested
+ *    network and must match `flags.network`, otherwise `SEND_NETWORK_MISMATCH`
+ *    is returned.
  */
 export function evaluateSendFlowGate(
 	flags: SendFlowFlags,

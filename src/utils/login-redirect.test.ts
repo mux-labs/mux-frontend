@@ -6,6 +6,7 @@ describe("getSafeLoginRedirect", () => {
 		"/dashboard",
 		"/dashboard/analytics",
 		"/dashboard/wallets?id=1#top",
+		"/dashboard?tab=activity",
 	])("allows %s", (input) => {
 		expect(getSafeLoginRedirect(input)).toBe(input);
 	});
@@ -23,6 +24,10 @@ describe("getSafeLoginRedirect", () => {
 		"/login",
 		"/dashboard\n",
 		"%E0%A4%A",
+		"/dashboard%3Fnext=%2F%2Fevil.com",
+		"/dashboard#//evil.com",
+		"/dashboard?next=//evil.com",
+		"/dashboard?redirect=https://evil.com",
 	])("rejects %s", (input) => {
 		expect(getSafeLoginRedirect(input)).toBe(DEFAULT_LOGIN_REDIRECT);
 	});

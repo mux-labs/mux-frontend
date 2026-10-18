@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 
 interface OfflineBannerProps {
   onRetry?: () => void;
@@ -23,6 +23,10 @@ export function OfflineBanner({
   const [error, setError] = useState<string | null>(forceError ?? null);
 
   useEffect(() => {
+    if (typeof navigator !== 'undefined') {
+      setIsOffline(!navigator.onLine);
+    }
+
     const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
 
@@ -35,31 +39,16 @@ export function OfflineBanner({
     };
   }, []);
 
-  const handleRetry = useCallback(() => {
-    if (onRetry) {
-      onRetry();
-    } else {
-      window.location.reload();
-    }
-  }, [onRetry]);
-
-  if (!isOffline && !error) return null;
+  if (!isOffline) {
+    return null;
+  }
 
   return (
-    <div className={`fixed top-0 left-0 right-0 z-50 ${className}`}>
-      {error ? (
-        <div className="bg-red-600 text-white px-4 py-3 flex justify-between items-center">
-          <span>{error}</span>
-          <button onClick={handleRetry} className="underline hover:no-underline">Retry</button>
-        </div>
-      ) : (
-        <div className="bg-orange-600 text-white px-4 py-3 flex justify-between items-center">
-          <span>📡 You are offline. Changes will sync when reconnected.</span>
-          {onRetry && (
-            <button onClick={handleRetry} className="underline hover:no-underline">Retry</button>
-          )}
-        </div>
-      )}
+    <div
+      role="status"
+      className="fixed inset-x-0 bottom-0 z-50 bg-amber-500 px-4 py-2 text-center text-sm font-medium text-white"
+    >
+      You are offline. Some features may be unavailable.
     </div>
   );
 }

@@ -255,22 +255,11 @@ export function TeamManagement({
             onClick={handleInvite}
             disabled={submitting}
             data-testid="team-invite-submit"
-            className="mt-4 rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="mt-3 rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {submitting ? 'Adding…' : 'Add member'}
           </button>
         </fieldset>
-      )}
-
-      {/* Developer read-only notice */}
-      {!isAdmin && (
-        <p
-          data-testid="team-readonly-notice"
-          className="text-xs text-gray-500"
-          role="note"
-        >
-          Only admins can add or remove team members.
-        </p>
       )}
     </section>
   );

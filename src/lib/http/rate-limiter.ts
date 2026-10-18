@@ -1,13 +1,10 @@
-import { createHash } from "node:crypto";
-import { credentialFingerprintSource } from "./credentials";
-
 /**
- * Minimal in-process fixed-window rate limiter for Next.js API routes.
+ * Fixed-window rate limiter used by public API routes.
  *
- * This is a per-instance griefing guard, not the source of truth: the Mux
- * backend enforces the authoritative limits. Callers are keyed by a hash of
- * their credential (never the raw token) plus client IP, so neither value is
- * retained in memory in a recoverable form.
+ * The limiter key must be derived from something the caller cannot freely
+ * rotate. Prefer the authenticated subject (the same value the route already
+ * resolves for authz); only fall back to a request header when no subject is
+ * available, since headers are attacker-controlled on public routes.
  */
 
 export interface RateLimitDecision {
@@ -16,23 +13,26 @@ export interface RateLimitDecision {
 }
 
 export interface FixedWindowLimiter {
-	check(key: string, now?: number): RateLimitDecision;
-	reset(): void;
+	check(key: string): RateLimitDecision;
 }
 
-const MAX_TRACKED_KEYS = 10_000;
+		check(key: string, now: number = Date.now()): RateLimitDecision {
+			const existing = windows.get(key);
+			if (existing === undefined || now >= existing.resetAt) {
+				windows.set(key, { count: 1, resetAt: now + windowMs });
 
 export function createFixedWindowLimiter(
 	limit: number,
 	windowMs: number,
 ): FixedWindowLimiter {
-	const windows = new Map<string, { start: number; count: number }>();
+	const windows = new Map<string, { count: number; resetAt: number }>();
 
 	return {
 		check(key, now = Date.now()) {
 			const current = windows.get(key);
 			if (!current || now - current.start >= windowMs) {
-				// Bound memory under key-spraying: drop the oldest entry.
+				// Bound memory under key-spraying: drop the oldest-inserted entry.
+				// Trade-off: an evicted key's window resets on its next check.
 				if (!current && windows.size >= MAX_TRACKED_KEYS) {
 					const oldest = windows.keys().next().value;
 					if (oldest !== undefined) windows.delete(oldest);
@@ -40,27 +40,11 @@ export function createFixedWindowLimiter(
 				windows.set(key, { start: now, count: 1 });
 				return { allowed: true, retryAfterMs: 0 };
 			}
-			if (current.count >= limit) {
-				return {
-					allowed: false,
-					retryAfterMs: current.start + windowMs - now,
-				};
+			if (existing.count >= limit) {
+				return { allowed: false, retryAfterMs: existing.resetAt - now };
 			}
-			current.count += 1;
+			existing.count += 1;
 			return { allowed: true, retryAfterMs: 0 };
 		},
-		reset() {
-			windows.clear();
-		},
 	};
-}
-
-/** Stable, non-reversible limiter key for a request's caller. */
-export function callerKey(request: Request): string {
-	const credential = credentialFingerprintSource(request);
-	const ip =
-		request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-		request.headers.get("x-real-ip") ??
-		"unknown";
-	return createHash("sha256").update(`${credential}\u0000${ip}`).digest("hex");
 }

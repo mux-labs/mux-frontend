@@ -1,5 +1,10 @@
 import { expect, test } from "@playwright/test";
-import { readRealBackendEnv, REAL_BACKEND_SKIP_REASON } from "./helpers";
+import {
+	LOGIN_ERROR_CODES,
+	readCorrelationId,
+	readRealBackendEnv,
+	REAL_BACKEND_SKIP_REASON,
+} from "./helpers";
 
 /**
  * Contract coverage for POST /api/auth/login against a REAL mux-backend.
@@ -17,24 +22,6 @@ import { readRealBackendEnv, REAL_BACKEND_SKIP_REASON } from "./helpers";
  * Run via playwright.real-backend.config.ts — see ./README.md.
  */
 const realBackend = readRealBackendEnv();
-
-/**
- * Stable error codes the real backend returns for the login surface. The
- * frontend maps these to user-facing copy; asserting on the code (not the
- * copy) keeps this spec resilient to wording changes while still pinning
- * the contract. See docs/security-ux-guards.md.
- */
-const LOGIN_ERROR_CODES = {
-	invalidCredentials: "AUTH_INVALID_CREDENTIALS",
-	missingCredentials: "AUTH_MISSING_CREDENTIALS",
-} as const;
-
-/**
- * Correlation id header the backend echoes on every auth response so a
- * failed login can be traced end-to-end without leaking credentials. The
- * frontend surfaces it on the error element as a data attribute.
- */
-const CORRELATION_ID_HEADER = "x-correlation-id";
 
 /**
  * Authz roles the login surface must deny by default. A client must not be
@@ -96,18 +83,19 @@ test.describe("Login against a real mux-backend", () => {
 			code?: string;
 			correlationId?: string;
 		};
-		expect(body.code).toBe(LOGIN_ERROR_CODES.invalidCredentials);
+		expect(body.code).toBe(LOGIN_ERROR_CODES.AUTH_INVALID_CREDENTIALS);
 
-		// Correlation id must be present on the response header so ops can
-		// trace the failure without the request body (which holds secrets).
-		const correlationId = response.headers()[CORRELATION_ID_HEADER];
+		// Correlation id must be present on the response header (or body) so
+		// ops can trace the failure without the request body (which holds
+		// secrets).
+		const correlationId = readCorrelationId(response.headers(), body);
 		expect(correlationId).toBeTruthy();
-		expect(body.correlationId ?? correlationId).toBeTruthy();
 
 		// The error surface must expose the correlation id for support, and
 		// must never echo the submitted password back to the client.
 		const errorEl = page.getByTestId("login-error");
 		await expect(errorEl).toBeVisible();
+		await expect(errorEl).toHaveAttribute("data-correlation-id", correlationId!);
 		await expect(errorEl).not.toContainText("definitely-wrong-password");
 	});
 
@@ -124,7 +112,7 @@ test.describe("Login against a real mux-backend", () => {
 		expect(response.status()).toBe(400);
 
 		const body = (await response.json()) as { code?: string };
-		expect(body.code).toBe(LOGIN_ERROR_CODES.missingCredentials);
+		expect(body.code).toBe(LOGIN_ERROR_CODES.AUTH_MISSING_CREDENTIALS);
 		await expect(page).not.toHaveURL(/\/dashboard/);
 	});
 

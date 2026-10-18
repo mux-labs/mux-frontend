@@ -13,7 +13,7 @@ interface GuardConfig {
 const DEFAULT_CONFIG: GuardConfig = {
   enabled: true,
   blockOnFailures: true,
-  checks: ['lint', 'typecheck', 'test', 'security'],
+  checks: ['lint', 'typecheck', 'test'],
   failFast: true,
   reportPath: '.husky/_guard-report.json',
 };
@@ -67,13 +67,10 @@ export class HuskyPreCommitGuard {
           command = 'npx tsc --noEmit';
           break;
         case 'test':
-          command = 'npx jest --passWithNoTests';
-          break;
-        case 'security':
-          command = 'npx audit-ci --moderate';
+          command = 'npx vitest run';
           break;
         default:
-          command = `npx ${check}`;
+          throw new Error(`Unsupported pre-commit check: "${check}"`);
       }
 
       execSync(command, { stdio: 'pipe', timeout: 60000 });

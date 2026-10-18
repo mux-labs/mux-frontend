@@ -1,7 +1,5 @@
 'use server';
 
-import { config } from '@biomejs/biome';
-
 export interface BiomeEslintConfig {
   extends?: string[];
   rules?: Record<string, 'on' | 'off' | 'warn' | 'error'>;

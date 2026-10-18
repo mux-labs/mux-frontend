@@ -21,9 +21,25 @@ interface CSPDirective {
  * source so the policy fails closed.
  */
 export const DEFAULT_CONNECT_SRC_ORIGINS: readonly string[] = [
-  'https://api.mux.protocol',
-  'https://horizon.stellar.org',
+  'https://api.muxprotocol.io',
   'https://soroban-testnet.stellar.org',
+  'https://horizon-testnet.stellar.org',
+  'https://horizon.stellar.org',
+];
+
+/**
+ * Broad scheme sources that must never appear as a standalone connect-src
+ * entry. Kept as a single typed source of truth so tests can assert the
+ * fail-closed contract documented in the README.
+ */
+export const BROAD_SCHEME_SOURCES: readonly string[] = [
+  '*',
+  'http:',
+  'https:',
+  'ws:',
+  'wss:',
+  'data:',
+  'blob:',
 ];
 
 /**
@@ -40,7 +56,7 @@ export function parseConnectSrcOrigins(raw: string | undefined): string[] {
     .split(',')
     .map((origin) => origin.trim())
     .filter((origin) => {
-      if (origin.length === 0 || origin === '*') {
+      if (origin.length === 0 || BROAD_SCHEME_SOURCES.includes(origin)) {
         return false;
       }
       try {
@@ -58,13 +74,29 @@ export function parseConnectSrcOrigins(raw: string | undefined): string[] {
  * NEXT_PUBLIC_CONNECT_SRC_ALLOWLIST. Always includes 'self' and never emits a
  * wildcard, so unknown or unset origins are not permitted.
  */
-export function getConnectSrcAllowlist(env: NodeJS.ProcessEnv = process.env): string[] {
+export function resolveConnectSrcOrigins(env: NodeJS.ProcessEnv = process.env): string[] {
   const configured = [
     ...parseConnectSrcOrigins(env.NEXT_PUBLIC_API_URL),
     ...parseConnectSrcOrigins(env.NEXT_PUBLIC_CONNECT_SRC_ALLOWLIST),
   ];
   const origins = new Set<string>([...DEFAULT_CONNECT_SRC_ORIGINS, ...configured]);
   return ["'self'", ...origins];
+}
+
+/**
+ * Build the resolved connect-src directive string (e.g. "connect-src 'self'
+ * https://..."). This is the exact value emitted in the CSP header, so tests
+ * can assert on the joined directive rather than the intermediate array.
+ */
+export function buildConnectSrcDirective(env: NodeJS.ProcessEnv = process.env): string {
+  return `connect-src ${resolveConnectSrcOrigins(env).join(' ')}`;
+}
+
+/**
+ * Backwards-compatible alias for the connect-src allowlist resolver.
+ */
+export function getConnectSrcAllowlist(env: NodeJS.ProcessEnv = process.env): string[] {
+  return resolveConnectSrcOrigins(env);
 }
 
 export function buildCSPHeader(directives: CSPDirective): string {
@@ -84,7 +116,7 @@ export function getNextConfigCSP(): Record<string, string[]> {
     'style-src': ["'self'", "'unsafe-inline'"],
     'img-src': ["'self'", "data:", "https:"],
     'font-src': ["'self'", "https:"],
-    'connect-src': getConnectSrcAllowlist(),
+    'connect-src': resolveConnectSrcOrigins(),
     'frame-src': ["'none'"],
     'object-src': ["'none'"],
     'base-uri': ["'self'"],

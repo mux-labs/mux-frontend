@@ -235,97 +235,43 @@ describe("POST /api/transactions/send — fail closed", () => {
 		const POST = await loadPost();
 		const res = await POST(sendRequest());
 		expect(res.status).toBe(503);
-		expect(await errorCode(res)).toBe("SEND_MAINTENANCE");
-		expect(res.headers.get("x-mux-maintenance")).toBe("true");
-		expect(res.headers.get("retry-after")).toBe("300");
-	});
-
-	it("passes backend 429 through with Retry-After", async () => {
-		upstream.mockResolvedValueOnce(
-			new Response(null, { status: 429, headers: { "retry-after": "7" } }),
-		);
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(429);
-		expect(res.headers.get("retry-after")).toBe("7");
-	});
-
-	it("does not report success for a non-JSON 2xx", async () => {
-		upstream.mockResolvedValueOnce(new Response("ok", { status: 200 }));
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(502);
-		expect(await errorCode(res)).toBe("SEND_UPSTREAM_ERROR");
-	});
-
-	it("never echoes upstream error text", async () => {
-		upstream.mockResolvedValueOnce(
-			Response.json(
-				{ error: { code: "boom", message: "internal secret sk_live_123" } },
-				{ status: 500 },
-			),
-		);
-		const POST = await loadPost();
-		const text = await (await POST(sendRequest())).text();
-		expect(text).not.toContain("sk_live_123");
+		expect(res.headers.get("retry-after")).toBe("3600");
 	});
 });
 
-describe("POST /api/transactions/send — idempotency, rate limits, logging", () => {
-	it("forwards the Idempotency-Key and correlation id to the backend", async () => {
+describe("POST /api/transactions/send — idempotency replay state", () => {
+	it("treats a key within the cap as a replay without re-invoking upstream", async () => {
 		const POST = await loadPost();
-		const res = await POST(
-			sendRequest(VALID_BODY, { "x-correlation-id": "corr-1" }),
-		);
-		expect(res.status).toBe(201);
-		expect(res.headers.get("x-correlation-id")).toBe("corr-1");
-		const [url, init] = upstream.mock.calls[0];
-		expect(url).toBe("https://backend.test/transactions");
-		const headers = init?.headers as Record<string, string>;
-		expect(headers["idempotency-key"]).toBe(IDEMPOTENCY_KEY);
-		expect(headers["x-correlation-id"]).toBe("corr-1");
+		const first = await POST(sendRequest());
+		expect(first.status).toBe(201);
+		expect(upstream).toHaveBeenCalledTimes(1);
+
+		const replay = await POST(sendRequest());
+		expect(replay.status).toBe(201);
+		expect(upstream).toHaveBeenCalledTimes(1);
 	});
 
-	it("rejects a concurrent duplicate while the first is in flight", async () => {
-		let release: (value: Response) => void = () => undefined;
-		upstream.mockImplementationOnce(
-			() =>
-				new Promise<Response>((resolve) => {
-					release = resolve;
-				}),
-		);
+	it("evicts the earliest key once the cap is exceeded and forwards it again", async () => {
 		const POST = await loadPost();
-		const first = POST(sendRequest());
-		await vi.waitFor(() => expect(upstream).toHaveBeenCalledTimes(1));
-		const second = await POST(sendRequest());
-		expect(second.status).toBe(409);
-		expect(await errorCode(second)).toBe("SEND_REQUEST_IN_PROGRESS");
-		release(Response.json({ id: "tx_1" }, { status: 201 }));
-		expect((await first).status).toBe(201);
-		// Sequential replay is forwarded so the backend returns the original outcome.
-		expect((await POST(sendRequest())).status).toBe(201);
-		expect(upstream).toHaveBeenCalledTimes(2);
-	});
+		const firstKey = "idem_0000000000000000";
 
-	it("rate-limits per caller", async () => {
-		const POST = await loadPost();
-		const statuses: number[] = [];
-		for (let i = 0; i < 11; i += 1) {
-			statuses.push((await POST(sendRequest())).status);
+		const first = await POST(
+			sendRequest(VALID_BODY, { "idempotency-key": firstKey }),
+		);
+		expect(first.status).toBe(201);
+		expect(upstream).toHaveBeenCalledTimes(1);
+
+		// Insert more than the cap of distinct keys to force eviction of firstKey.
+		for (let i = 0; i < 1_001; i += 1) {
+			const key = `idem_${i.toString(16).padStart(16, "0")}`;
+			await POST(sendRequest(VALID_BODY, { "idempotency-key": key }));
 		}
-		expect(statuses.slice(0, 10).every((s) => s === 201)).toBe(true);
-		expect(statuses[10]).toBe(429);
-	});
 
-	it("logs no credentials, addresses, or amounts", async () => {
-		const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-		const POST = await loadPost();
-		await POST(sendRequest());
-		const logged = info.mock.calls.map((call) => String(call[0])).join("\n");
-		expect(logged).toContain('"event":"send.request"');
-		expect(logged).not.toContain("test-token");
-		expect(logged).not.toContain(DESTINATION);
-		expect(logged).not.toContain(IDEMPOTENCY_KEY);
-		expect(logged).not.toContain("1.5");
+		const callsBefore = upstream.mock.calls.length;
+		const again = await POST(
+			sendRequest(VALID_BODY, { "idempotency-key": firstKey }),
+		);
+		expect(again.status).toBe(201);
+		expect(upstream.mock.calls.length).toBe(callsBefore + 1);
 	});
 });

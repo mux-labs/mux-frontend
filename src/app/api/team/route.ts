@@ -1,16 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { mockTeam, type TeamMember, type TeamRole } from './store';
 
 export const runtime = 'nodejs';
 
-export type TeamRole = 'admin' | 'developer';
-
-export interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: TeamRole;
-  addedAt: string;
-}
+export type { TeamMember, TeamRole } from './store';
+export { mockTeam } from './store';
 
 const TEAM_ERROR = {
   UNAUTHORIZED: 'unauthorized',
@@ -23,23 +17,6 @@ const TEAM_ERROR = {
 
 type TeamErrorCode = (typeof TEAM_ERROR)[keyof typeof TEAM_ERROR];
 
-// In-memory mock store for local dev / CI (never used in production).
-const mockTeam: TeamMember[] = [
-  {
-    id: 'member-1',
-    name: 'Alice Admin',
-    email: 'alice@muxprotocol.com',
-    role: 'admin',
-    addedAt: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-  {
-    id: 'member-2',
-    name: 'Bob Dev',
-    email: 'bob@muxprotocol.com',
-    role: 'developer',
-    addedAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),
-  },
-];
 
 function isMockAllowed(): boolean {
   return process.env.NODE_ENV !== 'production';

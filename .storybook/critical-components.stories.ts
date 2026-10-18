@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react';
 import React from 'react';
 import { criticalComponentFixtures } from '../src/mocks/wallet-fixtures';
+import NoMockWallets from '../src/components/NoMockWallets';
+import OfflineBanner from '../src/components/OfflineBanner';
 
 interface CriticalComponentProps {
   id: string;
@@ -65,4 +67,33 @@ export const PaymentComponent: Story = {
     ...criticalComponentFixtures[3],
     lastModified: '2026-09-26',
   },
+};
+
+// Shell-level overlays registered in the critical-components suite so the
+// a11y addon and interaction tests run against them.
+export const NoMockWalletsOverlay: Story = {
+  render: () => <NoMockWallets />,
+};
+
+export const OfflineBannerOverlay: Story = {
+  render: () => <OfflineBanner offline />,
+};
+
+// Notifications/Empty is a money-path surface: an outage must not look like
+// 'no notifications'. Reference it here so it runs in the critical-components
+// suite alongside the other CI-critical stories.
+export const NotificationsEmptyReference: Story = {
+  name: 'Notifications/Empty (critical)',
+  parameters: {
+    docs: {
+      description: {
+        story: 'References Notifications/Empty (Empty and LoadError) in the critical-components suite.',
+      },
+    },
+  },
+  args: {
+    ...criticalComponentFixtures[0],
+    lastModified: '2026-09-26',
+  },
+};
 };

@@ -1,59 +1,43 @@
-"use client";
+import type { Meta, StoryObj } from '@storybook/react';
+import { expect, fn, userEvent, within } from '@storybook/test';
+import { NotificationsEmpty } from '../components/NotificationsEmpty';
 
-/**
- * Notifications empty story.
- *
- * Empty state for the notifications panel: shown when the server confirms
- * there are no notifications. A load failure renders a distinct error state
- * so an outage is never presented as "no notifications".
- */
-
-interface NotificationsEmptyProps {
-	status: "empty" | "error";
-	correlationId?: string;
-	onRetry?: () => void;
-}
-
-export function NotificationsEmpty({
-	status,
-	correlationId,
-	onRetry,
-}: NotificationsEmptyProps) {
-	if (status === "error") {
-		return (
-			<div role="alert" data-testid="notifications-error">
-				<h3>Could not load notifications</h3>
-				<p>
-					Your notifications are unavailable right now. Nothing has been marked
-					as read.
-				</p>
-				{correlationId && <p>Reference: {correlationId}</p>}
-				{onRetry && (
-					<button type="button" onClick={onRetry}>
-						Try again
-					</button>
-				)}
-			</div>
-		);
-	}
-
-	return (
-		<div role="status" data-testid="notifications-empty">
-			<h3>You are all caught up</h3>
-			<p>New wallet, payment and security notifications will appear here.</p>
-		</div>
-	);
-}
-
-const meta = {
-	title: "Notifications/Empty",
-	component: NotificationsEmpty,
+const meta: Meta<typeof NotificationsEmpty> = {
+  title: 'Notifications/Empty',
+  component: NotificationsEmpty,
+  tags: ['autodocs'],
+  parameters: {
+    layout: 'centered',
+  },
+  argTypes: {
+    onRetry: { action: 'retried' },
+  },
 };
 
 export default meta;
+type Story = StoryObj<typeof NotificationsEmpty>;
 
-export const Empty = { args: { status: "empty" } };
+export const Empty: Story = {
+  args: {
+    onRetry: fn(),
+  },
+};
 
-export const LoadError = {
-	args: { status: "error", correlationId: "corr_123", onRetry: () => {} },
+export const LoadError: Story = {
+  args: {
+    error: true,
+    correlationId: 'corr-1234-abcd',
+    onRetry: fn(),
+  },
+  play: async ({ canvasElement, args }) => {
+    const canvas = within(canvasElement);
+
+    const alert = canvas.getByRole('alert');
+    await expect(alert).toBeInTheDocument();
+    await expect(alert).toHaveTextContent('corr-1234-abcd');
+
+    const retryButton = canvas.getByRole('button', { name: /try again/i });
+    await userEvent.click(retryButton);
+    await expect(args.onRetry).toHaveBeenCalledTimes(1);
+  },
 };

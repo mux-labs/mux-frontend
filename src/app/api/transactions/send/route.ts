@@ -14,6 +14,7 @@ import {
 	forwardCredentialHeaders,
 	hasCredential,
 	isCsrfSafe,
+	resolveCredentialSubject,
 } from "@/lib/http/credentials";
 import {
 	classifyServiceUnavailable,
@@ -55,8 +56,28 @@ export const dynamic = "force-dynamic";
 
 const UPSTREAM_TIMEOUT_MS = 15_000;
 
+/**
+ * Maximum number of in-flight/replay keys retained on this instance. The set
+ * is bounded so a client that generates a fresh key per request cannot grow
+ * process memory without limit (issue #1026). Oldest keys are evicted first
+ * (insertion-order LRU); an evicted key is treated as new and forwarded.
+ */
+const MAX_IN_FLIGHT_KEYS = 1_000;
+
 const limiter = createFixedWindowLimiter(10, 60_000);
 const inFlight = new Set<string>();
+
+function markInFlight(flightKey: string): void {
+	if (inFlight.has(flightKey)) {
+		inFlight.delete(flightKey);
+	}
+	inFlight.add(flightKey);
+	while (inFlight.size > MAX_IN_FLIGHT_KEYS) {
+		const oldest = inFlight.values().next().value;
+		if (oldest === undefined) break;
+		inFlight.delete(oldest);
+	}
+}
 
 function logSendEvent(fields: {
 	correlationId: string;
@@ -125,7 +146,10 @@ export async function POST(request: Request): Promise<NextResponse> {
 		);
 	}
 
-	const rateKey = callerKey(request);
+	// Key the limiter on the verified subject so a caller cannot rotate a
+	// spoofable header to obtain a fresh window on every request.
+	const subject = resolveCredentialSubject(request);
+	const rateKey = callerKey(request, subject);
 	const decision = limiter.check(rateKey);
 	if (!decision.allowed) {
 		return errorResponse(
@@ -239,7 +263,7 @@ export async function POST(request: Request): Promise<NextResponse> {
 			gate.network,
 		);
 	}
-	inFlight.add(flightKey);
+	markInFlight(flightKey);
 
 	try {
 		const forwardHeaders: Record<string, string> = {
@@ -309,78 +333,142 @@ export async function POST(request: Request): Promise<NextResponse> {
 			);
 		}
 
-		const unavailable = classifyServiceUnavailable(upstream, upstreamBody);
-		if (unavailable) {
-			const maintenance =
-				unavailable.code === SERVICE_UNAVAILABLE_CODES.MAINTENANCE;
+		const unavailable = classifyServiceUnavailable(upstream.status);
+		if (unavailable !== null) {
 			return errorResponse(
 				503,
-				maintenance
-					? SEND_ERROR_CODES.MAINTENANCE
-					: SEND_ERROR_CODES.BACKEND_UNAVAILABLE,
+				SERVICE_UNAVAILABLE_CODES[unavailable],
 				"Sending is temporarily unavailable.",
 				correlationId,
-				{
-					"retry-after": formatRetryAfterSeconds(unavailable.retryAfterMs),
-					...(maintenance ? { [MAINTENANCE_HEADER]: "true" } : {}),
-				},
+				{ [MAINTENANCE_HEADER]: unavailable },
+				gate.network,
+			);
+		}
+
+		if (upstream.status === 401 || upstream.status === 403) {
+			return errorResponse(
+				upstream.status,
+				SEND_ERROR_CODES.FORBIDDEN,
+				"The credential is not authorized to send.",
+				correlationId,
+				{},
 				gate.network,
 			);
 		}
 
 		const code = upstreamCode(upstreamBody);
-		switch (upstream.status) {
-			case 401:
-				return errorResponse(
-					401,
-					code.includes("expired")
-						? SEND_ERROR_CODES.AUTH_EXPIRED
-						: SEND_ERROR_CODES.UNAUTHORIZED,
-					"Your session is no longer valid. Sign in again.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			case 403:
-				return errorResponse(
-					403,
-					code.includes("revoked")
-						? SEND_ERROR_CODES.DELEGATE_REVOKED
-						: SEND_ERROR_CODES.FORBIDDEN,
-					"You are not authorized to send from this wallet.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			case 409:
-				return errorResponse(
-					409,
-					SEND_ERROR_CODES.IDEMPOTENCY_CONFLICT,
-					"This Idempotency-Key was already used for a different send.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			case 400:
-			case 422:
-				return errorResponse(
-					400,
-					SEND_ERROR_CODES.INVALID_INPUT,
-					"The send request was rejected.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			default:
-				return errorResponse(
-					502,
-					SEND_ERROR_CODES.UPSTREAM_ERROR,
-					"The send result could not be confirmed. Check activity before retrying.",
-					correlationId,
-					{},
-					gate.network,
-				);
+		if (code === "insufficient_funds") {
+			return errorResponse(
+				402,
+				SEND_ERROR_CODES.INSUFFICIENT_FUNDS,
+				"Insufficient funds for this send.",
+				correlationId,
+				{},
+				gate.network,
+			);
 		}
+
+		if (upstream.status === 400 || upstream.status === 422) {
+			return errorResponse(
+				400,
+				SEND_ERROR_CODES.INVALID_INPUT,
+				"The send request was rejected.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+				gate.network,
+			);
+		}
+
+		if (upstream.status === 401 || upstream.status === 403) {
+			return errorResponse(
+				upstream.status,
+				SEND_ERROR_CODES.FORBIDDEN,
+				"The credential is not authorized to send.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+
+		const code = upstreamCode(upstreamBody);
+		if (code === "insufficient_funds") {
+			return errorResponse(
+				402,
+				SEND_ERROR_CODES.INSUFFICIENT_FUNDS,
+				"Insufficient funds for this send.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+		if (upstream.status === 400 || upstream.status === 422) {
+			return errorResponse(
+				400,
+				SEND_ERROR_CODES.INVALID_INPUT,
+				"The send request was rejected.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+		if (code === "unauthorized" || upstream.status === 401) {
+			return errorResponse(
+				401,
+				SEND_ERROR_CODES.UNAUTHORIZED,
+				"A valid owner, delegate, API key, or JWT credential is required.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+		if (code === "forbidden" || upstream.status === 403) {
+			return errorResponse(
+				403,
+				SEND_ERROR_CODES.FORBIDDEN,
+				"This credential is not allowed to send.",
+				c
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+		const code = upstreamCode(upstreamBody);
+		if (code === "insufficient_funds") {
+			return errorResponse(
+				402,
+				SEND_ERROR_CODES.INSUFFICIENT_FUNDS,
+				"Insufficient funds for this send.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+		if (upstream.status === 400 || upstream.status === 422) {
+			return errorResponse(
+				400,
+				SEND_ERROR_CODES.INVALID_INPUT,
+				"The send request was rejected.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+
+				gate.network,
+			);
+		}
+
+		return errorResponse(
+			502,
+			SEND_ERROR_CODES.UPSTREAM_ERROR,
+			`Upstream send failed${upstreamCode(upstreamBody) ? `: ${upstreamCode(upstreamBody)}` : ""}.`,
+			correlationId,
+			{},
+			gate.network,
+		);
 	} finally {
 		inFlight.delete(flightKey);
 	}

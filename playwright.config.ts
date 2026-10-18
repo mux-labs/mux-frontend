@@ -26,6 +26,7 @@ const SMOKE_SPECS = [
 	"**/login.spec.ts",
 	"**/wallets.spec.ts",
 	"**/wallet-send-receive.spec.ts",
+	"**/playwright-smoke.ts",
 ];
 
 export default defineConfig({

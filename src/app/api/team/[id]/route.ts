@@ -1,14 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
-import type { TeamRole } from '../route';
+import { mockTeam } from '../store';
 
 export const runtime = 'nodejs';
-
-// Re-use the same mock store reference via the parent module.
-// In production this proxies to the real backend.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const parentModule = require('../route') as {
-  mockTeam?: Array<{ id: string; email: string; role: string; name: string; addedAt: string }>;
-};
 
 const TEAM_ERROR = {
   UNAUTHORIZED: 'unauthorized',
@@ -41,20 +34,21 @@ function errorResponse(
   );
 }
 
-function resolveCallerRole(req: NextRequest): TeamRole | null {
+/** Resolve caller role from the session/JWT. Deny-by-default: null = unauthorized. */
+function resolveCallerRole(req: NextRequest): 'admin' | 'developer' | null {
   const auth = req.headers.get('authorization');
   if (!auth) return null;
   const [scheme, token] = auth.split(' ');
   if (!token || (scheme !== 'Bearer' && scheme !== 'ApiKey')) return null;
-  const role = req.headers.get('x-role') as TeamRole | null;
+  const role = req.headers.get('x-role');
   if (role !== 'admin' && role !== 'developer') return null;
   return role;
 }
 
-/** DELETE /api/team/[id] — remove a member. admin only. Idempotent. */
+/** DELETE /api/team/[id] — remove a member. admin only. */
 export async function DELETE(
   req: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
   const correlationId = req.headers.get('x-correlation-id') ?? newCorrelationId();
 
@@ -66,24 +60,20 @@ export async function DELETE(
     return errorResponse(403, TEAM_ERROR.FORBIDDEN, 'Only admins may remove team members.', correlationId);
   }
 
-  if (!isMockAllowed()) {
+  if (!isMockAllowed() || !Array.isArray(mockTeam)) {
     return errorResponse(503, TEAM_ERROR.BACKEND_UNAVAILABLE, 'Team backend not configured.', correlationId);
   }
 
-  const { id } = params;
-  const mockTeam = parentModule.mockTeam;
-  if (!mockTeam) {
-    return errorResponse(503, TEAM_ERROR.BACKEND_UNAVAILABLE, 'Team store unavailable.', correlationId);
+  const { id } = await params;
+  const index = mockTeam.findIndex((m) => m.id === id);
+  if (index === -1) {
+    return errorResponse(404, TEAM_ERROR.NOT_FOUND, 'Team member not found.', correlationId);
   }
 
-  const idx = mockTeam.findIndex((m) => m.id === id);
-  // Idempotent: removing an already-removed member succeeds without error.
-  if (idx !== -1) {
-    mockTeam.splice(idx, 1);
-  }
+  const [removed] = mockTeam.splice(index, 1);
 
   return NextResponse.json(
-    { removed: true, id, correlationId },
-    { status: 200, headers: { 'x-correlation-id': correlationId } },
+    { member: removed, correlationId },
+    { headers: { 'x-correlation-id': correlationId } },
   );
 }

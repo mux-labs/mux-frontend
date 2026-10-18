@@ -36,8 +36,12 @@ const isDevOrTest =
  *   and malformed entries are rejected rather than silently permitted, so
  *   an unset or typo'd origin can never widen the policy.
  * - `'self'` is always included; the directive is never empty.
+ *
+ * The construction below is exported so tests/csp-connect-src.test.ts can
+ * assert the resolved directive against the README's fail-closed contract
+ * (issue #979).
  */
-const DEFAULT_CONNECT_SRC_ORIGINS = [
+export const DEFAULT_CONNECT_SRC_ORIGINS = [
 	"'self'",
 	"https://api.muxprotocol.io",
 	"https://soroban-testnet.stellar.org",
@@ -45,7 +49,7 @@ const DEFAULT_CONNECT_SRC_ORIGINS = [
 	"https://horizon.stellar.org",
 ];
 
-const BROAD_SCHEME_SOURCES = new Set([
+export const BROAD_SCHEME_SOURCES = new Set([
 	"*",
 	"http:",
 	"https:",
@@ -80,7 +84,7 @@ function normalizeConnectSrcOrigin(raw: string): string | null {
  * Resolve the connect-src allowlist from env, falling back to safe defaults.
  * Always includes `'self'` and never returns an empty list.
  */
-function resolveConnectSrcOrigins(): string[] {
+export function resolveConnectSrcOrigins(): string[] {
 	const configured = (process.env.NEXT_PUBLIC_API_ORIGINS ?? "")
 		.split(",")
 		.map(normalizeConnectSrcOrigin)
@@ -90,7 +94,13 @@ function resolveConnectSrcOrigins(): string[] {
 	return Array.from(origins);
 }
 
-const connectSrcOrigins = resolveConnectSrcOrigins();
+/**
+ * Build the `connect-src` directive value from the resolved allowlist.
+ * Exported so tests can assert on the actual header value.
+ */
+export function buildConnectSrcDirective(): string {
+	return `connect-src ${resolveConnectSrcOrigins().join(" ")}`;
+}
 
 /**
  * Content-Security-Policy. Only `connect-src` is parameterized here; all
@@ -100,7 +110,7 @@ const connectSrcOrigins = resolveConnectSrcOrigins();
  */
 const contentSecurityPolicy = [
 	"default-src 'self'",
-	`connect-src ${connectSrcOrigins.join(" ")}`,
+	buildConnectSrcDirective(),
 ].join("; ");
 
 /** @type {import('next').NextConfig} */

@@ -12,6 +12,7 @@ const ERROR_CODES = {
 
 const MAX_FIELD_LENGTH = 256;
 const SESSION_COOKIE = "mux_session";
+const CORRELATION_ID_HEADER = "x-correlation-id";
 
 type LoginBody = { email: string; password: string };
 
@@ -31,7 +32,10 @@ function log(event: string, fields: Record<string, string | number>) {
 }
 
 function errorResponse(status: number, code: string, message: string, correlationId: string) {
-	return NextResponse.json({ error: { code, message, correlationId } }, { status });
+	return NextResponse.json(
+		{ error: { code, message, correlationId } },
+		{ status, headers: { [CORRELATION_ID_HEADER]: correlationId } },
+	);
 }
 
 function parseBody(raw: unknown): LoginBody | null {
@@ -90,7 +94,10 @@ export async function POST(request: Request) {
 	}
 
 	log("auth.login.succeeded", { correlationId, email: redactEmail(body.email) });
-	const response = NextResponse.json({ ok: true, correlationId });
+	const response = NextResponse.json(
+		{ ok: true, correlationId },
+		{ headers: { [CORRELATION_ID_HEADER]: correlationId } },
+	);
 	response.cookies.set(SESSION_COOKIE, token, {
 		httpOnly: true,
 		secure: true,

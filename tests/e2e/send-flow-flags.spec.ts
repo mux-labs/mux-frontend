@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { SEND_GATE_CODES } from "../../src/lib/feature-flags/send-flows";
 
 /**
  * E2E coverage for feature-flagged send flows (issue #803).
@@ -19,6 +20,14 @@ const BODY = {
 	asset: "native",
 	network: "testnet",
 };
+
+// Gate codes the route may return while the flag is off, derived from the
+// shared constant so a rename in `SEND_GATE_CODES` fails here too.
+const DENY_GATE_CODES = [
+	SEND_GATE_CODES.SEND_DISABLED,
+	SEND_GATE_CODES.SEND_KILL_SWITCH_ENGAGED,
+	SEND_GATE_CODES.SEND_NETWORK_MISCONFIGURED,
+];
 
 test.describe("POST /api/transactions/send (flags off)", () => {
 	test("anonymous sends are rejected", async ({ request }) => {
@@ -42,9 +51,7 @@ test.describe("POST /api/transactions/send (flags off)", () => {
 			},
 		});
 		expect([403, 503]).toContain(res.status());
-		expect((await res.json()).error.code).toMatch(
-			/^SEND_(DISABLED|KILL_SWITCH_ENGAGED|NETWORK_MISCONFIGURED)$/,
-		);
+		expect(DENY_GATE_CODES).toContain((await res.json()).error.code);
 	});
 
 	test("cookie-only cross-origin sends are rejected (CSRF)", async ({

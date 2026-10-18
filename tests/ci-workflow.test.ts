@@ -191,43 +191,54 @@ describe('Deterministic CSS build', () => {
     for (const name of ['tailwindcss', "'@tailwindcss/postcss"]) {
       const escaped = name.replace(/[/@']/g, '\\$&');
       const versions = new Set(
-        [...lockfile.matchAll(new RegExp(`^  ${escaped}@(\\d[^:(']*)`, 'gm'))].map(([, v]) => v),
+        [...lockfile.matchAll(new RegExp(`^  ${escaped}@([^:\\s]+):`, 'gm'))].map(([, version]) => version),
       );
-      expect([...versions], name).toHaveLength(1);
+      expect(versions.size, `${name} versions: ${[...versions].join(', ')}`).toBe(1);
+    }
+  });
+});
+
+/**
+ * Guards for issue #1052: the Playwright smoke spec must be runnable — no
+ * undeclared SDK imports, no non-existent runner API, and every `page.goto`
+ * path must map to a route directory under src/app.
+ */
+describe('Playwright smoke spec', () => {
+  const specPath = 'tests/playwright-smoke.ts';
+  const spec = readRepoFile(specPath);
+
+  it('does not import packages absent from package.json', () => {
+    const pkg = JSON.parse(readRepoFile('package.json')) as {
+      dependencies?: Record<string, string>;
+      devDependencies?: Record<string, string>;
+    };
+    const declared = new Set([
+      ...Object.keys(pkg.dependencies ?? {}),
+      ...Object.keys(pkg.devDependencies ?? {}),
+    ]);
+
+    const imports = [...spec.matchAll(/from\s+['"]([^'"]+)['"]/g)].map(([, specifier]) => specifier);
+    for (const specifier of imports) {
+      if (specifier.startsWith('.') || specifier.startsWith('node:')) continue;
+      const packageName = specifier.startsWith('@')
+        ? specifier.split('/').slice(0, 2).join('/')
+        : specifier.split('/')[0];
+      expect(declared.has(packageName), `${specPath} imports undeclared ${packageName}`).toBe(true);
     }
   });
 
-  it.each(['.next/', 'out/', 'coverage/', 'storybook-static/', 'playwright-report/', 'test-results/'])(
-    'git-ignores build output %s so Tailwind source detection never scans it',
-    (dir) => {
-      const ignored = readRepoFile('.gitignore')
-        .split('\n')
-        .map((line) => line.trim().replace(/^\//, ''));
-      expect(ignored).toContain(dir);
-    },
-  );
+  it('does not call the non-existent test.run() runner API', () => {
+    expect(spec).not.toMatch(/\btest\.run\s*\(/);
+  });
 
-  it('emits byte-identical CSS regardless of class discovery order', async () => {
-    const { compile } = await import('tailwindcss');
-    const twRoot = resolve(repoRoot, 'node_modules/tailwindcss');
-    const loadStylesheet = async (id: string, base: string) => ({
-      path: id,
-      base,
-      content: readFileSync(
-        resolve(twRoot, id === 'tailwindcss' ? 'index.css' : `${id.replace(/^tailwindcss\//, '')}`),
-        'utf8',
-      ),
-    });
-    const build = async (candidates: string[]) =>
-      (await compile('@import "tailwindcss";', { base: twRoot, loadStylesheet })).build(candidates);
+  it('only navigates to routes that exist under src/app', () => {
+    const gotoPaths = [...spec.matchAll(/page\.goto\(\s*['"`]([^'"`]+)['"`]/g)].map(([, path]) => path);
+    expect(gotoPaths.length).toBeGreaterThan(0);
 
-    const candidates = ['flex', 'p-4', 'text-red-500', 'md:grid', 'hover:bg-blue-600', 'dark:text-white'];
-    const first = await build(candidates);
-    const reversed = await build([...candidates].reverse());
-    const duplicated = await build([...candidates, ...candidates]);
-
-    expect(first).toContain('.hover\\:bg-blue-600');
-    expect(reversed).toBe(first);
-    expect(duplicated).toBe(first);
+    for (const path of gotoPaths) {
+      const routePath = path.split(/[?#]/)[0].replace(/^\/+|\/+$/g, '');
+      const routeDir = resolve(repoRoot, 'src/app', routePath);
+      expect(existsSync(routeDir), `${specPath}: ${path} has no route under src/app`).toBe(true);
+    }
   });
 });

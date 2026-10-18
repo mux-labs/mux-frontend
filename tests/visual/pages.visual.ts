@@ -1,5 +1,7 @@
 import { expect, test } from "@playwright/test";
 
+import { PAGES } from "./pages";
+
 /**
  * Optional visual regression (issue #840).
  *
@@ -10,8 +12,6 @@ import { expect, test } from "@playwright/test";
  *
  *   VISUAL_REGRESSION=1 pnpm exec playwright test --project=visual --update-snapshots
  */
-const PAGES = [{ name: "login", path: "/login" }];
-
 for (const { name, path } of PAGES) {
 	test(`${name} page matches baseline`, async ({ page }) => {
 		await page.goto(path);

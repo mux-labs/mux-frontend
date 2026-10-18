@@ -1,0 +1,54 @@
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@testing-library/react';
+import { OfflineBanner } from './OfflineBanner';
+
+describe('OfflineBanner', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('renders nothing when online and no error', () => {
+    const { container } = render(<OfflineBanner />);
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('renders the offline copy after an offline event', () => {
+    render(<OfflineBanner />);
+
+    act(() => {
+      window.dispatchEvent(new Event('offline'));
+    });
+
+    expect(screen.getByText(/you are offline/i)).toBeInTheDocument();
+  });
+
+  it('renders the error copy and calls onRetry when the error prop is set', () => {
+    const onRetry = vi.fn();
+    const reload = vi.fn();
+    vi.spyOn(window, 'location', 'get').mockReturnValue({
+      ...window.location,
+      reload,
+    } as Location);
+
+    render(<OfflineBanner error="Failed to fetch" onRetry={onRetry} />);
+
+    expect(screen.getByText('Failed to fetch')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /retry/i }));
+
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it('clears the error after an online event', () => {
+    render(<OfflineBanner error="Failed to fetch" />);
+
+    expect(screen.getByText('Failed to fetch')).toBeInTheDocument();
+
+    act(() => {
+      window.dispatchEvent(new Event('online'));
+    });
+
+    expect(screen.queryByText('Failed to fetch')).not.toBeInTheDocument();
+  });
+});

@@ -1,54 +1,76 @@
-'use client';
-
-import React, { useState, useEffect, useCallback } from 'react';
+import { useEffect, useState } from 'react';
 
 interface OfflineBannerProps {
   onRetry?: () => void;
   className?: string;
+  error?: string | null;
 }
 
-export function OfflineBanner({ onRetry, className = '' }: OfflineBannerProps) {
-  const [isOffline, setIsOffline] = useState(!navigator.onLine);
-  const [error, setError] = useState<string | null>(null);
+export function OfflineBanner({ onRetry, className, error: errorProp }: OfflineBannerProps) {
+  const [isOffline, setIsOffline] = useState(
+    typeof navigator !== 'undefined' ? !navigator.onLine : false
+  );
+  const [localError, setLocalError] = useState<string | null>(null);
+
+  const error = errorProp ?? localError;
 
   useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
     const handleOffline = () => setIsOffline(true);
+    const handleOnline = () => {
+      setIsOffline(false);
+      setLocalError(null);
+    };
 
-    window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('online', handleOnline);
 
     return () => {
-      window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('online', handleOnline);
     };
   }, []);
 
-  const handleRetry = useCallback(() => {
+  const handleRetry = () => {
     if (onRetry) {
       onRetry();
     } else {
       window.location.reload();
     }
-  }, [onRetry]);
+  };
 
   if (!isOffline && !error) return null;
 
+  if (error) {
+    return (
+      <div
+        className={`flex items-center justify-between gap-3 bg-red-600 px-4 py-2 text-sm text-white ${className ?? ''}`}
+        role="alert"
+      >
+        <span>{error}</span>
+        <button
+          type="button"
+          onClick={handleRetry}
+          className="rounded bg-white/20 px-3 py-1 font-medium hover:bg-white/30"
+        >
+          Retry
+        </button>
+      </div>
+    );
+  }
+
   return (
-    <div className={`fixed top-0 left-0 right-0 z-50 ${className}`}>
-      {error ? (
-        <div className="bg-red-600 text-white px-4 py-3 flex justify-between items-center">
-          <span>{error}</span>
-          <button onClick={handleRetry} className="underline hover:no-underline">Retry</button>
-        </div>
-      ) : (
-        <div className="bg-orange-600 text-white px-4 py-3 flex justify-between items-center">
-          <span>📡 You are offline. Changes will sync when reconnected.</span>
-          {onRetry && (
-            <button onClick={handleRetry} className="underline hover:no-underline">Retry</button>
-          )}
-        </div>
-      )}
+    <div
+      className={`flex items-center justify-between gap-3 bg-orange-500 px-4 py-2 text-sm text-white ${className ?? ''}`}
+      role="status"
+    >
+      <span>You are offline. Some features may be unavailable.</span>
+      <button
+        type="button"
+        onClick={handleRetry}
+        className="rounded bg-white/20 px-3 py-1 font-medium hover:bg-white/30"
+      >
+        Retry
+      </button>
     </div>
   );
 }

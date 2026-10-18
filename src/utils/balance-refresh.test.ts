@@ -1,7 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { renderHook, act } from "@testing-library/react";
 import {
 	balanceReducer,
 	initialBalanceState,
+	useBalanceRefresh,
 	type BalanceAction,
 	type BalanceState,
 } from "./balance-refresh";
@@ -47,5 +49,47 @@ describe("balanceReducer", () => {
 		const state = reduce([start(2), failure(1)], loaded);
 
 		expect(state).toBe(loaded);
+	});
+});
+
+describe("useBalanceRefresh", () => {
+	it("fetches exactly once on mount with a stable callback", async () => {
+		const fetchBalance = vi.fn().mockResolvedValue(100);
+
+		const { result } = renderHook(() => useBalanceRefresh(fetchBalance));
+
+		await act(async () => {});
+
+		expect(fetchBalance).toHaveBeenCalledTimes(1);
+		expect(result.current.balance).toBe(100);
+	});
+
+	it("does not refetch on re-render with a new inline callback identity", async () => {
+		const fetchBalance = vi.fn().mockResolvedValue(100);
+
+		const { rerender } = renderHook(() => useBalanceRefresh(() => fetchBalance()));
+
+		await act(async () => {});
+		expect(fetchBalance).toHaveBeenCalledTimes(1);
+
+		rerender();
+		await act(async () => {});
+
+		expect(fetchBalance).toHaveBeenCalledTimes(1);
+	});
+
+	it("triggers exactly one additional fetch when refresh is called", async () => {
+		const fetchBalance = vi.fn().mockResolvedValue(100);
+
+		const { result } = renderHook(() => useBalanceRefresh(fetchBalance));
+
+		await act(async () => {});
+		expect(fetchBalance).toHaveBeenCalledTimes(1);
+
+		await act(async () => {
+			await result.current.refresh();
+		});
+
+		expect(fetchBalance).toHaveBeenCalledTimes(2);
 	});
 });

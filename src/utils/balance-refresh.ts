@@ -1,60 +1,54 @@
-import { useCallback, useEffect, useReducer, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-// Stale-while-revalidate balance state: a refresh keeps the last known balance
-// on screen (no flicker to a skeleton/zero) and out-of-order responses are
-// dropped so an older request can never overwrite a newer balance.
-
-export type BalanceState = {
-	balance: string | null;
-	refreshing: boolean;
-	error: string | null;
-	requestId: number;
-};
-
-export type BalanceAction =
-	| { type: "start"; requestId: number }
-	| { type: "success"; requestId: number; balance: string }
-	| { type: "failure"; requestId: number; error: string };
-
-export const initialBalanceState: BalanceState = {
-	balance: null,
-	refreshing: false,
-	error: null,
-	requestId: 0,
-};
-
-export function balanceReducer(state: BalanceState, action: BalanceAction): BalanceState {
-	switch (action.type) {
-		case "start":
-			return { ...state, refreshing: true, requestId: action.requestId };
-		case "success":
-			if (action.requestId !== state.requestId) return state;
-			return { ...state, balance: action.balance, refreshing: false, error: null };
-		case "failure":
-			// Keep the last known balance; surface the error without blanking it.
-			if (action.requestId !== state.requestId) return state;
-			return { ...state, refreshing: false, error: action.error };
-	}
+export interface BalanceRefreshState<T> {
+  balance: T | null;
+  refreshing: boolean;
+  error: Error | null;
+  refresh: () => Promise<void>;
 }
 
-export function useBalanceRefresh(fetchBalance: () => Promise<string>) {
-	const [state, dispatch] = useReducer(balanceReducer, initialBalanceState);
-	const counter = useRef(0);
+/**
+ * Stale-while-revalidate balance hook.
+ *
+ * Keeps the last known balance visible while a fresh request is in flight so
+ * the UI never flickers to a skeleton or zero. The latest `fetchBalance` is
+ * held in a ref so the returned `refresh` stays stable across renders — an
+ * inline arrow callback will not cause a fetch per render. The mount effect
+ * runs once; subsequent fetches happen only when `refresh` is called.
+ */
+export function useBalanceRefresh<T>(
+  fetchBalance: () => Promise<T>,
+): BalanceRefreshState<T> {
+  const [balance, setBalance] = useState<T | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<Error | null>(null);
 
-	const refresh = useCallback(async () => {
-		const requestId = ++counter.current;
-		dispatch({ type: "start", requestId });
-		try {
-			const balance = await fetchBalance();
-			dispatch({ type: "success", requestId, balance });
-		} catch {
-			dispatch({ type: "failure", requestId, error: "BALANCE_REFRESH_FAILED" });
-		}
-	}, [fetchBalance]);
+  const fetchRef = useRef(fetchBalance);
+  fetchRef.current = fetchBalance;
 
-	useEffect(() => {
-		void refresh();
-	}, [refresh]);
+  const requestIdRef = useRef(0);
 
-	return { ...state, refresh };
+  const refresh = useCallback(async () => {
+    const requestId = ++requestIdRef.current;
+    setRefreshing(true);
+    try {
+      const next = await fetchRef.current();
+      if (requestId !== requestIdRef.current) return;
+      setBalance(next);
+      setError(null);
+    } catch (err) {
+      if (requestId !== requestIdRef.current) return;
+      setError(err instanceof Error ? err : new Error(String(err)));
+    } finally {
+      if (requestId === requestIdRef.current) {
+        setRefreshing(false);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    void refresh();
+  }, [refresh]);
+
+  return { balance, refreshing, error, refresh };
 }

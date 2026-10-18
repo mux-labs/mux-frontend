@@ -123,3 +123,48 @@ export function redactToken(token: string): string {
 	}
 	return `${token.slice(0, 4)}…${token.slice(-4)}`;
 }
+
+/**
+ * Stable error codes the real mux-backend wallets surface (`GET
+ * /api/wallets`) is expected to return on failure. Mirrors
+ * `LOGIN_ERROR_CODES` above so `wallets.spec.ts` can assert on exact codes
+ * instead of free-form error text — see issue #950.
+ */
+export const WALLET_ERROR_CODES = {
+	unauthorized: "WALLETS_UNAUTHORIZED",
+	forbidden: "WALLETS_FORBIDDEN",
+	unavailable: "WALLETS_UNAVAILABLE",
+} as const;
+
+export type WalletErrorCode =
+	(typeof WALLET_ERROR_CODES)[keyof typeof WALLET_ERROR_CODES];
+
+/**
+ * Shape of a single wallet row the real `GET /api/wallets` response is
+ * expected to return.
+ */
+export interface RealBackendWallet {
+	walletId: string;
+	network: "testnet" | "mainnet";
+	label: string | null;
+}
+
+/**
+ * Shape of the `GET /api/wallets` response body the real backend is
+ * expected to return. `correlationId` is required for the same tracing
+ * reasons as `RealBackendLoginResponse` above.
+ */
+export interface RealBackendWalletsResponse {
+	wallets: RealBackendWallet[];
+	correlationId: string;
+}
+
+/**
+ * Shape of a wallets error body. `code` is one of `WALLET_ERROR_CODES` and
+ * `correlationId` is echoed back so ops can correlate a client failure with
+ * a server log line without exposing secrets.
+ */
+export interface RealBackendWalletsError {
+	code: WalletErrorCode;
+	correlationId: string;
+}

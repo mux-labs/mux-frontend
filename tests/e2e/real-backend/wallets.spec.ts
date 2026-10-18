@@ -1,5 +1,10 @@
 import { expect, type Page, test } from "@playwright/test";
-import { readRealBackendEnv, REAL_BACKEND_SKIP_REASON } from "./helpers";
+import {
+	readCorrelationId,
+	readRealBackendEnv,
+	REAL_BACKEND_SKIP_REASON,
+	redactToken,
+} from "./helpers";
 
 /**
  * Contract coverage for GET /api/wallets against a REAL mux-backend.
@@ -114,6 +119,56 @@ test.describe("Wallets dashboard against a real mux-backend", () => {
 		await expect(
 			page.getByText(/bearer|authorization|secret|private key/i),
 		).toHaveCount(0);
+	});
+
+	test("surfaces the correlation id via the shared helper and never logs the raw bearer token", async ({
+		page,
+	}) => {
+		await signInRealBackend(page);
+
+		let capturedAuth: string | null = null;
+		await page.route("**/api/wallets", async (route) => {
+			capturedAuth = route.request().headers()["authorization"] ?? null;
+			await route.fulfill({
+				status: 503,
+				contentType: "application/json",
+				body: JSON.stringify({
+					code: "WALLETS_UNAVAILABLE",
+					correlationId: "e2e-helper-correlation-id",
+					message: "Wallets are temporarily unavailable.",
+				}),
+				headers: { "x-correlation-id": "e2e-helper-correlation-id" },
+			});
+		});
+
+		const responsePromise = page.waitForResponse((res) =>
+			res.url().includes("/api/wallets"),
+		);
+		await page.goto("/dashboard/wallets");
+		const response = await responsePromise;
+		const body = (await response.json().catch(() => null)) as unknown;
+
+		// Adapt Playwright's plain headers object to the `{ get(name) }`
+		// interface `readCorrelationId` expects (the same shared helper
+		// `login.spec.ts` uses), rather than re-implementing the lookup here.
+		const rawHeaders = response.headers();
+		const headerLike = {
+			get: (name: string) => rawHeaders[name.toLowerCase()] ?? null,
+		};
+		const correlationId = readCorrelationId(headerLike, body);
+		expect(correlationId).toBe("e2e-helper-correlation-id");
+		await expect(page.getByText(correlationId!)).toBeVisible();
+
+		// The real bearer token must never appear unredacted in test output.
+		// If the wallets request carried one, prove the shared redaction
+		// helper never echoes it back in full (parity with how a failure
+		// message elsewhere in this spec would log it).
+		if (capturedAuth) {
+			const token = capturedAuth.replace(/^Bearer\s+/i, "");
+			if (token.length > 8) {
+				expect(redactToken(token)).not.toBe(token);
+			}
+		}
 	});
 
 	test("scopes the request to the active network switcher against the real backend", async ({

@@ -3,43 +3,23 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
 
-interface LockFileEntry {
-  name: string;
-  version: string;
-  resolved: string;
-  integrity: string;
-  dependencies?: Record<string, string>;
-}
-
-interface LockFileIntegrityResult {
-  valid: boolean;
-  packageCount: number;
-  failed: string[];
-  warnings: string[];
-  missingIntegrity: string[];
-  hashMismatch: string[];
-  lockFileHash: string;
-  verifiedAt: number;
-}
-
-interface PackageJson {
-  name: string;
-  version: string;
-  dependencies?: Record<string, string>;
-  devDependencies?: Record<string, string>;
-}
+// #937: integrity verification must only fail on genuinely missing or
+// mismatched integrity hashes. Dependency-consistency and unused-package
+// findings are advisory and must never flip `valid` to false. The parser
+// must also handle the lockfile shapes pnpm actually produces (a `packages:`
+// section with quoted `'name@version':` keys and a nested/inline
+// `resolution: {integrity: ..., ...}` map), not just a single hand-picked
+// indentation pattern.
 
 export class PnpmLockIntegrityVerifier {
-  private lockFilePath: string;
-  private packageJsonPath: string;
-
-  constructor(projectRoot: string = process.cwd()) {
+  constructor(projectRoot = process.cwd()) {
     this.lockFilePath = path.join(projectRoot, 'pnpm-lock.yaml');
     this.packageJsonPath = path.join(projectRoot, 'package.json');
+    this.projectRoot = projectRoot;
   }
 
-  verify(): LockFileIntegrityResult {
-    const result: LockFileIntegrityResult = {
+  verify() {
+    const result = {
       valid: true,
       packageCount: 0,
       failed: [],
@@ -64,6 +44,8 @@ export class PnpmLockIntegrityVerifier {
       result.missingIntegrity = integrityIssues.missing;
       result.hashMismatch = integrityIssues.mismatched;
 
+      // `valid` reflects only genuine integrity problems (missing/mismatched
+      // hashes) or a parse failure below - never advisory warnings.
       if (result.missingIntegrity.length > 0 || result.hashMismatch.length > 0) {
         result.valid = false;
       }
@@ -76,11 +58,6 @@ export class PnpmLockIntegrityVerifier {
       if (unusedPackages.length > 0) {
         result.warnings.push(...unusedPackages);
       }
-
-      if (result.warnings.length > 0) {
-        result.valid = false;
-      }
-
     } catch (error) {
       result.valid = false;
       result.failed.push(error instanceof Error ? error.message : 'Unknown error');
@@ -89,67 +66,105 @@ export class PnpmLockIntegrityVerifier {
     return result;
   }
 
-  private parseLockFile(content: string): LockFileEntry[] {
-    const packages: LockFileEntry[] = [];
+  /**
+   * Parses the `packages:` section of a pnpm-lock.yaml (lockfile v6+/v9
+   * shape): entries are 2-space-indented `'name@version':` (or unquoted)
+   * keys, each followed by a more-indented block that contains a
+   * `resolution: {integrity: sha512-..., ...}` map - either inline on one
+   * line or spread across several indented lines.
+   */
+  parseLockFile(content) {
     const lines = content.split('\n');
-    let currentPackage: Partial<LockFileEntry> = {};
-    let inPackage = false;
 
-    for (const line of lines) {
-      if (line.startsWith('  ') && !line.startsWith('    ')) {
-        if (inPackage && currentPackage.name) {
-          packages.push(currentPackage as LockFileEntry);
-        }
-        const match = line.match(/^(\S+):/);
-        if (match) {
-          currentPackage = { name: match[1] };
-          inPackage = true;
-        }
-      } else if (line.startsWith('    ') && inPackage) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('version:')) {
-          currentPackage.version = trimmed.split(':')[1].trim();
-        } else if (trimmed.startsWith('resolved:')) {
-          currentPackage.resolved = trimmed.split(':')[1].trim();
-        } else if (trimmed.startsWith('integrity:')) {
-          currentPackage.integrity = trimmed.split(':')[1].trim();
-        }
+    const sectionStart = lines.findIndex((line) => line === 'packages:');
+    if (sectionStart === -1) {
+      return [];
+    }
+    let sectionEnd = lines.length;
+    for (let i = sectionStart + 1; i < lines.length; i++) {
+      // The next top-level (unindented, non-blank) key ends the section.
+      if (/^\S/.test(lines[i])) {
+        sectionEnd = i;
+        break;
       }
     }
 
-    if (inPackage && currentPackage.name) {
-      packages.push(currentPackage as LockFileEntry);
+    const packages = [];
+    let current = null;
+
+    // Exactly 2 leading spaces (a 3rd space means this is a nested field of
+    // the current package, e.g. `    resolution:`, not a new package key).
+    const keyPattern = /^ {2}(?!\s)(['"]?)(.+?)\1:\s*$/;
+
+    for (let i = sectionStart + 1; i < sectionEnd; i++) {
+      const line = lines[i];
+      if (line.trim() === '') continue;
+
+      const keyMatch = line.match(keyPattern);
+      if (keyMatch) {
+        if (current) packages.push(current);
+        const key = keyMatch[2];
+        const { name, version } = this.splitNameVersion(key);
+        current = { name, version, resolved: '', integrity: '' };
+        continue;
+      }
+
+      if (!current) continue;
+
+      // `integrity:` may appear inline in a flow map (`resolution: {integrity: ...}`)
+      // or on its own indented line - either way, grab the token after it.
+      const integrityMatch = line.match(/integrity:\s*([^\s,}'"]+)/);
+      if (integrityMatch && !current.integrity) {
+        current.integrity = integrityMatch[1];
+      }
+
+      const resolvedMatch = line.match(/(?:^|[{,]\s*)tarball:\s*([^\s,}'"]+)/);
+      if (resolvedMatch && !current.resolved) {
+        current.resolved = resolvedMatch[1];
+      }
     }
+    if (current) packages.push(current);
 
     return packages;
   }
 
-  private validateIntegrity(
-    packages: LockFileEntry[]
-  ): { missing: string[]; mismatched: string[] } {
-    const missing: string[] = [];
-    const mismatched: string[] = [];
+  /** Splits a `'@scope/name@1.2.3'` or `'name@1.2.3'` package key. */
+  splitNameVersion(key) {
+    const scoped = key.startsWith('@');
+    const rest = scoped ? key.slice(1) : key;
+    const atIndex = rest.lastIndexOf('@');
+    if (atIndex === -1) {
+      return { name: key, version: '' };
+    }
+    const name = (scoped ? '@' : '') + rest.slice(0, atIndex);
+    const version = rest.slice(atIndex + 1);
+    return { name, version };
+  }
+
+  validateIntegrity(packages) {
+    const missing = [];
+    const mismatched = [];
 
     for (const pkg of packages) {
       if (!pkg.integrity || pkg.integrity.trim() === '') {
         missing.push(`${pkg.name}@${pkg.version}`);
-      } else {
-        const expectedHash = this.extractIntegrityHash(pkg.integrity);
-        if (expectedHash && !this.verifyPackageIntegrity(pkg)) {
-          mismatched.push(`${pkg.name}@${pkg.version}`);
-        }
+        continue;
+      }
+      const expectedHash = this.extractIntegrityHash(pkg.integrity);
+      if (expectedHash && !this.verifyPackageIntegrity(pkg)) {
+        mismatched.push(`${pkg.name}@${pkg.version}`);
       }
     }
 
     return { missing, mismatched };
   }
 
-  private extractIntegrityHash(integrity: string): string | null {
+  extractIntegrityHash(integrity) {
     const match = integrity.match(/sha512-([a-zA-Z0-9+/=]+)/);
     return match ? match[1] : null;
   }
 
-  private verifyPackageIntegrity(pkg: LockFileEntry): boolean {
+  verifyPackageIntegrity(pkg) {
     try {
       const pkgPath = this.getPackagePath(pkg);
       if (!fs.existsSync(pkgPath)) return false;
@@ -159,12 +174,12 @@ export class PnpmLockIntegrityVerifier {
     }
   }
 
-  private getPackagePath(pkg: LockFileEntry): string {
+  getPackagePath(pkg) {
     const safeName = pkg.name.replace(/[^a-zA-Z0-9]/g, '_');
-    return path.join(process.cwd(), 'node_modules', safeName);
+    return path.join(this.projectRoot, 'node_modules', safeName);
   }
 
-  private readPackageJson(): PackageJson | null {
+  readPackageJson() {
     try {
       const content = fs.readFileSync(this.packageJsonPath, 'utf-8');
       return JSON.parse(content);
@@ -173,11 +188,8 @@ export class PnpmLockIntegrityVerifier {
     }
   }
 
-  private checkDependencyConsistency(
-    packages: LockFileEntry[],
-    packageJson: PackageJson | null
-  ): string[] {
-    const warnings: string[] = [];
+  checkDependencyConsistency(packages, packageJson) {
+    const warnings = [];
 
     if (!packageJson) return warnings;
 
@@ -197,11 +209,8 @@ export class PnpmLockIntegrityVerifier {
     return warnings;
   }
 
-  private findUnusedPackages(
-    packages: LockFileEntry[],
-    packageJson: PackageJson | null
-  ): string[] {
-    const warnings: string[] = [];
+  findUnusedPackages(packages, packageJson) {
+    const warnings = [];
     if (!packageJson) return warnings;
 
     const usedDeps = new Set([
@@ -219,12 +228,12 @@ export class PnpmLockIntegrityVerifier {
     return warnings;
   }
 
-  private computeFileHash(filePath: string): string {
+  computeFileHash(filePath) {
     const content = fs.readFileSync(filePath);
     return createHash('sha256').update(content).digest('hex');
   }
 
-  async fix(): Promise<boolean> {
+  async fix() {
     try {
       execSync('pnpm install --lockfile-only', { stdio: 'inherit' });
       execSync('pnpm verify-pnpm.js', { stdio: 'inherit' });
@@ -234,8 +243,8 @@ export class PnpmLockIntegrityVerifier {
     }
   }
 
-  generateReport(result: LockFileIntegrityResult): string {
-    const lines: string[] = [
+  generateReport(result) {
+    const lines = [
       '# pnpm Lock File Integrity Report',
       '',
       `**Verified At:** ${new Date(result.verifiedAt).toISOString()}`,
@@ -280,9 +289,7 @@ export class PnpmLockIntegrityVerifier {
   }
 }
 
-export function verifyPnpmLock(): LockFileIntegrityResult {
-  const verifier = new PnpmLockIntegrityVerifier();
+export function verifyPnpmLock(projectRoot) {
+  const verifier = new PnpmLockIntegrityVerifier(projectRoot);
   return verifier.verify();
 }
-
-export { PnpmLockIntegrityVerifier };

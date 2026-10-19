@@ -8,6 +8,16 @@ import { expect, test } from "@playwright/test";
  * well-formed credentials when `NEXT_PUBLIC_API_URL` is unset, so this
  * spec exercises real client wiring without depending on a live backend.
  */
+
+
+/**
+ * Smoke coverage for the primary login path: empty state -> validation
+ * errors -> successful sign in -> redirect to the dashboard.
+ *
+ * The `/api/auth/login` route mocks a successful response for any
+ * well-formed credentials when `NEXT_PUBLIC_API_URL` is unset, so this
+ * spec exercises real client wiring without depending on a live backend.
+ */
 test.describe("Login smoke", () => {
 	test.beforeEach(async ({ page }) => {
 		await page.goto("/login");

@@ -43,15 +43,86 @@ describe("buildBackendUrl", () => {
 		expect(buildBackendUrl("/spending-limits", env)).toBe(
 			"https://backend.test/v1/spending-limits",
 		);
+		expect(buildBackendUrl("/wallets/abc/balance?x=1", env)).toBe(
+			"https://backend.test/v1/wallets/abc/balance?x=1",
+		);
+	});
+
+	it("normalizes trailing slashes on the base without doubling slashes", () => {
+		expect(
+			buildBackendUrl("/spending-limits", {
+				MUX_BACKEND_URL: "https://backend.test/v1/",
+			}),
+		).toBe("https://backend.test/v1/spending-limits");
+		expect(
+			buildBackendUrl("/spending-limits", {
+				MUX_BACKEND_URL: "https://backend.test///",
+			}),
+		).toBe("https://backend.test/spending-limits");
+		expect(
+			buildBackendUrl("/health", { MUX_BACKEND_URL: "http://localhost:4000" }),
+		).toBe("http://localhost:4000/health");
 	});
 
 	it("returns null when the backend is not configured", () => {
 		expect(buildBackendUrl("/spending-limits", {})).toBeNull();
+		expect(
+			buildBackendUrl("/spending-limits", { MUX_BACKEND_URL: undefined }),
+		).toBeNull();
 	});
 
-	it("refuses paths that could escape the backend host", () => {
+	it("returns null when MUX_BACKEND_URL is blank", () => {
+		expect(
+			buildBackendUrl("/spending-limits", { MUX_BACKEND_URL: "" }),
+		).toBeNull();
+		expect(
+			buildBackendUrl("/spending-limits", { MUX_BACKEND_URL: "   " }),
+		).toBeNull();
+	});
+
+	it("returns null when MUX_BACKEND_URL is not http(s)", () => {
+		for (const MUX_BACKEND_URL of [
+			"ftp://backend.test",
+			"file:///etc/passwd",
+			"javascript:alert(1)",
+			"backend.test",
+		]) {
+			expect(
+				buildBackendUrl("/spending-limits", { MUX_BACKEND_URL }),
+			).toBeNull();
+		}
+	});
+
+	it("returns null when MUX_BACKEND_URL embeds credentials", () => {
+		for (const MUX_BACKEND_URL of [
+			"https://user:secret@backend.test",
+			"https://user@backend.test",
+			"http://:secret@backend.test",
+		]) {
+			expect(
+				buildBackendUrl("/spending-limits", { MUX_BACKEND_URL }),
+			).toBeNull();
+		}
+	});
+
+	it("refuses paths without a leading slash", () => {
 		expect(buildBackendUrl("spending-limits", env)).toBeNull();
+		expect(buildBackendUrl("", env)).toBeNull();
+		expect(buildBackendUrl("https://evil.test/x", env)).toBeNull();
+		expect(buildBackendUrl("evil.test/x", env)).toBeNull();
+	});
+
+	it("refuses protocol-relative paths", () => {
 		expect(buildBackendUrl("//evil.test/x", env)).toBeNull();
+		expect(buildBackendUrl("//evil.test", env)).toBeNull();
+		expect(buildBackendUrl("///evil.test/x", env)).toBeNull();
+	});
+
+	it("refuses any path containing ..", () => {
 		expect(buildBackendUrl("/../admin", env)).toBeNull();
+		expect(buildBackendUrl("/wallets/../admin", env)).toBeNull();
+		expect(buildBackendUrl("/wallets/..", env)).toBeNull();
+		expect(buildBackendUrl("/wallets/..%2fadmin", env)).toBeNull();
+		expect(buildBackendUrl("/a..b", env)).toBeNull();
 	});
 });

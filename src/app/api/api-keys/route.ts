@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { mockApiKeys } from "@/mock-data/api-keys";
+import { isAuthorized, redact } from "./guards";
 
 type ApiKeyAction = "create" | "rotate" | "revoke";
 
@@ -49,22 +50,6 @@ function newCorrelationId(): string {
   return `apikey_${Date.now().toString(36)}_${Math.random()
     .toString(36)
     .slice(2, 10)}`;
-}
-
-// Never echo raw key material, JWTs, or secrets back to clients or logs.
-function redact(value: unknown): string {
-  if (typeof value !== "string" || value.length === 0) return "[redacted]";
-  return `[redacted:${value.length}]`;
-}
-
-// Deny-by-default: analytics is a privileged surface. Require an owner/API-key/JWT
-// credential before returning any per-key usage data.
-function isAuthorized(request: Request): boolean {
-  const auth = request.headers.get("authorization");
-  if (!auth) return false;
-  const [scheme, token] = auth.split(" ");
-  if (!token) return false;
-  return scheme === "Bearer" || scheme === "ApiKey";
 }
 
 // Idempotency keys are opaque client tokens; reject oversized/adversarial input

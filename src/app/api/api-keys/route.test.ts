@@ -13,6 +13,7 @@ vi.mock('@/mock-data/api-keys', () => ({
 }));
 
 import { GET, POST } from './route';
+import { isAuthorized, redact } from './guards';
 
 const AUTH_HEADERS = { authorization: 'Bearer test-token' };
 
@@ -291,4 +292,77 @@ describe('api-keys route', () => {
       expect(retriedBody).toMatchObject({ action: 'rotate', id: 'key_1' });
     });
   });
+});
+
+describe('redact', () => {
+  it.each([
+    ['undefined', undefined],
+    ['null', null],
+    ['an empty string', ''],
+    ['a number', 12345],
+    ['a boolean', true],
+    ['an object', { key: 'supersecret' }],
+    ['an array', ['supersecret']],
+  ])('returns "[redacted]" for %s', (_label, value) => {
+    expect(redact(value)).toBe('[redacted]');
+  });
+
+  it('returns only the length for a non-empty string', () => {
+    const out = redact('supersecret');
+
+    expect(out).toBe('[redacted:11]');
+    expect(out).not.toContain('supersecret');
+  });
+
+  it('never echoes any part of the original secret', () => {
+    const secret = 'sk_live_51M0L9SA9mG8G8xX5u4v5';
+    const out = redact(secret);
+
+    expect(out).toBe(`[redacted:${secret.length}]`);
+    expect(out).not.toContain(secret);
+    expect(out).not.toContain('sk_');
+    expect(out).not.toContain(secret.slice(-4));
+  });
+});
+
+describe('isAuthorized', () => {
+  function withAuth(authorization?: string) {
+    return new Request('http://localhost/api/api-keys', {
+      headers: authorization === undefined ? {} : { authorization },
+    });
+  }
+
+  it('returns false when the authorization header is missing', () => {
+    expect(isAuthorized(withAuth())).toBe(false);
+  });
+
+  it.each(['Bearer', 'ApiKey', 'Bearer ', 'Bearer  token'])(
+    'returns false when the header has no token: %j',
+    (header) => {
+      expect(isAuthorized(withAuth(header))).toBe(false);
+    },
+  );
+
+  it.each(['Basic dXNlcjpwYXNz', 'Token abc', 'Digest abc', 'test-token'])(
+    'returns false for an unknown scheme: %j',
+    (header) => {
+      expect(isAuthorized(withAuth(header))).toBe(false);
+    },
+  );
+
+  // Scheme matching is case-sensitive today; changing that must be a
+  // deliberate test update.
+  it.each(['bearer test-token', 'BEARER test-token', 'apikey test-key', 'Apikey test-key'])(
+    'returns false for a non-canonical scheme casing: %j',
+    (header) => {
+      expect(isAuthorized(withAuth(header))).toBe(false);
+    },
+  );
+
+  it.each(['Bearer test-token', 'ApiKey test-key'])(
+    'returns true for %j',
+    (header) => {
+      expect(isAuthorized(withAuth(header))).toBe(true);
+    },
+  );
 });

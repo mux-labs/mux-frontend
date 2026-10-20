@@ -5,14 +5,6 @@ import {
 	MOCK_AUDIT_ENTRY_COUNT,
 } from "@/lib/audit/mock-entries";
 import { AUDIT_ERROR_CODES } from "@/lib/audit/pagination";
-import { MAINTENANCE_HEADER } from "@/lib/http/maintenance";
-
-const backendUrlMocks = vi.hoisted(() => ({
-	getBackendBaseUrl: vi.fn(),
-	isMockFallbackAllowed: vi.fn(),
-}));
-
-vi.mock("@/lib/http/backend-url", () => backendUrlMocks);
 
 type Handler = (request: Request) => Promise<Response>;
 
@@ -40,7 +32,8 @@ async function json(response: Response) {
 		items?: { id: string }[];
 		nextCursor: string | null;
 		hasMore: boolean;
-		error?: { code: string };
+		correlationId?: string;
+		error?: { code: string; correlationId?: string };
 	};
 }
 
@@ -84,6 +77,8 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+	vi.doUnmock("@/lib/http/backend-url");
+	vi.doUnmock("@/lib/http/rate-limiter");
 	vi.unstubAllEnvs();
 	vi.unstubAllGlobals();
 	vi.restoreAllMocks();
@@ -183,6 +178,162 @@ describe("GET /api/activity — mock fallback pagination", () => {
 		vi.stubEnv("MUX_STELLAR_NETWORK", "mainnet");
 		const GET = await loadGet();
 		expect((await GET(activityRequest())).status).toBe(503);
+	});
+});
+
+describe("GET /api/activity — fail-closed short-circuits (#926)", () => {
+	const fixtureIds = MOCK_AUDIT_ENTRIES.map((entry) => entry.id);
+
+	// Forces the no-backend branch and pins the mock-fallback decision so the
+	// guard is exercised independently of NODE_ENV / network env vars.
+	function mockBackendUrl(allowMock: boolean) {
+		const getBackendBaseUrl = vi.fn(() => null);
+		const isMockFallbackAllowed = vi.fn(() => allowMock);
+		vi.doMock("@/lib/http/backend-url", () => ({
+			getBackendBaseUrl,
+			isMockFallbackAllowed,
+		}));
+		return { getBackendBaseUrl, isMockFallbackAllowed };
+	}
+
+	it("returns 401 with UNAUTHORIZED for a credential-less request", async () => {
+		const GET = await loadGet();
+		const res = await GET(activityRequest("?limit=5", {}));
+		expect(res.status).toBe(401);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+		const body = await json(res);
+		expect(body.error?.code).toBe(AUDIT_ERROR_CODES.UNAUTHORIZED);
+		expect(body.items).toBeUndefined();
+		expect(upstream).not.toHaveBeenCalled();
+	});
+
+	it("rejects an unknown authorization scheme before serving any data", async () => {
+		const GET = await loadGet();
+		const res = await GET(
+			activityRequest("", { authorization: "Basic dXNlcjpwYXNz" }),
+		);
+		expect(res.status).toBe(401);
+		expect((await json(res)).error?.code).toBe(AUDIT_ERROR_CODES.UNAUTHORIZED);
+	});
+
+	it("checks the credential before the rate limiter", async () => {
+		const check = vi.fn(() => ({ allowed: false, retryAfterMs: 5_000 }));
+		vi.doMock("@/lib/http/rate-limiter", () => ({
+			callerKey: () => "caller",
+			createFixedWindowLimiter: () => ({ check, reset: vi.fn() }),
+		}));
+		const GET = await loadGet();
+		const res = await GET(activityRequest("", {}));
+		expect(res.status).toBe(401);
+		expect(check).not.toHaveBeenCalled();
+	});
+
+	it("returns 429 with RATE_LIMITED and a retry-after header when the limiter denies", async () => {
+		vi.doMock("@/lib/http/rate-limiter", () => ({
+			callerKey: () => "caller",
+			createFixedWindowLimiter: () => ({
+				check: () => ({ allowed: false, retryAfterMs: 12_345 }),
+				reset: vi.fn(),
+			}),
+		}));
+		const GET = await loadGet();
+		const res = await GET(activityRequest("?limit=5"));
+		expect(res.status).toBe(429);
+		expect(res.headers.get("retry-after")).toBe("13");
+		const body = await json(res);
+		expect(body.error?.code).toBe(AUDIT_ERROR_CODES.RATE_LIMITED);
+		expect(body.items).toBeUndefined();
+		expect(upstream).not.toHaveBeenCalled();
+	});
+
+	it("returns 429 with a retry-after header once the real 60-request window is exhausted", async () => {
+		const GET = await loadGet();
+		for (let i = 0; i < 60; i += 1) {
+			expect((await GET(activityRequest("?limit=1"))).status).toBe(200);
+		}
+		const res = await GET(activityRequest("?limit=1"));
+		expect(res.status).toBe(429);
+		expect(res.headers.get("retry-after")).not.toBeNull();
+		expect(Number(res.headers.get("retry-after"))).toBeGreaterThan(0);
+		expect((await json(res)).error?.code).toBe(AUDIT_ERROR_CODES.RATE_LIMITED);
+	});
+
+	it("returns 503 and never serves mock entries when no backend is configured and mock fallback is disallowed", async () => {
+		const { getBackendBaseUrl, isMockFallbackAllowed } = mockBackendUrl(false);
+		const GET = await loadGet();
+		const res = await GET(activityRequest("?limit=10"));
+
+		expect(getBackendBaseUrl).toHaveBeenCalled();
+		expect(isMockFallbackAllowed).toHaveBeenCalled();
+		expect(res.status).toBe(503);
+		expect(res.headers.get("cache-control")).toBe("no-store");
+
+		const text = await res.text();
+		const body = JSON.parse(text) as Awaited<ReturnType<typeof json>>;
+		expect(body.error?.code).toBe(AUDIT_ERROR_CODES.BACKEND_UNAVAILABLE);
+		expect(body.items).toBeUndefined();
+		for (const id of fixtureIds) expect(text).not.toContain(id);
+		expect(upstream).not.toHaveBeenCalled();
+	});
+
+	it("returns 503 without mock entries even in a non-production env when the guard denies", async () => {
+		vi.stubEnv("NODE_ENV", "development");
+		mockBackendUrl(false);
+		const GET = await loadGet();
+		const res = await GET(activityRequest());
+		expect(res.status).toBe(503);
+		const text = await res.text();
+		for (const id of fixtureIds) expect(text).not.toContain(id);
+	});
+
+	it.each([
+		["production", { NODE_ENV: "production" }],
+		["mainnet", { NEXT_PUBLIC_STELLAR_NETWORK: "mainnet" }],
+		["public network", { MUX_STELLAR_NETWORK: "public" }],
+	])(
+		"returns 503 with no mock entry ids on a %s deploy (real guard)",
+		async (_label, env) => {
+			for (const [name, value] of Object.entries(env)) vi.stubEnv(name, value);
+			const GET = await loadGet();
+			const res = await GET(activityRequest("?limit=10"));
+			expect(res.status).toBe(503);
+			const text = await res.text();
+			expect(
+				(JSON.parse(text) as { error?: { code: string } }).error?.code,
+			).toBe(AUDIT_ERROR_CODES.BACKEND_UNAVAILABLE);
+			for (const id of fixtureIds) expect(text).not.toContain(id);
+		},
+	);
+
+	it("returns a paginated page with a correlationId when mock fallback is allowed", async () => {
+		mockBackendUrl(true);
+		const GET = await loadGet();
+		const res = await GET(
+			activityRequest("?limit=5", {
+				authorization: "Bearer test-token",
+				"x-correlation-id": "corr-926",
+			}),
+		);
+
+		expect(res.status).toBe(200);
+		expect(res.headers.get("x-correlation-id")).toBe("corr-926");
+		const body = await json(res);
+		expect(body.correlationId).toBe("corr-926");
+		expect(body.items).toHaveLength(5);
+		expect(body.hasMore).toBe(true);
+		expect(typeof body.nextCursor).toBe("string");
+		for (const item of body.items) expect(fixtureIds).toContain(item.id);
+		expect(upstream).not.toHaveBeenCalled();
+	});
+
+	it("mints a correlationId on the mock page when none is supplied", async () => {
+		mockBackendUrl(true);
+		const GET = await loadGet();
+		const res = await GET(activityRequest("?limit=1"));
+		expect(res.status).toBe(200);
+		const body = await json(res);
+		expect(typeof body.correlationId).toBe("string");
+		expect(body.correlationId).toBe(res.headers.get("x-correlation-id"));
 	});
 });
 

@@ -5,23 +5,6 @@ import { useEffect, useState } from 'react';
 interface OfflineBannerProps {
   onRetry?: () => void;
   className?: string;
-  error?: string | null;
-}
-
-export function OfflineBanner({ onRetry, className, error: errorProp }: OfflineBannerProps) {
-  const [isOffline, setIsOffline] = useState(
-    typeof navigator !== 'undefined' ? !navigator.onLine : false
-  );
-  const [localError, setLocalError] = useState<string | null>(null);
-
-  const error = errorProp ?? localError;
-
-  useEffect((
-import { useEffect, useState } from 'react';
-
-interface OfflineBannerProps {
-  onRetry?: () => void;
-  className?: string;
   /** Force the offline state (useful for stories/tests). */
   forceOffline?: boolean;
   /** Force an error message to display (useful for stories/tests). */

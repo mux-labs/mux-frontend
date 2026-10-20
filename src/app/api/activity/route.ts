@@ -58,13 +58,13 @@ const limiter = createFixedWindowLimiter(60, 60_000);
  * Single named predicate for the mock-fallback allow/deny decision.
  *
  * The mock fixture may only be served when no backend is configured AND the
- * environment is a non-production, non-mainnet one. Kept as one exported
- * predicate so the gate is testable in isolation (issue #1023).
+ * environment explicitly names a known non-production network. Kept as one
+ * exported predicate so the gate is testable in isolation (issue #1023).
  */
 export function isMockFallbackAllowedFor(
 	env: Record<string, string | undefined> = process.env,
 ): boolean {
-	return isMockFallbackAllowed(env);
+	return getBackendBaseUrl(env) === null && isMockFallbackAllowed(env);
 }
 
 function logAuditEvent(fields: {

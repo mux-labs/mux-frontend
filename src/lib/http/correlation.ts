@@ -9,7 +9,7 @@
 
 export const CORRELATION_HEADER = "x-correlation-id";
 
-const CORRELATION_ID_RE = /^[A-Za-z0-9._:-]{1,128}$/;
+const CORRELATION_ID_RE = /^(?=.*[A-Za-z0-9])[A-Za-z0-9._:-]{1,128}$/;
 
 export function isValidCorrelationId(value: unknown): value is string {
 	return typeof value === "string" && CORRELATION_ID_RE.test(value);

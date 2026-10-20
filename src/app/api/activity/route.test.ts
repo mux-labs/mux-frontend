@@ -4,6 +4,15 @@ import {
 	MOCK_AUDIT_ENTRIES,
 	MOCK_AUDIT_ENTRY_COUNT,
 } from "@/lib/audit/mock-entries";
+import { AUDIT_ERROR_CODES } from "@/lib/audit/pagination";
+import { MAINTENANCE_HEADER } from "@/lib/http/maintenance";
+
+const backendUrlMocks = vi.hoisted(() => ({
+	getBackendBaseUrl: vi.fn(),
+	isMockFallbackAllowed: vi.fn(),
+}));
+
+vi.mock("@/lib/http/backend-url", () => backendUrlMocks);
 
 type Handler = (request: Request) => Promise<Response>;
 
@@ -16,7 +25,7 @@ async function loadIsMockFallbackAllowed(): Promise<
 	(env: Record<string, string | undefined>) => boolean
 > {
 	vi.resetModules();
-	return (await import("./route")).isMockFallbackAllowed;
+	return (await import("./route")).isMockFallbackAllowedFor;
 }
 
 function activityRequest(
@@ -28,7 +37,7 @@ function activityRequest(
 
 async function json(response: Response) {
 	return (await response.json()) as {
-		items: { id: string }[];
+		items?: { id: string }[];
 		nextCursor: string | null;
 		hasMore: boolean;
 		error?: { code: string };
@@ -49,9 +58,29 @@ beforeEach(() => {
 		vi.stubEnv(name, "");
 	}
 	vi.stubEnv("NODE_ENV", "test");
+	vi.stubEnv("MUX_STELLAR_NETWORK", "testnet");
 	vi.stubGlobal("fetch", upstream);
 	vi.spyOn(console, "info").mockImplementation(() => undefined);
 	upstream.mockReset();
+	backendUrlMocks.getBackendBaseUrl.mockReset();
+	backendUrlMocks.getBackendBaseUrl.mockImplementation(
+		(env: Record<string, string | undefined> = process.env) => {
+			const value = env.MUX_BACKEND_URL?.trim();
+			return value ? value.replace(/\/+$/, "") : null;
+		},
+	);
+	backendUrlMocks.isMockFallbackAllowed.mockReset();
+	backendUrlMocks.isMockFallbackAllowed.mockImplementation(
+		(env: Record<string, string | undefined> = process.env) => {
+			if (env.NODE_ENV === "production") return false;
+			const network = (
+				env.MUX_STELLAR_NETWORK ?? env.NEXT_PUBLIC_STELLAR_NETWORK
+			)
+				?.trim()
+				.toLowerCase();
+			return network === "testnet" || network === "futurenet";
+		},
+	);
 });
 
 afterEach(() => {
@@ -102,7 +131,7 @@ describe("GET /api/activity — mock fallback pagination", () => {
 			expect(res.status).toBe(200);
 			expect(res.headers.get("cache-control")).toBe("no-store");
 			const body = await json(res);
-			ids.push(...body.items.map((item) => item.id));
+			ids.push(...(body.items ?? []).map((item) => item.id));
 			cursor = body.nextCursor;
 		} while (cursor);
 		expect(ids).toHaveLength(MOCK_AUDIT_ENTRY_COUNT);
@@ -110,14 +139,27 @@ describe("GET /api/activity — mock fallback pagination", () => {
 	});
 
 	it("serves the mock fixture when allowed (NODE_ENV=test, no backend)", async () => {
+		backendUrlMocks.getBackendBaseUrl.mockReturnValue(null);
+		backendUrlMocks.isMockFallbackAllowed.mockReturnValue(true);
 		const GET = await loadGet();
 		const res = await GET(activityRequest("?limit=10"));
 		expect(res.status).toBe(200);
 		expect(res.headers.get("cache-control")).toBe("no-store");
 		const body = await json(res);
-		expect(body.items.length).toBeGreaterThan(0);
+		expect(body.items?.length).toBeGreaterThan(0);
 		const fixtureIds = new Set(MOCK_AUDIT_ENTRIES.map((entry) => entry.id));
-		for (const item of body.items) expect(fixtureIds.has(item.id)).toBe(true);
+		for (const item of body.items ?? []) expect(fixtureIds.has(item.id)).toBe(true);
+	});
+
+	it("returns backend_unavailable without items when fallback is denied", async () => {
+		backendUrlMocks.getBackendBaseUrl.mockReturnValue(null);
+		backendUrlMocks.isMockFallbackAllowed.mockReturnValue(false);
+		const GET = await loadGet();
+		const res = await GET(activityRequest());
+		const body = await json(res);
+		expect(res.status).toBe(503);
+		expect(body.error?.code).toBe(AUDIT_ERROR_CODES.BACKEND_UNAVAILABLE);
+		expect(body.items).toBeUndefined();
 	});
 
 	it("rejects a cursor reused with different filters", async () => {
@@ -138,17 +180,21 @@ describe("GET /api/activity — mock fallback pagination", () => {
 	});
 
 	it("never serves the testnet mock on a mainnet deploy", async () => {
-		vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "mainnet");
+		vi.stubEnv("MUX_STELLAR_NETWORK", "mainnet");
 		const GET = await loadGet();
 		expect((await GET(activityRequest())).status).toBe(503);
 	});
 });
 
 describe("isMockFallbackAllowed predicate", () => {
-	it("allows test/development with no backend and non-mainnet", async () => {
+	it("allows test/development with no backend and an explicit non-mainnet", async () => {
 		const allowed = await loadIsMockFallbackAllowed();
-		expect(allowed({ NODE_ENV: "test" })).toBe(true);
-		expect(allowed({ NODE_ENV: "development" })).toBe(true);
+		expect(allowed({ NODE_ENV: "test", MUX_STELLAR_NETWORK: "testnet" })).toBe(
+			true,
+		);
+		expect(
+			allowed({ NODE_ENV: "development", MUX_STELLAR_NETWORK: "futurenet" }),
+		).toBe(true);
 	});
 
 	it("denies production", async () => {
@@ -223,7 +269,11 @@ describe("GET /api/activity — backend proxy", () => {
 			Response.json({ items: [{ id: "x" }], nextCursor: null }),
 		);
 		const GET = await loadGet();
-		expect((await GET(activityRequest())).status).toBe(503);
+		const res = await GET(activityRequest());
+		const body = await json(res);
+		expect(res.status).toBe(503);
+		expect(body.error?.code).toBe(AUDIT_ERROR_CODES.BACKEND_UNAVAILABLE);
+		expect(body.items).toBeUndefined();
 	});
 
 	it("fails closed on an upstream page larger than requested", async () => {
@@ -247,7 +297,10 @@ describe("GET /api/activity — backend proxy", () => {
 		const GET = await loadGet();
 		const res = await GET(activityRequest());
 		expect(res.status).toBe(503);
-		expect(res.headers.get("x-mux-maintenance")).toBe("true");
+		expect((await json(res)).error?.code).toBe(
+			AUDIT_ERROR_CODES.BACKEND_UNAVAILABLE,
+		);
+		expect(res.headers.get(MAINTENANCE_HEADER)).toBe("true");
 		expect(res.headers.get("retry-after")).toBe("60");
 	});
 

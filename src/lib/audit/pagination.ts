@@ -83,7 +83,10 @@ function invalid(
 	return { ok: false, code, field };
 }
 
-/** Validate `/api/activity` query params. Unknown params are ignored. */
+/**
+ * Validate `/api/activity` query params. Unknown params are ignored.
+ * Inverted UTC-normalized ranges report `from`; oversized ranges report `to`.
+ */
 export function parseAuditPageParams(
 	params: URLSearchParams,
 ): ParseAuditPageResult {
@@ -109,10 +112,10 @@ export function parseAuditPageParams(
 		filters[name] = new Date(raw).toISOString();
 	}
 	if (filters.from && filters.to) {
-		const span = Date.parse(filters.to) - Date.parse(filters.from);
-		if (span < 0 || span > MAX_AUDIT_RANGE_DAYS * DAY_MS) {
-			return invalid("to");
-		}
+		const fromMs = Date.parse(filters.from);
+		const toMs = Date.parse(filters.to);
+		if (fromMs > toMs) return invalid("from");
+		if (toMs - fromMs > MAX_AUDIT_RANGE_DAYS * DAY_MS) return invalid("to");
 	}
 
 	let limit = DEFAULT_AUDIT_PAGE_SIZE;

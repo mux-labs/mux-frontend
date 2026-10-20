@@ -87,12 +87,30 @@ describe("getBackendBaseUrl", () => {
 });
 
 describe("isMockFallbackAllowed", () => {
-	it("allows mocks outside production on non-mainnet networks", () => {
-		expect(isMockFallbackAllowed({})).toBe(true);
-		expect(isMockFallbackAllowed({ NODE_ENV: "development" })).toBe(true);
+	it("allows mocks outside production on known non-mainnet networks", () => {
 		expect(
-			isMockFallbackAllowed({ NODE_ENV: "test", MUX_STELLAR_NETWORK: "testnet" }),
+			isMockFallbackAllowed({
+				NODE_ENV: "development",
+				MUX_STELLAR_NETWORK: "testnet",
+			}),
 		).toBe(true);
+		expect(
+			isMockFallbackAllowed({
+				NODE_ENV: "test",
+				NEXT_PUBLIC_STELLAR_NETWORK: "futurenet",
+			}),
+		).toBe(true);
+	});
+
+	it("fails closed when the network is unset or unrecognized", () => {
+		expect(isMockFallbackAllowed({})).toBe(false);
+		expect(isMockFallbackAllowed({ NODE_ENV: "development" })).toBe(false);
+		expect(
+			isMockFallbackAllowed({
+				NODE_ENV: "development",
+				MUX_STELLAR_NETWORK: "customnet",
+			}),
+		).toBe(false);
 	});
 
 	it("refuses mocks when NODE_ENV is production", () => {

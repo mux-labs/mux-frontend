@@ -98,7 +98,7 @@ describe("parseAuditPageParams", () => {
 		[`action=${"a".repeat(129)}`, "action"],
 		["from=yesterday", "from"],
 		["from=2026-13-40", "from"],
-		["from=2026-02-01&to=2026-01-01", "to"],
+		["from=2026-02-01&to=2026-01-01", "from"],
 		["from=2024-01-01&to=2026-01-01", "to"],
 	])("rejects %s as invalid_filter", (query, field) => {
 		expect(parse(query)).toEqual({ ok: false, code: "invalid_filter", field });
@@ -199,15 +199,46 @@ describe("parseAuditPageParams rejection branches", () => {
 			expectRejected(query, field);
 		});
 
-		it("rejects an inverted range on the to field", () => {
+		it("rejects an inverted range on the from field", () => {
 			expectRejected(
 				"from=2026-02-01T00%3A00%3A00Z&to=2026-01-31T23%3A59%3A59Z",
-				"to",
+				"from",
 			);
 		});
 
-		it("accepts a zero-length range", () => {
-			expect(parse("from=2026-01-01&to=2026-01-01").ok).toBe(true);
+		it("accepts date-only bounds on the same day", () => {
+			expect(parse("from=2026-01-01&to=2026-01-01")).toMatchObject({
+				ok: true,
+				query: {
+					filters: {
+						from: "2026-01-01T00:00:00.000Z",
+						to: "2026-01-01T00:00:00.000Z",
+					},
+				},
+			});
+		});
+
+		it("accepts offset-bearing bounds that are forward after UTC normalization", () => {
+			expect(
+				parse(
+					"from=2024-01-01T23%3A00%3A00%2B02%3A00&to=2024-01-02T00%3A00%3A00Z",
+				),
+			).toMatchObject({
+				ok: true,
+				query: {
+					filters: {
+						from: "2024-01-01T21:00:00.000Z",
+						to: "2024-01-02T00:00:00.000Z",
+					},
+				},
+			});
+		});
+
+		it("rejects a genuinely inverted offset-bearing pair on from", () => {
+			expectRejected(
+				"from=2024-01-02T01%3A00%3A00%2B01%3A00&to=2024-01-01T23%3A59%3A59Z",
+				"from",
+			);
 		});
 
 		it(`accepts a range of exactly ${MAX_AUDIT_RANGE_DAYS} days`, () => {
@@ -220,10 +251,10 @@ describe("parseAuditPageParams rejection branches", () => {
 			).toMatchObject({ ok: true, query: { filters: { from, to } } });
 		});
 
-		it(`rejects a range over ${MAX_AUDIT_RANGE_DAYS} days`, () => {
+		it(`rejects a range one day over ${MAX_AUDIT_RANGE_DAYS} days`, () => {
 			const from = "2025-01-01T00:00:00.000Z";
 			const to = new Date(
-				Date.parse(from) + MAX_AUDIT_RANGE_DAYS * DAY_MS + 1,
+				Date.parse(from) + (MAX_AUDIT_RANGE_DAYS + 1) * DAY_MS,
 			).toISOString();
 			expectRejected(new URLSearchParams({ from, to }).toString(), "to");
 		});

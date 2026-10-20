@@ -32,11 +32,11 @@ export function getBackendBaseUrl(env: Env = process.env): string | null {
 	return null;
 }
 
-/** Mock fallbacks are never allowed in production or against mainnet. */
+/** Mock fallbacks require an explicitly configured non-mainnet network. */
 export function isMockFallbackAllowed(env: Env = process.env): boolean {
 	if (env.NODE_ENV === "production") return false;
-	const network = (configuredNetwork(env) ?? "").toLowerCase();
-	return network !== "mainnet" && network !== "public";
+	const network = configuredNetwork(env)?.toLowerCase();
+	return network === "testnet" || network === "futurenet";
 }
 
 /**

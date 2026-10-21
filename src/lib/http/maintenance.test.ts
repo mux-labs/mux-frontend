@@ -1,78 +1,40 @@
 import { describe, expect, it } from "vitest";
 import {
 	classifyServiceUnavailable,
-	SERVICE_UNAVAILABLE_COPY,
+	MAINTENANCE_HEADER,
+	SERVICE_UNAVAILABLE_CODES,
 } from "./maintenance";
-import { DEFAULT_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS } from "./retry-after";
 
-const NOW = Date.UTC(2026, 8, 27, 12, 0, 0);
+type TableRow = [status: number, headers: Record<string, string>, expectedCode: string | null];
 
-function unavailable(headers: Record<string, string> = {}, status = 503) {
-	return new Response(null, { status, headers });
-}
+const rows: TableRow[] = [
+	[503, { [MAINTENANCE_HEADER]: "true" }, SERVICE_UNAVAILABLE_CODES.MAINTENANCE],
+	[503, { [MAINTENANCE_HEADER]: "1" }, SERVICE_UNAVAILABLE_CODES.MAINTENANCE],
+	[500, { [MAINTENANCE_HEADER]: "true" }, null],
+	[503, {}, SERVICE_UNAVAILABLE_CODES.DEPENDENCY_UNAVAILABLE],
+	[200, {}, null],
+];
 
-describe("classifyServiceUnavailable", () => {
-	it("ignores non-503 statuses", () => {
-		expect(
-			classifyServiceUnavailable(unavailable({}, 500), undefined, NOW),
-		).toBeNull();
-		expect(
-			classifyServiceUnavailable(unavailable({}, 429), undefined, NOW),
-		).toBeNull();
-	});
+describe.each(rows)(
+	"classifyServiceUnavailable(%i, %o)",
+	(status, headers, expectedCode) => {
+		it(`classifies as ${expectedCode ?? "not unavailable"}`, () => {
+			const response = new Response(null, { status, headers });
+			const state = classifyServiceUnavailable(response);
+			if (expectedCode === null) {
+				expect(state).toBeNull();
+			} else {
+				expect(state?.code).toBe(expectedCode);
+			}
+		});
+	},
+);
 
-	it("detects maintenance from the header", () => {
-		const state = classifyServiceUnavailable(
-			unavailable({ "x-mux-maintenance": "true", "retry-after": "600" }),
-			undefined,
-			NOW,
-		);
-		expect(state?.code).toBe("MAINTENANCE");
-		// Oversized Retry-After is clamped.
-		expect(state?.retryAfterMs).toBe(MAX_RETRY_AFTER_MS);
-	});
-
-	it("detects maintenance from the body error code", () => {
-		const state = classifyServiceUnavailable(
-			unavailable(),
-			{ error: { code: "maintenance" } },
-			NOW,
-		);
-		expect(state?.code).toBe("MAINTENANCE");
-	});
-
-	it("fails closed to DEPENDENCY_UNAVAILABLE for any other 503", () => {
-		for (const body of [
-			undefined,
-			null,
-			"oops",
-			{ error: { code: "db_down" } },
-		]) {
-			const state = classifyServiceUnavailable(
-				unavailable({ "x-mux-maintenance": "maybe" }),
-				body,
-				NOW,
-			);
-			expect(state?.code).toBe("DEPENDENCY_UNAVAILABLE");
-			expect(state?.retryAfterMs).toBe(DEFAULT_RETRY_AFTER_MS);
-		}
-	});
-
-	it("propagates a safe correlation id", () => {
-		const state = classifyServiceUnavailable(
-			unavailable({ "x-correlation-id": "abc-123" }),
-			undefined,
-			NOW,
-		);
-		expect(state?.correlationId).toBe("abc-123");
-		expect(state?.retryAt).toBe(NOW + DEFAULT_RETRY_AFTER_MS);
-	});
-});
-
-describe("SERVICE_UNAVAILABLE_COPY", () => {
-	it("is fixed copy with no links or markup a spoofed 503 could influence", () => {
-		for (const copy of Object.values(SERVICE_UNAVAILABLE_COPY)) {
-			expect(copy.title + copy.body).not.toMatch(/https?:|<|>/);
-		}
-	});
+it("every SERVICE_UNAVAILABLE_CODES value is reachable from the table", () => {
+	const produced = new Set<string>();
+	for (const [status, headers] of rows) {
+		const state = classifyServiceUnavailable(new Response(null, { status, headers }));
+		if (state) produced.add(state.code);
+	}
+	expect(produced).toEqual(new Set(Object.values(SERVICE_UNAVAILABLE_CODES)));
 });

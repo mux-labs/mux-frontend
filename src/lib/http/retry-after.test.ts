@@ -3,6 +3,7 @@ import {
 	classifyRateLimit,
 	DEFAULT_RETRY_AFTER_MS,
 	fetchWithRetryAfter,
+	formatRetryAfterSeconds,
 	formatRetryCountdown,
 	MAX_RETRY_AFTER_MS,
 	MIN_RETRY_AFTER_MS,
@@ -195,5 +196,101 @@ describe("formatRetryCountdown", () => {
 		[125_000, "2m 05s"],
 	])("formats %i ms as %s", (ms, expected) => {
 		expect(formatRetryCountdown(ms)).toBe(expected);
+	});
+});
+
+/**
+ * Boundary inputs from issue #999, each paired with the exact `retry-after`
+ * header value it must produce. These reach the client as an HTTP header, so
+ * the assertions below pin the observable 429 contract, not just internals.
+ */
+const BOUNDARY_INPUTS: Array<[delayMs: number, seconds: string]> = [
+	[0, "1"],
+	[1, "1"],
+	[999, "1"],
+	[1_000, "1"],
+	[1_001, "2"],
+	[60_000, "60"],
+	[Number.MAX_SAFE_INTEGER, "9007199254741"],
+	[-1, "1"],
+];
+
+describe.each(BOUNDARY_INPUTS)(
+	"formatRetryAfterSeconds(%i)",
+	(delayMs, expected) => {
+		it("pins the delta-seconds header value", () => {
+			expect(formatRetryAfterSeconds(delayMs)).toBe(expected);
+		});
+
+		it("is a positive integer, never 0 or a negative delta", () => {
+			// `retry-after: 0` reads as "retry immediately" and invites the retry
+			// storm the 429 contract exists to prevent.
+			expect(formatRetryAfterSeconds(delayMs)).toMatch(/^[1-9]\d*$/);
+		});
+
+		it("is pure", () => {
+			expect(formatRetryAfterSeconds(delayMs)).toBe(
+				formatRetryAfterSeconds(delayMs),
+			);
+		});
+	},
+);
+
+describe("formatRetryAfterSeconds", () => {
+	it("never formats a zero or negative delay below 1 second", () => {
+		for (const delayMs of [0, -1, -1_000, -Number.MAX_SAFE_INTEGER]) {
+			const seconds = Number(formatRetryAfterSeconds(delayMs));
+			expect(seconds).toBeGreaterThanOrEqual(1);
+		}
+	});
+
+	it("rounds up rather than down", () => {
+		expect(formatRetryAfterSeconds(1_000)).toBe("1");
+		expect(formatRetryAfterSeconds(1_001)).toBe("2");
+		expect(formatRetryAfterSeconds(1_500)).toBe("2");
+		expect(formatRetryAfterSeconds(1_999)).toBe("2");
+		expect(formatRetryAfterSeconds(60_000)).toBe("60");
+	});
+
+	it("falls back to the floor for non-finite input instead of emitting NaN", () => {
+		expect(formatRetryAfterSeconds(Number.NaN)).toBe("1");
+		expect(formatRetryAfterSeconds(Number.POSITIVE_INFINITY)).toBe("1");
+		expect(formatRetryAfterSeconds(Number.NEGATIVE_INFINITY)).toBe("1");
+	});
+
+	it("round-trips every resolved header back to a usable delay", () => {
+		for (const header of [
+			null,
+			undefined,
+			"",
+			"0",
+			"1",
+			"999",
+			"60000",
+			"9007199254740991",
+			"-1",
+			"garbage",
+		]) {
+			const seconds = Number(
+				formatRetryAfterSeconds(resolveRetryDelayMs(header, NOW)),
+			);
+			expect(Number.isInteger(seconds)).toBe(true);
+			expect(seconds).toBeGreaterThanOrEqual(1);
+		}
+	});
+});
+
+describe.each(BOUNDARY_INPUTS)("resolveRetryDelayMs(%i)", (delayMs) => {
+	it("returns a finite delay inside the documented bounds", () => {
+		const delay = resolveRetryDelayMs(String(delayMs), NOW);
+		expect(Number.isFinite(delay)).toBe(true);
+		expect(delay).toBeGreaterThanOrEqual(MIN_RETRY_AFTER_MS);
+		expect(delay).toBeLessThanOrEqual(MAX_RETRY_AFTER_MS);
+	});
+
+	it("is pure", () => {
+		expect(resolveRetryDelayMs(String(delayMs), NOW)).toBe(
+			resolveRetryDelayMs(String(delayMs), NOW),
+		);
 	});
 });

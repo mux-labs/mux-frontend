@@ -65,9 +65,18 @@ export function resolveRetryDelayMs(
 	return Math.min(MAX_RETRY_AFTER_MS, Math.max(MIN_RETRY_AFTER_MS, delay));
 }
 
+/** Floor for a formatted header value, in delta-seconds (1 s). */
+const MIN_RETRY_AFTER_SECONDS = MIN_RETRY_AFTER_MS / 1000;
+
 /** Format a delay as a `Retry-After` delta-seconds header value. */
 export function formatRetryAfterSeconds(delayMs: number): string {
-	return String(Math.ceil(delayMs / 1000));
+	// Clients read `retry-after: 0` (and any negative value) as "retry
+	// immediately", so this boundary repeats the 1 s floor `resolveRetryDelayMs`
+	// applies. A non-finite delay would otherwise stringify as "NaN" or
+	// "Infinity", which is not a parseable delta-seconds value.
+	const seconds = Math.ceil(delayMs / 1000);
+	if (!Number.isFinite(seconds)) return String(MIN_RETRY_AFTER_SECONDS);
+	return String(Math.max(MIN_RETRY_AFTER_SECONDS, seconds));
 }
 
 export function isIdempotentMethod(method: string | undefined): boolean {

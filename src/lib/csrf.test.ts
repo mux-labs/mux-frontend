@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	CSRF_COOKIE_NAME,
 	CSRF_HEADER_NAME,
+	hasCsrfToken,
+	tryWithCsrf,
 	verifyCsrf,
 	withCsrf,
 } from "./csrf";
@@ -211,5 +213,56 @@ describe("withCsrf", () => {
 		expect(result).not.toBe(init);
 		expect(init.headers).toBeUndefined();
 		expect(init.credentials).toBeUndefined();
+	});
+});
+
+describe("tryWithCsrf", () => {
+	it("reports ok and sets the header for an unsafe method with a token", () => {
+		const { init, ok } = tryWithCsrf(
+			{ method: "POST" },
+			`${CSRF_COOKIE_NAME}=abc`,
+		);
+		expect(ok).toBe(true);
+		expect(new Headers(init.headers).get(CSRF_HEADER_NAME)).toBe("abc");
+	});
+
+	it("reports failure and returns init unchanged when no token is present", () => {
+		const original: RequestInit = { method: "POST", body: "{}" };
+		const { init, ok } = tryWithCsrf(original, "mux_session=s");
+		expect(ok).toBe(false);
+		expect(init).toBe(original);
+	});
+
+	it.each(["GET", "HEAD", "OPTIONS"])(
+		"returns init unchanged and not ok for safe method %s",
+		(method) => {
+			const original: RequestInit = { method, headers: { accept: "text/plain" } };
+			const { init, ok } = tryWithCsrf(original, `${CSRF_COOKIE_NAME}=abc`);
+			expect(ok).toBe(false);
+			expect(init).toBe(original);
+		},
+	);
+
+	it("defaults credentials to same-origin and preserves an explicit value", () => {
+		const defaulted = tryWithCsrf({ method: "POST" }, `${CSRF_COOKIE_NAME}=abc`);
+		expect(defaulted.init.credentials).toBe("same-origin");
+
+		const preserved = tryWithCsrf(
+			{ method: "POST", credentials: "include" },
+			`${CSRF_COOKIE_NAME}=abc`,
+		);
+		expect(preserved.init.credentials).toBe("include");
+	});
+});
+
+describe("hasCsrfToken", () => {
+	it("returns true when the token cookie is present", () => {
+		expect(hasCsrfToken(`mux_session=s; ${CSRF_COOKIE_NAME}=abc`)).toBe(true);
+	});
+
+	it("returns false when the token cookie is absent or empty", () => {
+		expect(hasCsrfToken("")).toBe(false);
+		expect(hasCsrfToken("mux_session=s")).toBe(false);
+		expect(hasCsrfToken(`${CSRF_COOKIE_NAME}=`)).toBe(false);
 	});
 });

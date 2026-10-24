@@ -1,6 +1,16 @@
 /**
  * Client-side CSRF helper.
  *
+ * The session cookie (`mux_session`) is HttpOnly + SameSite=Lax. For any
+ * state-changing request the client must also echo a non-HttpOnly CSRF token
+ * cookie in the `x-csrf-token` header. The server compares both values and
+ * fails closed on any mismatch. See docs/security-ux-guards.md#csrf-strategy.
+ *
+ * Normalization rule: the double-submit comparison uses the raw, undecoded
+ * cookie value against the header value verbatim. Neither side is
+ * percent-decoded, so a cookie/header pair that differs only by URL-encoding
+ * is rejected symmetrically. Malformed cookies are treated as absent.
+ *
  * The server issues a CSRF token in a readable cookie and fails closed with
  * `CSRF_MISSING` when an unsafe request arrives without the `x-csrf-token`
  * header. `withCsrf` attaches that header from the cookie; `tryWithCsrf`
@@ -31,6 +41,26 @@ function readCookie(name: string, source?: CookieSource): string | undefined {
     }
   }
   return undefined;
+}
+
+/**
+ * Reads a cookie value verbatim (no percent-decoding). Returns `null` when the
+ * cookie is absent or empty. Decoding is intentionally skipped so the CSRF
+ * comparison is symmetric with the raw header token.
+ */
+export function readCookie(
+	cookieHeader: string | null | undefined,
+	name: string,
+): string | null {
+	if (!cookieHeader) return null;
+	for (const part of cookieHeader.split(";")) {
+		const [key, ...rest] = part.trim().split("=");
+		if (key === name) {
+			const value = rest.join("=");
+			return value ? value : null;
+		}
+	}
+	return null;
 }
 
 function isSafeMethod(method: string | undefined): boolean {

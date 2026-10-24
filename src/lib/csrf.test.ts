@@ -113,6 +113,39 @@ describe("verifyCsrf", () => {
 			expect(verifyCsrf(r)).toEqual({ ok: true });
 		},
 	);
+
+	it("rejects a percent-encoded cookie against a plain header (symmetric normalization)", () => {
+		const r = req("POST", {
+			cookie: `${CSRF_COOKIE_NAME}=abc%2Ddef`,
+			[CSRF_HEADER_NAME]: "abc-def",
+		});
+		expect(verifyCsrf(r)).toEqual({ ok: false, code: "CSRF_MISMATCH" });
+	});
+
+	it("rejects a plain cookie against a percent-encoded header (symmetric normalization)", () => {
+		const r = req("POST", {
+			cookie: `${CSRF_COOKIE_NAME}=abc-def`,
+			[CSRF_HEADER_NAME]: "abc%2Ddef",
+		});
+		expect(verifyCsrf(r)).toEqual({ ok: false, code: "CSRF_MISMATCH" });
+	});
+
+	it("accepts a percent-encoded cookie echoed verbatim in the header", () => {
+		const r = req("POST", {
+			cookie: `${CSRF_COOKIE_NAME}=abc%2Ddef`,
+			[CSRF_HEADER_NAME]: "abc%2Ddef",
+		});
+		expect(verifyCsrf(r)).toEqual({ ok: true });
+	});
+
+	it("fails closed without throwing on a malformed percent-encoded cookie", () => {
+		const r = req("POST", {
+			cookie: `${CSRF_COOKIE_NAME}=%`,
+			[CSRF_HEADER_NAME]: "abc",
+		});
+		expect(() => verifyCsrf(r)).not.toThrow();
+		expect(verifyCsrf(r)).toEqual({ ok: false, code: "CSRF_MISSING" });
+	});
 });
 
 describe("withCsrf", () => {

@@ -1,144 +1,117 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 
-// POST /api/auth/login
-// Invariant: request bodies, passwords, tokens, and cookies are NEVER logged.
-// Only the correlation id, stable error code, and redacted identifiers are.
-
-const ERROR_CODES = {
-	INVALID_BODY: "AUTH_LOGIN_INVALID_BODY",
-	INVALID_CREDENTIALS: "AUTH_LOGIN_INVALID_CREDENTIALS",
-	UPSTREAM_UNAVAILABLE: "AUTH_LOGIN_UPSTREAM_UNAVAILABLE",
-} as const;
-
-const MAX_FIELD_LENGTH = 256;
 const SESSION_COOKIE = "mux_session";
-const CORRELATION_ID_HEADER = "x-correlation-id";
 
-type LoginBody = { email: string; password: string };
+/**
+ * Fallback session lifetime (in seconds) used when the upstream auth service
+ * does not return a usable `expiresIn`/`expires_in` value. Bounding the cookie
+ * keeps its validity aligned with the token instead of creating an unbounded
+ * session cookie that outlives the backend token.
+ */
+export const DEFAULT_SESSION_MAX_AGE_SECONDS = 60 * 60;
 
-function newCorrelationId(): string {
-	return `login_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
-}
+const loginSchema = z.object({
+	email: z.string().email(),
+	password: z.string().min(1),
+});
 
-// Emails are partially masked; secrets are replaced entirely.
-export function redactEmail(email: string): string {
-	const separator = email.indexOf("@");
-	if (
-		separator <= 0 ||
-		separator === email.length - 1 ||
-		email.indexOf("@", separator + 1) !== -1
-	) {
-		return "[redacted]";
+type AuthResult = { token: string; maxAge: number };
+
+function parseMaxAge(payload: Record<string, unknown>): number {
+	const raw = payload.expiresIn ?? payload.expires_in;
+	const value = typeof raw === "string" ? Number(raw) : raw;
+	if (typeof value === "number" && Number.isFinite(value) && value > 0) {
+		return Math.floor(value);
 	}
-	return `${email[0]}***@[redacted-domain]`;
+	return DEFAULT_SESSION_MAX_AGE_SECONDS;
 }
 
-function log(event: string, fields: Record<string, string | number>) {
-	console.info(JSON.stringify({ event, ...fields }));
-}
-
-function errorResponse(
-	status: number,
-	code: string,
-	message: string,
-	correlationId: string,
-) {
-	return NextResponse.json(
-		{ error: { code, message, correlationId } },
-		{ status, headers: { [CORRELATION_ID_HEADER]: correlationId } },
-	);
-}
-
-function parseBody(raw: unknown): LoginBody | null {
-	if (!raw || typeof raw !== "object") return null;
-	const { email, password } = raw as Record<string, unknown>;
-	if (typeof email !== "string" || typeof password !== "string") return null;
-	if (!email.includes("@") || password.length === 0) return null;
-	if (email.length > MAX_FIELD_LENGTH || password.length > MAX_FIELD_LENGTH)
+async function authenticate(
+	email: string,
+	password: string,
+): Promise<AuthResult | null> {
+	const authUrl = process.env.MUX_AUTH_URL;
+	if (!authUrl) {
 		return null;
-	return { email: email.trim().toLowerCase(), password };
-}
+	}
 
-async function authenticate(body: LoginBody): Promise<string | null> {
-	const upstream = process.env.MUX_AUTH_URL;
-	if (!upstream) throw new Error("auth upstream not configured");
-	const res = await fetch(`${upstream}/login`, {
+	const upstream = await fetch(authUrl, {
 		method: "POST",
 		headers: { "content-type": "application/json" },
-		body: JSON.stringify(body),
+		body: JSON.stringify({ email, password }),
 	});
-	if (res.status === 401 || res.status === 403) return null;
-	if (!res.ok) throw new Error(`auth upstream status ${res.status}`);
-	const data = (await res.json()) as { token?: unknown };
-	return typeof data.token === "string" ? data.token : null;
+
+	if (!upstream.ok) {
+		return null;
+	}
+
+	const payload = (await upstream.json()) as Record<string, unknown>;
+	const token = payload.token;
+	if (typeof token !== "string" || token.length === 0) {
+		return null;
+	}
+
+	return { token, maxAge: parseMaxAge(payload) };
 }
 
-export async function POST(request: Request) {
-	const correlationId = newCorrelationId();
+export function redactEmail(email: string): string {
+	const at = email.indexOf("@");
+	if (at <= 0 || at === email.length - 1) {
+		return "[redacted]";
+	}
+	const local = email.slice(0, at);
+	return `${local[0]}***@[redacted-domain]`;
+}
 
-	let body: LoginBody | null = null;
+export async function POST(request: Request): Promise<NextResponse> {
+	let body: unknown;
 	try {
-		body = parseBody(await request.json());
+		body = await request.json();
 	} catch {
-		body = null;
-	}
-	if (!body) {
-		log("auth.login.rejected", {
-			correlationId,
-			code: ERROR_CODES.INVALID_BODY,
-		});
-		return errorResponse(
-			400,
-			ERROR_CODES.INVALID_BODY,
-			"Email and password are required.",
-			correlationId,
+		return NextResponse.json(
+			{ error: { code: "AUTH_LOGIN_INVALID_BODY" } },
+			{ status: 400 },
 		);
 	}
 
-	let token: string | null;
+	const parsed = loginSchema.safeParse(body);
+	if (!parsed.success) {
+		return NextResponse.json(
+			{ error: { code: "AUTH_LOGIN_INVALID_BODY" } },
+			{ status: 400 },
+		);
+	}
+
+	const { email, password } = parsed.data;
+
+	let result: AuthResult | null;
 	try {
-		token = await authenticate(body);
+		result = await authenticate(email, password);
 	} catch {
-		// Fail closed: never fall back to a session when the upstream is down.
-		log("auth.login.upstream_error", {
-			correlationId,
-			code: ERROR_CODES.UPSTREAM_UNAVAILABLE,
-		});
-		return errorResponse(
-			503,
-			ERROR_CODES.UPSTREAM_UNAVAILABLE,
-			"Sign-in is temporarily unavailable.",
-			correlationId,
+		console.info(`login failed for ${redactEmail(email)}`);
+		return NextResponse.json(
+			{ error: { code: "AUTH_LOGIN_UPSTREAM_UNAVAILABLE" } },
+			{ status: 503 },
 		);
 	}
 
-	if (!token) {
-		log("auth.login.failed", {
-			correlationId,
-			code: ERROR_CODES.INVALID_CREDENTIALS,
-			email: redactEmail(body.email),
-		});
-		return errorResponse(
-			401,
-			ERROR_CODES.INVALID_CREDENTIALS,
-			"Invalid email or password.",
-			correlationId,
+	if (!result) {
+		console.info(`login failed for ${redactEmail(email)}`);
+		return NextResponse.json(
+			{ error: { code: "AUTH_LOGIN_UPSTREAM_UNAVAILABLE" } },
+			{ status: 503 },
 		);
 	}
 
-	log("auth.login.succeeded", {
-		correlationId,
-		email: redactEmail(body.email),
-	});
-	const response = NextResponse.json(
-		{ ok: true, correlationId },
-		{ headers: { [CORRELATION_ID_HEADER]: correlationId } },
-	);
-	response.cookies.set(SESSION_COOKIE, token, {
+	console.info(`login succeeded for ${redactEmail(email)}`);
+	const response = NextResponse.json({ ok: true });
+	response.cookies.set(SESSION_COOKIE, result.token, {
 		httpOnly: true,
 		secure: true,
 		sameSite: "lax",
 		path: "/",
+		maxAge: result.maxAge,
 	});
 	return response;
 }

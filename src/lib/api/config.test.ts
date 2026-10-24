@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getBackendBaseUrl } from "../http/backend-url";
 import { buildBackendUrl, getBackendApiBaseUrl } from "./config";
 
 describe("getBackendApiBaseUrl (MUX_BACKEND_URL)", () => {
@@ -33,6 +34,48 @@ describe("getBackendApiBaseUrl (MUX_BACKEND_URL)", () => {
 		expect(
 			getBackendApiBaseUrl({ MUX_BACKEND_URL: "http://localhost:4000/api//" }),
 		).toBe("http://localhost:4000/api");
+	});
+});
+
+describe("getBackendBaseUrl / getBackendApiBaseUrl parity", () => {
+	const envs = [
+		{},
+		{ MUX_BACKEND_URL: "" },
+		{ MUX_BACKEND_URL: "   " },
+		{ MUX_BACKEND_URL: "not a url" },
+		{ MUX_BACKEND_URL: "ftp://backend" },
+		{ MUX_BACKEND_URL: "javascript:alert(1)" },
+		{ MUX_BACKEND_URL: "https://user:secret@backend.test" },
+		{ MUX_BACKEND_URL: "https://user@backend.test" },
+		{ MUX_BACKEND_URL: "http://:secret@backend.test" },
+		{ MUX_BACKEND_URL: " https://backend.test/ " },
+		{ MUX_BACKEND_URL: "http://localhost:4000/api//" },
+		{ MUX_BACKEND_URL: "https://API.EXAMPLE.COM:443/" },
+		{ MUX_BACKEND_URL: "https://API.EXAMPLE.COM:443/v1/" },
+		{ MUX_BACKEND_URL: "http://API.EXAMPLE.COM:80" },
+	];
+
+	it("returns the same value (or both null) for the same env", () => {
+		for (const env of envs) {
+			expect(getBackendBaseUrl(env)).toBe(getBackendApiBaseUrl(env));
+		}
+	});
+
+	it("rejects credential-bearing URLs in both helpers", () => {
+		for (const MUX_BACKEND_URL of [
+			"https://user:secret@backend.test",
+			"https://user@backend.test",
+			"http://:secret@backend.test",
+		]) {
+			expect(getBackendBaseUrl({ MUX_BACKEND_URL })).toBeNull();
+			expect(getBackendApiBaseUrl({ MUX_BACKEND_URL })).toBeNull();
+		}
+	});
+
+	it("normalizes uppercase host and default port identically", () => {
+		const env = { MUX_BACKEND_URL: "https://API.EXAMPLE.COM:443/" };
+		expect(getBackendBaseUrl(env)).toBe("https://api.example.com");
+		expect(getBackendApiBaseUrl(env)).toBe("https://api.example.com");
 	});
 });
 

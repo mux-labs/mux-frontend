@@ -1,53 +1,32 @@
-/**
- * Server-side backend base URL resolution for API route proxies.
- *
- * Walks `MUX_BACKEND_URL` (server-only) then the documented public aliases in
- * priority order and returns the first non-empty value. Blank or non-http(s)
- * values are treated as unset so a misconfigured deploy fails closed instead
- * of proxying to an unintended host. The resolved URL is never logged or
- * returned to clients.
- */
+import { getBackendApiBaseUrl } from "@/lib/api/config";
 
+/**
+ * Ordered list of environment variables that may carry the backend base URL.
+ * The first non-empty candidate wins.
+ */
 export const BACKEND_URL_CANDIDATES = [
-	"MUX_BACKEND_URL",
-	"NEXT_PUBLIC_API_URL",
-	"NEXT_PUBLIC_MUX_API_URL",
-	"NEXT_PUBLIC_API_BASE",
+  "MUX_BACKEND_URL",
+  "NEXT_PUBLIC_MUX_BACKEND_URL",
+  "BACKEND_URL",
 ] as const;
 
-type Env = Record<string, string | undefined>;
-
-export function getBackendBaseUrl(env: Env = process.env): string | null {
-	for (const name of BACKEND_URL_CANDIDATES) {
-		const value = env[name]?.trim();
-		if (!value) continue;
-		try {
-			const url = new URL(value);
-			if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-			return value.replace(/\/+$/, "");
-		} catch {
-			return null;
-		}
-	}
-	return null;
-}
-
-/** Mock fallbacks require an explicitly configured non-mainnet network. */
-export function isMockFallbackAllowed(env: Env = process.env): boolean {
-	if (env.NODE_ENV === "production") return false;
-	const network = configuredNetwork(env)?.toLowerCase();
-	return network === "testnet" || network === "futurenet";
-}
+type EnvLike = Record<string, string | undefined>;
 
 /**
- * The configured Stellar network name: `MUX_STELLAR_NETWORK`, then
- * `NEXT_PUBLIC_STELLAR_NETWORK`. Blank values count as unset so an empty
- * server var cannot mask a mainnet public var.
+ * Resolve the backend base URL from the environment.
+ *
+ * Delegates to {@link getBackendApiBaseUrl} so both helpers apply the same
+ * acceptance rules (http/https only, no embedded credentials) and the same
+ * normalization (origin + pathname, trailing slash stripped).
  */
-export function configuredNetwork(env: Env = process.env): string | null {
-	for (const name of ["MUX_STELLAR_NETWORK", "NEXT_PUBLIC_STELLAR_NETWORK"]) {
-		const value = env[name]?.trim();
-		if (value) return value;
-	}
-	return null;
+export function getBackendBaseUrl(env: EnvLike = process.env): string | null {
+  for (const key of BACKEND_URL_CANDIDATES) {
+    const raw = env[key];
+    if (typeof raw !== "string") continue;
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const normalized = getBackendApiBaseUrl({ [key]: trimmed });
+    if (normalized) return normalized;
+  }
+  return null;
 }

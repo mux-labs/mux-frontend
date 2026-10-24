@@ -24,6 +24,15 @@ export function canApplyOptimistic(mutation: MutationDescriptor): boolean {
 /**
  * Runs `commit`, applying `optimistic` state first only when the mutation is
  * idempotent. On failure the previous state is restored and the error rethrown.
+ *
+ * Contract:
+ * - `state.set` is never called when `canApplyOptimistic(mutation)` is false.
+ * - When applied, `state.set` is called once with the optimistic value and, on
+ *   failure, once more with the exact `previous` reference from `state.get()`.
+ * - The rejection from `commit` is rethrown unchanged.
+ *
+ * Precondition: callers must forward `mutation.idempotencyKey` to the server
+ * (e.g. as an `Idempotency-Key` header) so a retry cannot double-apply.
  */
 export async function runMutation<S, R>(
 	mutation: MutationDescriptor,

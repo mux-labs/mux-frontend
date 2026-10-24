@@ -10,19 +10,18 @@
 export const BACKEND_NOT_CONFIGURED = "backend_not_configured" as const;
 
 /**
- * Resolve the normalized backend base URL (no trailing slash), or `null`
- * when unset/invalid. Only `http:`/`https:` URLs without embedded
- * credentials are accepted.
+ * Normalize a raw backend URL string to `origin + pathname` with trailing
+ * slashes stripped, or `null` when it is not a valid `http:`/`https:` URL
+ * without embedded credentials. Shared by every backend URL resolver so a
+ * given environment yields one canonical base URL.
  */
-export function getBackendApiBaseUrl(
-	env: Record<string, string | undefined> = process.env,
-): string | null {
-	const raw = env.MUX_BACKEND_URL?.trim();
-	if (!raw) return null;
+export function normalizeBackendUrl(raw: string | undefined): string | null {
+	const trimmed = raw?.trim();
+	if (!trimmed) return null;
 
 	let url: URL;
 	try {
-		url = new URL(raw);
+		url = new URL(trimmed);
 	} catch {
 		return null;
 	}
@@ -30,6 +29,17 @@ export function getBackendApiBaseUrl(
 	if (url.username || url.password) return null;
 
 	return `${url.origin}${url.pathname}`.replace(/\/+$/, "");
+}
+
+/**
+ * Resolve the normalized backend base URL (no trailing slash), or `null`
+ * when unset/invalid. Only `http:`/`https:` URLs without embedded
+ * credentials are accepted.
+ */
+export function getBackendApiBaseUrl(
+	env: Record<string, string | undefined> = process.env,
+): string | null {
+	return normalizeBackendUrl(env.MUX_BACKEND_URL);
 }
 
 /**

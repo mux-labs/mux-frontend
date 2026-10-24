@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { POST, redactEmail } from "./route";
+import { DEFAULT_SESSION_MAX_AGE_SECONDS, POST, redactEmail } from "./route";
 
 const PASSWORD = "hunter2-super-secret";
 const TOKEN = "jwt.secret.token";
@@ -47,6 +47,54 @@ describe("POST /api/auth/login", () => {
 		expect(joined).not.toContain(PASSWORD);
 		expect(joined).not.toContain(TOKEN);
 		expect(joined).not.toContain("alice@mux.io");
+	});
+
+	it("sets the cookie maxAge from the upstream expiresIn", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN, expiresIn: 900 })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.cookies.get("mux_session")?.maxAge).toBe(900);
+	});
+
+	it("sets the cookie maxAge from the upstream expires_in", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN, expires_in: 1200 })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.cookies.get("mux_session")?.maxAge).toBe(1200);
+	});
+
+	it("falls back to the default maxAge when the upstream has no lifetime", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		const maxAge = res.cookies.get("mux_session")?.maxAge;
+		expect(maxAge).toBe(DEFAULT_SESSION_MAX_AGE_SECONDS);
+		expect(maxAge).toBeGreaterThan(0);
+	});
+
+	it("falls back to the default maxAge when the upstream lifetime is invalid", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN, expiresIn: -5 })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.cookies.get("mux_session")?.maxAge).toBe(
+			DEFAULT_SESSION_MAX_AGE_SECONDS,
+		);
 	});
 
 	it("maps an upstream 429 to a stable error code without echoing the upstream body", async () => {

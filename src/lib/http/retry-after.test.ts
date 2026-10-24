@@ -3,6 +3,7 @@ import {
 	classifyRateLimit,
 	DEFAULT_RETRY_AFTER_MS,
 	fetchWithRetryAfter,
+	formatRetryAfterSeconds,
 	formatRetryCountdown,
 	MAX_RETRY_AFTER_MS,
 	MIN_RETRY_AFTER_MS,
@@ -195,5 +196,60 @@ describe("formatRetryCountdown", () => {
 		[125_000, "2m 05s"],
 	])("formats %i ms as %s", (ms, expected) => {
 		expect(formatRetryCountdown(ms)).toBe(expected);
+	});
+});
+
+// Boundary inputs shared by the formatting and delay-resolution contract tests.
+const BOUNDARY_INPUTS = [0, 1, 999, 60_000, Number.MAX_SAFE_INTEGER, -1];
+
+describe.each(BOUNDARY_INPUTS)("formatRetryAfterSeconds(%i)", (input) => {
+	it("never returns a value below 1", () => {
+		// The `retry-after` header must never be 0 or negative: clients treat
+		// `retry-after: 0` as "retry immediately".
+		expect(Number(formatRetryAfterSeconds(input))).toBeGreaterThanOrEqual(1);
+	});
+
+	it("is pure (same input, same output)", () => {
+		expect(formatRetryAfterSeconds(input)).toBe(
+			formatRetryAfterSeconds(input),
+		);
+	});
+});
+
+describe("formatRetryAfterSeconds header format", () => {
+	it("pins the exact string for small cases", () => {
+		expect(formatRetryAfterSeconds(0)).toBe("1");
+		expect(formatRetryAfterSeconds(1)).toBe("1");
+		expect(formatRetryAfterSeconds(999)).toBe("1");
+	});
+
+	it("rounds up rather than down", () => {
+		// 1_001 ms is just over one second; rounding down would emit "1".
+		expect(formatRetryAfterSeconds(1_001)).toBe("2");
+		expect(formatRetryAfterSeconds(1_999)).toBe("2");
+		expect(formatRetryAfterSeconds(2_000)).toBe("2");
+	});
+
+	it("never emits 0 or a negative value for 0 and -1", () => {
+		expect(Number(formatRetryAfterSeconds(0))).toBeGreaterThanOrEqual(1);
+		expect(Number(formatRetryAfterSeconds(-1))).toBeGreaterThanOrEqual(1);
+	});
+});
+
+describe.each(BOUNDARY_INPUTS)("resolveRetryDelayMs(%i)", (input) => {
+	it("returns a finite, non-negative number within the clamp bounds", () => {
+		const delay = resolveRetryDelayMs(String(input), NOW);
+		expect(Number.isFinite(delay)).toBe(true);
+		expect(delay).toBeGreaterThanOrEqual(0);
+		// Bounds documented in the JSDoc for resolveRetryDelayMs in
+		// src/lib/http/retry-after.ts (MIN_RETRY_AFTER_MS / MAX_RETRY_AFTER_MS).
+		expect(delay).toBeGreaterThanOrEqual(MIN_RETRY_AFTER_MS);
+		expect(delay).toBeLessThanOrEqual(MAX_RETRY_AFTER_MS);
+	});
+
+	it("is pure (same input, same output)", () => {
+		expect(resolveRetryDelayMs(String(input), NOW)).toBe(
+			resolveRetryDelayMs(String(input), NOW),
+		);
 	});
 });

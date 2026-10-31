@@ -71,12 +71,11 @@ export function getRealWalletFixture(type: string): WalletFixture | undefined {
   return REAL_WALLET_FIXTURES[type];
 }
 
-export function hasRealWallets(): boolean {
-  return Object.keys(REAL_WALLET_FIXTURES).some((type) => {
-    try {
-      return REAL_WALLET_FIXTURES[type].isConnected();
-    } catch {
-      return false;
-    }
-  });
+export async function hasRealWallets(): Promise<boolean> {
+  const results = await Promise.all(
+    Object.values(REAL_WALLET_FIXTURES).map((fixture) =>
+      fixture.isConnected().then(Boolean).catch(() => false),
+    ),
+  );
+  return results.some(Boolean);
 }

@@ -16,14 +16,14 @@ export function useRetryCountdown(
 	retryAt: number | null,
 	now: () => number = Date.now,
 ): RetryCountdown {
-	const [nowMs, setNowMs] = useState(now);
+	const initialNowMs = retryAt !== null && now() >= retryAt ? now() : now();
+	const [nowMs, setNowMs] = useState(initialNowMs);
 
 	useEffect(() => {
 		if (retryAt === null) return;
 		// Already elapsed (e.g. a cached 429 whose Retry-After has already
 		// passed): reflect that immediately and never start a timer.
 		if (now() >= retryAt) {
-			setNowMs(now());
 			return;
 		}
 		const tick = () => {

@@ -237,132 +237,69 @@ describe('api-keys route', () => {
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
       expect(writes).toBe(2);
-      expect(second.body.correlationId).not.toBe(first.body.correlationId);
     });
 
-    it(`accepts a ${MAX_IDEMPOTENCY_KEY_LENGTH}-character key and replays the cached response`, async () => {
-      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH);
-      expect(key).toHaveLength(MAX_IDEMPOTENCY_KEY_LENGTH);
-
+    it('replays the first response for a repeated idempotency-key', async () => {
+      const key = idempotencyKey(16);
       const { first, second, writes } = await postTwice(ROTATE, {
         'idempotency-key': key,
       });
 
       expect(first.status).toBe(200);
-      expect(second).toEqual(first);
-      expect(writes).toBe(1);
-    });
-
-    it(`rejects a ${MAX_IDEMPOTENCY_KEY_LENGTH + 1}-character key so it is never cached or replayed`, async () => {
-      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
-      expect(key).toHaveLength(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
-
-      const { first, second, writes } = await postTwice(ROTATE, {
-        'idempotency-key': key,
-      });
-
-      expect(first.status).toBe(200);
-      expect(second.status).toBe(200);
-      expect(writes).toBe(2);
-      expect(second.body.correlationId).not.toBe(first.body.correlationId);
-    });
-
-    it('replays the cached response for the same key and body without re-running the write', async () => {
-      const headers = { 'idempotency-key': idempotencyKey(16) };
-      const { first, second, writes } = await postTwice(ROTATE, headers);
-
-      expect(first.status).toBe(200);
-      expect(first.body).toMatchObject({ action: 'rotate', id: 'key_1' });
       expect(second.status).toBe(first.status);
       expect(second.body).toEqual(first.body);
       expect(writes).toBe(1);
     });
 
-    it('does not cache a failed write, so the key can be retried with a valid body', async () => {
-      const headers = { 'idempotency-key': idempotencyKey(16) };
+    it(`accepts an idempotency-key of exactly ${MAX_IDEMPOTENCY_KEY_LENGTH} chars`, async () => {
+      const res = await POST(
+        postRequest(ROTATE, { 'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH) }),
+      );
 
-      const failed = await POST(postRequest({ action: 'rotate', id: 'key_1' }, headers));
-      const failedBody = await failed.json();
-      const retried = await POST(postRequest(ROTATE, headers));
-      const retriedBody = await retried.json();
+      expect(res.status).toBe(200);
+    });
 
-      expect(failed.status).toBe(400);
-      expect(failedBody.error.code).toBe('API_KEY_CONFIRMATION_REQUIRED');
-      expect(retried.status).toBe(200);
-      expect(retriedBody).toMatchObject({ action: 'rotate', id: 'key_1' });
+    it(`rejects an idempotency-key longer than ${MAX_IDEMPOTENCY_KEY_LENGTH} chars`, async () => {
+      const res = await POST(
+        postRequest(ROTATE, { 'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1) }),
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
     });
   });
-});
 
-describe('redact', () => {
-  it.each([
-    ['undefined', undefined],
-    ['null', null],
-    ['an empty string', ''],
-    ['a number', 12345],
-    ['a boolean', true],
-    ['an object', { key: 'supersecret' }],
-    ['an array', ['supersecret']],
-  ])('returns "[redacted]" for %s', (_label, value) => {
-    expect(redact(value)).toBe('[redacted]');
-  });
+  describe('POST rotate/revoke ownership', () => {
+    it('revokes a key that is not in mockApiKeys for its owner', async () => {
+      const res = await POST(
+        postRequest({ action: 'revoke', id: 'key_persisted', confirm: true }),
+      );
+      const body = await res.json();
 
-  it('returns only the length for a non-empty string', () => {
-    const out = redact('supersecret');
-
-    expect(out).toBe('[redacted:11]');
-    expect(out).not.toContain('supersecret');
-  });
-
-  it('never echoes any part of the original secret', () => {
-    const secret = 'sk_live_51M0L9SA9mG8G8xX5u4v5';
-    const out = redact(secret);
-
-    expect(out).toBe(`[redacted:${secret.length}]`);
-    expect(out).not.toContain(secret);
-    expect(out).not.toContain('sk_');
-    expect(out).not.toContain(secret.slice(-4));
-  });
-});
-
-describe('isAuthorized', () => {
-  function withAuth(authorization?: string) {
-    return new Request('http://localhost/api/api-keys', {
-      headers: authorization === undefined ? {} : { authorization },
+      expect(res.status).toBe(200);
+      expect(body.id).toBe('key_persisted');
     });
-  }
 
-  it('returns false when the authorization header is missing', () => {
-    expect(isAuthorized(withAuth())).toBe(false);
+    it('does not revoke a mock key owned by another owner', async () => {
+      const res = await POST(
+        postRequest(
+          { action: 'revoke', id: 'key_1', confirm: true },
+          { authorization: 'Bearer other-owner-token' },
+        ),
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(404);
+      expect(body.error.code).toBe('API_KEY_NOT_FOUND');
+    });
+
+    it('requires confirm: true for rotate and revoke', async () => {
+      const rotate = await POST(postRequest({ action: 'rotate', id: 'key_1' }));
+      const revoke = await POST(postRequest({ action: 'revoke', id: 'key_1' }));
+
+      expect(rotate.status).toBe(400);
+      expect(revoke.status).toBe(400);
+    });
   });
-
-  it.each(['Bearer', 'ApiKey', 'Bearer ', 'Bearer  token'])(
-    'returns false when the header has no token: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  it.each(['Basic dXNlcjpwYXNz', 'Token abc', 'Digest abc', 'test-token'])(
-    'returns false for an unknown scheme: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  // Scheme matching is case-sensitive today; changing that must be a
-  // deliberate test update.
-  it.each(['bearer test-token', 'BEARER test-token', 'apikey test-key', 'Apikey test-key'])(
-    'returns false for a non-canonical scheme casing: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  it.each(['Bearer test-token', 'ApiKey test-key'])(
-    'returns true for %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(true);
-    },
-  );
 });

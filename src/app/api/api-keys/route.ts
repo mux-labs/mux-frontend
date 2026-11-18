@@ -74,6 +74,30 @@ function createIdempotencyStore(): IdempotencyStore {
   };
 }
 
+// Persistent key store for the authenticated owner. Rotate/revoke resolve and
+// mutate targets here rather than against the mock list, which is test-only.
+type StoredApiKey = {
+  id: string;
+  name: string;
+  owner: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+};
+
+const keyStore = new Map<string, StoredApiKey>();
+
+function ownerFromRequest(request: Request): string | null {
+  const owner = request.headers.get("x-owner-id")?.trim();
+  return owner && owner.length > 0 ? owner : null;
+}
+
+function findOwnedKey(owner: string, keyId: string): StoredApiKey | null {
+  const key = keyStore.get(keyId);
+  if (!key || key.owner !== owner) return null;
+  return key;
+}
+
 function errorResponse(
   status: number,
   code: string,
@@ -87,9 +111,8 @@ function errorResponse(
 }
 
 function newCorrelationId(): string {
-  return `apikey_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
+  // CSPRNG-backed id: unique even when Date.now is fixed, unlike Math.random.
+  return `apikey_${crypto.randomUUID()}`;
 }
 
 // Idempotency keys are opaque client tokens; reject oversized/adversarial input
@@ -330,6 +353,16 @@ export async function POST(request: Request) {
     );
   }
 
+  const owner = ownerFromRequest(request);
+  if (owner === null) {
+    return errorResponse(
+      401,
+      ERROR_CODES.UNAUTHORIZED,
+      "A valid owner credential is required.",
+      correlationId,
+    );
+  }
+
   // Idempotency: a blank or oversized key is rejected with 400 and no write is
   // performed. A missing key is treated as an explicit one-shot write (no
   // replay protection) and is documented here rather than silently ignored.
@@ -368,7 +401,12 @@ export async function POST(request: Request) {
     }
   }
 
-  const action = (payload as { action?: unknown } | null)?.action;
+  const { action, id, name, confirm } = body as {
+    action?: unknown;
+    id?: unknown;
+    name?: unknown;
+    confirm?: unknown;
+  };
   if (
     typeof action !== "string" ||
     !["create", "rotate", "revoke"].includes(action)
@@ -376,33 +414,109 @@ export async function POST(request: Request) {
     return errorResponse(
       400,
       ERROR_CODES.INVALID_ACTION,
-      "action must be one of create, rotate, or revoke.",
+  const { action, id, name, confirm } = body as {
+    action?: unknown;
+    id?: unknown;
+    name?: unknown;
+    confirm?: unknown;
+  };
+
       correlationId,
     );
   }
 
-  if (
-    DESTRUCTIVE_ACTIONS.includes(action as ApiKeyAction) &&
-    (payload as { confirm?: unknown }).confirm !== true
-  ) {
+  const typedAction = action as ApiKeyAction;
+
+  // Destructive actions require an explicit confirmation flag.
+  if (DESTRUCTIVE_ACTIONS.includes(typedAction) && confirm !== true) {
     return errorResponse(
       400,
       ERROR_CODES.CONFIRMATION_REQUIRED,
-      "Destructive actions require confirm: true.",
+      "confirm: true is required for rotate and revoke.",
       correlationId,
     );
   }
 
-  const responseBody = { correlationId, action, ok: true };
-  const status = 200;
-
-  if (scope !== null) {
-    await idempotencyStore.set(scope, {
-      status,
-      body: responseBody,
-      expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
-    });
+  if (typedAction === "create") {
+    if (typeof name !== "string" || name.trim().length === 0) {
+      return errorResponse(
+        400,
+        ERROR_CODES.INVALID_BODY,
+        "name is required to create an API key.",
+        correlationId,
+      );
+    }
+    const created: StoredApiKey = {
+      id: `key_${crypto.randomUUID()}`,
+      name: name.trim(),
+      owner,
+      createdAt: new Date().toISOString(),
+      lastUsedAt: null,
+      revokedAt: null,
+    };
+    keyStore.set(created.id, created);
+    const responseBody = { correlationId, key: redact(created) };
+    if (idempotencyKey !== null) {
+      idempotencyCache.set(`${owner}:${idempotencyKey}`, {
+        status: 201,
+        body: responseBody,
+      });
+    }
+    return NextResponse.json(responseBody, { status: 201 });
   }
 
-  return NextResponse.json(responseBody, { status });
+  // rotate/revoke resolve the target against the persistent store for the
+  // authenticated owner; mock keys are never consulted here.
+  if (typeof id !== "string" || id.trim().length === 0) {
+    return errorResponse(
+      400,
+      ERROR_CODES.INVALID_BODY,
+      "id is required for rotate and revoke.",
+      correlationId,
+    );
+  }
+
+  const target = findOwnedKey(owner, id);
+  if (target === null) {
+    return errorResponse(
+      404,
+      ERROR_CODES.NOT_FOUND,
+      "API key not found.",
+      correlationId,
+    );
+  }
+
+  if (typedAction === "revoke") {
+    target.revokedAt = new Date().toISOString();
+    keyStore.set(target.id, target);
+    const responseBody = { correlationId, key: redact(target) };
+    if (idempotencyKey !== null) {
+      idempotencyCache.set(`${owner}:${idempotencyKey}`, {
+        status: 200,
+        body: responseBody,
+      });
+    }
+    return NextResponse.json(responseBody);
+  }
+
+  // rotate: issue a fresh id for the same owner and retire the old key.
+  target.revokedAt = new Date().toISOString();
+  keyStore.set(target.id, target);
+  const rotated: StoredApiKey = {
+    id: `key_${crypto.randomUUID()}`,
+    name: target.name,
+    owner,
+    createdAt: new Date().toISOString(),
+    lastUsedAt: null,
+    revokedAt: null,
+  };
+  keyStore.set(rotated.id, rotated);
+  const responseBody = { correlationId, key: redact(rotated) };
+  if (idempotencyKey !== null) {
+    idempotencyCache.set(`${owner}:${idempotencyKey}`, {
+      status: 200,
+      body: responseBody,
+    });
+  }
+  return NextResponse.json(responseBody);
 }

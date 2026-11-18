@@ -25,6 +25,7 @@ const developerHeaders = {
 describe('/api/team route', () => {
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.restoreAllMocks();
   });
 
   describe('GET', () => {
@@ -211,6 +212,32 @@ describe('/api/team route', () => {
       const afterBody = await after.json();
 
       expect(afterBody.members.length).toBe(beforeBody.members.length);
+    });
+
+    it('generates distinct member ids for two adds in the same millisecond', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+
+      const first = await POST(
+        makeRequest('POST', {
+          headers: adminHeaders,
+          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'developer' }),
+        }),
+      );
+      expect(first.status).toBe(200);
+      const firstBody = await first.json();
+
+      const second = await POST(
+        makeRequest('POST', {
+          headers: adminHeaders,
+          body: JSON.stringify({ name: 'Grace', email: 'grace@example.com', role: 'developer' }),
+        }),
+      );
+      expect(second.status).toBe(200);
+      const secondBody = await second.json();
+
+      expect(firstBody.member.id).toBeTruthy();
+      expect(secondBody.member.id).toBeTruthy();
+      expect(firstBody.member.id).not.toBe(secondBody.member.id);
     });
 
     it('returns 503 backend_unavailable when NODE_ENV is production', async () => {

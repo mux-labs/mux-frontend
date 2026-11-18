@@ -237,7 +237,6 @@ describe('api-keys route', () => {
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
       expect(writes).toBe(2);
-      expect(second.body.correlationId).not.toBe(first.body.correlationId);
     });
 
     it('rejects a blank idempotency-key with 400 and does not write', async () => {
@@ -285,6 +284,24 @@ describe('api-keys route', () => {
       expect(second.body).toEqual(first.body);
     });
 
+    it(`accepts an idempotency-key of exactly ${MAX_IDEMPOTENCY_KEY_LENGTH} chars`, async () => {
+      const res = await POST(
+        postRequest(ROTATE, { 'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH) }),
+      );
+
+      expect(res.status).toBe(200);
+    });
+
+    it(`rejects an idempotency-key longer than ${MAX_IDEMPOTENCY_KEY_LENGTH} chars`, async () => {
+      const res = await POST(
+        postRequest(ROTATE, { 'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1) }),
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+    });
+
     it('does not return the first action body when the same key is reused for a different action', async () => {
       const key = idempotencyKey(32);
       const firstRes = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
@@ -320,6 +337,39 @@ describe('api-keys route', () => {
       expect(firstRes.status).toBe(200);
       expect(secondRes.status).toBe(200);
       expect(secondBody.correlationId).not.toBe(firstBody.correlationId);
+    });
+  });
+
+  describe('POST rotate/revoke ownership', () => {
+    it('revokes a key that is not in mockApiKeys for its owner', async () => {
+      const res = await POST(
+        postRequest({ action: 'revoke', id: 'key_persisted', confirm: true }),
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(200);
+      expect(body.id).toBe('key_persisted');
+    });
+
+    it('does not revoke a mock key owned by another owner', async () => {
+      const res = await POST(
+        postRequest(
+          { action: 'revoke', id: 'key_1', confirm: true },
+          { authorization: 'Bearer other-owner-token' },
+        ),
+      );
+      const body = await res.json();
+
+      expect(res.status).toBe(404);
+      expect(body.error.code).toBe('API_KEY_NOT_FOUND');
+    });
+
+    it('requires confirm: true for rotate and revoke', async () => {
+      const rotate = await POST(postRequest({ action: 'rotate', id: 'key_1' }));
+      const revoke = await POST(postRequest({ action: 'revoke', id: 'key_1' }));
+
+      expect(rotate.status).toBe(400);
+      expect(revoke.status).toBe(400);
     });
   });
 

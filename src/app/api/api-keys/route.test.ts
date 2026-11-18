@@ -239,16 +239,49 @@ describe('api-keys route', () => {
       expect(writes).toBe(2);
     });
 
-    it('replays the first response for a repeated idempotency-key', async () => {
-      const key = idempotencyKey(16);
+    it('rejects a blank idempotency-key with 400 and does not write', async () => {
+      const req = postRequest(ROTATE, { 'idempotency-key': '' });
+      const json = vi.spyOn(req, 'json');
+
+      const res = await POST(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+      expect(json).not.toHaveBeenCalled();
+    });
+
+    it(`rejects a ${MAX_IDEMPOTENCY_KEY_LENGTH + 1}-character idempotency-key with 400 and does not write`, async () => {
+      const req = postRequest(ROTATE, {
+        'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1),
+      });
+      const json = vi.spyOn(req, 'json');
+
+      const res = await POST(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+      expect(json).not.toHaveBeenCalled();
+    });
+
+    it(`accepts a ${MAX_IDEMPOTENCY_KEY_LENGTH}-character idempotency-key`, async () => {
+      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH);
+      const res = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+
+      expect(res.status).toBe(200);
+    });
+
+    it('replays the stored response for the same key and body', async () => {
+      const key = idempotencyKey(32);
       const { first, second, writes } = await postTwice(ROTATE, {
         'idempotency-key': key,
       });
 
       expect(first.status).toBe(200);
-      expect(second.status).toBe(first.status);
-      expect(second.body).toEqual(first.body);
+      expect(second.status).toBe(200);
       expect(writes).toBe(1);
+      expect(second.body).toEqual(first.body);
     });
 
     it(`accepts an idempotency-key of exactly ${MAX_IDEMPOTENCY_KEY_LENGTH} chars`, async () => {
@@ -267,6 +300,43 @@ describe('api-keys route', () => {
 
       expect(res.status).toBe(400);
       expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+    });
+
+    it('does not return the first action body when the same key is reused for a different action', async () => {
+      const key = idempotencyKey(32);
+      const firstRes = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+      const firstBody = await firstRes.json();
+
+      const secondRes = await POST(
+        postRequest(
+          { action: 'revoke', id: 'key_2', confirm: true },
+          { 'idempotency-key': key },
+        ),
+      );
+      const secondBody = await secondRes.json();
+
+      expect(firstRes.status).toBe(200);
+      expect(secondRes.status).toBe(200);
+      expect(secondBody).not.toEqual(firstBody);
+      expect(secondBody.action).toBe('revoke');
+    });
+
+    it('does not share a cache entry across callers', async () => {
+      const key = idempotencyKey(32);
+      const firstRes = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+      const firstBody = await firstRes.json();
+
+      const secondRes = await POST(
+        postRequest(ROTATE, {
+          'idempotency-key': key,
+          authorization: 'Bearer other-token',
+        }),
+      );
+      const secondBody = await secondRes.json();
+
+      expect(firstRes.status).toBe(200);
+      expect(secondRes.status).toBe(200);
+      expect(secondBody.correlationId).not.toBe(firstBody.correlationId);
     });
   });
 
@@ -300,6 +370,19 @@ describe('api-keys route', () => {
 
       expect(rotate.status).toBe(400);
       expect(revoke.status).toBe(400);
+    });
+  });
+
+  describe('guards', () => {
+    it('isAuthorized rejects missing credentials', () => {
+      expect(isAuthorized(new NextRequest('http://localhost/api/api-keys'))).toBe(false);
+    });
+
+    it('redact never returns the raw key', () => {
+      const raw = 'super-secret-key-value';
+      const out = redact(raw);
+
+      expect(out).not.toContain(raw);
     });
   });
 });

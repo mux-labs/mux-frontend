@@ -89,11 +89,30 @@ interface AuthContext {
 }
 
 /**
- * Resolve the caller's auth context. Deny-by-default: any missing/invalid
- * credential, expired token, or revoked delegate yields null.
+ * Verify the presented credential and return its claims, or null when the
+ * credential is missing, malformed, or unverifiable. Deny-by-default: nothing
+ * is trusted until the signature/hash is checked.
  *
- * NOTE: wire this to the real auth provider (JWT/API-key/owner-delegate
- * registry). Kept as a single seam so authz cannot be bypassed by callers.
+ * NOTE: wire this to the real auth provider (JWT signature/expiry check or
+ * API-key hash lookup + owner-delegate registry). Kept as a single seam so
+ * authz cannot be bypassed by callers. Client-supplied `x-subject`, `x-role`,
+ * and `x-owner-scopes` headers are intentionally ignored.
+ */
+async function verifyCredential(
+  _authz: string | null,
+  _apiKey: string | null,
+): Promise<{ subject: string; role: string; ownerScopes: string[] } | null> {
+  // Placeholder verification seam. Real implementation validates the JWT
+  // signature/expiry or API-key hash and resolves role + owner scope from the
+  // verified claims. Until wired, no credential verifies, so every request is
+  // denied (fail-closed).
+  return null;
+}
+
+/**
+ * Resolve the caller's auth context. Deny-by-default: any missing/invalid
+ * credential, expired token, or revoked delegate yields null. Subject, role,
+ * and owner scopes come only from the verified credential.
  */
 async function resolveAuthContext(
   req: NextRequest,
@@ -102,15 +121,10 @@ async function resolveAuthContext(
   const apiKey = req.headers.get('x-api-key');
   if (!authz && !apiKey) return null;
 
-  // Placeholder verification seam. Real implementation validates the JWT
-  // signature/expiry or API-key hash and resolves role + owner scope.
-  const subject = req.headers.get('x-subject');
-  const role = req.headers.get('x-role') as OnboardingRole | null;
-  const ownerScopes = (req.headers.get('x-owner-scopes') ?? '')
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+  const claims = await verifyCredential(authz, apiKey);
+  if (!claims) return null;
 
+  const { subject, role, ownerScopes } = claims;
   if (!subject || !role) return null;
   if (role !== 'owner' && role !== 'delegate' && role !== 'guardian') {
     return null;
@@ -263,14 +277,14 @@ export async function POST(
     // Fail-closed: never return a partial wallet on upstream outage.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
-      'Wallet provisioning temporarily unavailable.',
+      'Wallet provisioning is temporarily unavailable.',
       503,
       correlationId,
     );
   }
 
   return NextResponse.json(
-    { wallet: result.wallet, replayed: result.replayed, correlationId },
+    { ...result, correlationId },
     { status: result.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
   );
 }

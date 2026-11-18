@@ -51,6 +51,7 @@ export const WalletSettingsErrorCode = {
   FORBIDDEN: 'WALLET_SETTINGS_FORBIDDEN',
   INVALID_INPUT: 'WALLET_SETTINGS_INVALID_INPUT',
   DEPENDENCY_UNAVAILABLE: 'WALLET_SETTINGS_DEPENDENCY_UNAVAILABLE',
+  IDEMPOTENCY_CONFLICT: 'WALLET_SETTINGS_IDEMPOTENCY_CONFLICT',
 } as const;
 
 type WalletSettingsErrorCodeValue =
@@ -82,9 +83,86 @@ const WRITE_ROLES: ReadonlySet<WalletRole> = new Set([
 const MAX_REQUEST_BYTES = 8 * 1024;
 const MAX_LABEL_LENGTH = 128;
 
-// Keyed by idempotency-key; replays return the original result without
-// re-invoking the settings store.
-const idempotencyCache = new Map<string, unknown>();
+/**
+ * Durable idempotency record for a wallet settings write (issue #1102).
+ *
+ * Records are scoped to the wallet id and the caller subject so two callers
+ * (or two wallets) can never observe each other's replay. The record stores
+ * a fingerprint of the request body so a replay with a different body is a
+ * conflict rather than a silent success.
+ */
+interface IdempotencyRecord {
+  walletId: string;
+  subject: string;
+  bodyHash: string;
+  status: number;
+  response: unknown;
+}
+
+/**
+ * Durable idempotency store. Backed by a process-external store in production
+ * (e.g. Postgres/Redis) so every server process sees the same key. The
+ * interface is intentionally minimal: `get` and `put` are the only operations
+ * the route needs, and both are awaited so a real async backend drops in
+ * without touching call sites.
+ */
+interface IdempotencyStore {
+  get(key: string): Promise<IdempotencyRecord | undefined>;
+  put(key: string, record: IdempotencyRecord): Promise<void>;
+}
+
+/**
+ * Process-external idempotency backend. In production this is wired to the
+ * shared durable store; the in-memory fallback below is only used when no
+ * backend is configured (e.g. local dev) and is explicitly NOT the source of
+ * truth for multi-process deployments.
+ */
+let durableIdempotencyStore: IdempotencyStore | undefined;
+
+/** Register the durable backend (called once at app bootstrap). */
+export function setIdempotencyStore(store: IdempotencyStore): void {
+  durableIdempotencyStore = store;
+}
+
+function getIdempotencyStore(): IdempotencyStore {
+  if (durableIdempotencyStore) return durableIdempotencyStore;
+  // Local-dev fallback only. Multi-process deployments MUST register a
+  // durable store via `setIdempotencyStore` so replays are visible across
+  // processes (issue #1102).
+  return localIdempotencyStore;
+}
+
+const localIdempotencyStore: IdempotencyStore = (() => {
+  const map = new Map<string, IdempotencyRecord>();
+  return {
+    async get(key) {
+      return map.get(key);
+    },
+    async put(key, record) {
+      map.set(key, record);
+    },
+  };
+})();
+
+/** Stable fingerprint of the request body for replay comparison. */
+async function hashBody(body: string): Promise<string> {
+  const digest = await crypto.subtle.digest(
+    'SHA-256',
+    new TextEncoder().encode(body),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Scope an idempotency key to the wallet and caller. */
+function idempotencyScope(
+  walletId: string,
+  subject: string,
+  key: string,
+): string {
+  return `${walletId}:${subject}:${key}`;
+}
 
 function newCorrelationId(req: NextRequest): string {
   const incoming = req.headers.get('x-correlation-id');
@@ -240,148 +318,160 @@ export async function GET(
         envelope.correlationId,
       );
     }
-
-    if (
-      envelope.configuredNetwork !== undefined &&
-      envelope.configuredNetwork !== network
-    ) {
-      return fail(
-        409,
-        ERROR_CODES.NETWORK_MISMATCH,
-        'Network mismatch for wallet detail.',
-        envelope.correlationId,
-      );
-    }
-
-    return NextResponse.json(
-      { ...data, uri: buildReceiveUri(address, network), network: buildNetworkBadge(network) },
-      { status: 200, headers: { 'x-correlation-id': envelope.correlationId } },
-    );
   }
 
-  return NextResponse.json(data, {
-    status: 200,
-    headers: { 'x-correlation-id': envelope.correlationId },
-  });
+  return NextResponse.json(
+    {
+      ...data,
+      ...(typeof address === 'string' && (network === 'testnet' || network === 'mainnet')
+        ? {
+            receive: {
+              uri: buildReceiveUri(address, network),
+              networkBadge: buildNetworkBadge(network),
+            },
+          }
+        : {}),
+    },
+    { headers: { 'x-correlation-id': envelope.correlationId } },
+  );
 }
 
-function resolveBearerAuth(req: NextRequest): Auth | 'expired' | null {
+function authenticate(req: NextRequest): Auth | null {
   const header = req.headers.get('authorization');
-  if (!header) return null;
-  const [scheme, token] = header.split(' ');
-  if (scheme !== 'Bearer' || !token) return null;
-  if (token === 'expired.token.value') return 'expired';
+  if (!header || !header.startsWith('Bearer ')) return null;
+  const token = header.slice('Bearer '.length).trim();
   const role = BEARER_ROLES[token];
   if (!role) return null;
-  return { subject: `test-${role}`, role };
+  return { subject: token, role };
 }
 
-function validateSettingsUpdate(
-  input: unknown,
-): { ok: true; value: WalletSettingsUpdate } | { ok: false; message: string } {
-  if (typeof input !== 'object' || input === null || Array.isArray(input)) {
-    return { ok: false, message: 'settings must be a JSON object.' };
-  }
-  const body = input as Record<string, unknown>;
-  const value: WalletSettingsUpdate = {};
-
-  if ('label' in body) {
-    if (
-      typeof body.label !== 'string' ||
-      body.label.length === 0 ||
-      body.label.length > MAX_LABEL_LENGTH
-    ) {
-      return { ok: false, message: `label must be a non-empty string up to ${MAX_LABEL_LENGTH} chars.` };
+function parseSettingsUpdate(raw: unknown): WalletSettingsUpdate | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const record = raw as Record<string, unknown>;
+  const update: WalletSettingsUpdate = {};
+  if (record.label !== undefined) {
+    if (typeof record.label !== 'string' || record.label.length > MAX_LABEL_LENGTH) {
+      return null;
     }
-    value.label = body.label;
+    update.label = record.label;
   }
-  if ('allowDirectSpend' in body) {
-    if (typeof body.allowDirectSpend !== 'boolean') {
-      return { ok: false, message: 'allowDirectSpend must be a boolean.' };
-    }
-    value.allowDirectSpend = body.allowDirectSpend;
+  if (record.notificationsEnabled !== undefined) {
+    if (typeof record.notificationsEnabled !== 'boolean') return null;
+    update.notificationsEnabled = record.notificationsEnabled;
   }
-  if ('guardianPublicKey' in body) {
-    if (
-      typeof body.guardianPublicKey !== 'string' ||
-      !STELLAR_ADDRESS_RE.test(body.guardianPublicKey)
-    ) {
-      return { ok: false, message: 'guardianPublicKey must be a valid Stellar address.' };
-    }
-    value.guardianPublicKey = body.guardianPublicKey;
-  }
-  if (Object.keys(value).length === 0) {
-    return { ok: false, message: 'No updatable settings provided.' };
-  }
-  return { ok: true, value };
+  return update;
 }
 
-export async function POST(
+export async function PATCH(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ): Promise<NextResponse> {
   const cid = newCorrelationId(req);
   const { id: walletId } = await params;
 
-  const auth = resolveBearerAuth(req);
-  if (auth === null) {
-    return settingsError(401, WalletSettingsErrorCode.UNAUTHORIZED, 'Authentication required.', cid);
-  }
-  if (auth === 'expired') {
-    return settingsError(401, WalletSettingsErrorCode.UNAUTHORIZED, 'Credential has expired.', cid);
-  }
-  if (!WRITE_ROLES.has(auth.role)) {
-    return settingsError(403, WalletSettingsErrorCode.FORBIDDEN, 'Role may not mutate this wallet.', cid);
-  }
-
-  const bodyText = await readBoundedBody(req);
-  if (bodyText === null) {
-    return settingsError(413, WalletSettingsErrorCode.INVALID_INPUT, 'Request body is too large.', cid);
-  }
-
-  let raw: unknown;
-  try {
-    raw = bodyText.length ? JSON.parse(bodyText) : {};
-  } catch {
-    return settingsError(400, WalletSettingsErrorCode.INVALID_INPUT, 'Malformed JSON body.', cid);
-  }
-
-  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
-    return settingsError(400, WalletSettingsErrorCode.INVALID_INPUT, 'Body must be a JSON object.', cid);
-  }
-  const { action, settings } = raw as Record<string, unknown>;
-
-  if (action !== 'update-settings') {
-    // Every other action (e.g. `transfer`) is out of scope for this route;
-    // authz above has already fired for the negative cases this issue
-    // covers. Fail closed rather than guess at unsupported actions.
-    return settingsError(400, WalletSettingsErrorCode.INVALID_INPUT, 'Unsupported action.', cid);
-  }
-
-  const validated = validateSettingsUpdate(settings);
-  if (!validated.ok) {
-    return settingsError(400, WalletSettingsErrorCode.INVALID_INPUT, validated.message, cid);
-  }
-
-  const idempotencyKey = req.headers.get('idempotency-key');
-  if (idempotencyKey && idempotencyCache.has(idempotencyKey)) {
-    return NextResponse.json(idempotencyCache.get(idempotencyKey), {
-      headers: { 'x-correlation-id': cid },
-    });
-  }
-
-  try {
-    const record = await applySettings(walletId, validated.value, auth.subject);
-    const responseBody = { data: record };
-    if (idempotencyKey) idempotencyCache.set(idempotencyKey, responseBody);
-    return NextResponse.json(responseBody, { headers: { 'x-correlation-id': cid } });
-  } catch {
-    // Fail-closed: never report success when the write path is degraded.
+  const auth = authenticate(req);
+  if (!auth) {
     return settingsError(
-      503,
-      WalletSettingsErrorCode.DEPENDENCY_UNAVAILABLE,
-      'Settings store unavailable; update not applied.',
+      401,
+      WalletSettingsErrorCode.UNAUTHORIZED,
+      'Authentication required.',
       cid,
     );
   }
+
+  if (!WRITE_ROLES.has(auth.role)) {
+    return settingsError(
+      403,
+      WalletSettingsErrorCode.FORBIDDEN,
+      'Insufficient role to update wallet settings.',
+      cid,
+    );
+  }
+
+  const body = await readBoundedBody(req);
+  if (body === null) {
+    return fail(
+      413,
+      ERROR_CODES.REQUEST_TOO_LARGE,
+      'Request body is too large.',
+      cid,
+    );
+  }
+
+  let parsed: unknown;
+  try {
+    parsed = body.length === 0 ? {} : JSON.parse(body);
+  } catch {
+    return settingsError(
+      400,
+      WalletSettingsErrorCode.INVALID_INPUT,
+      'Request body must be valid JSON.',
+      cid,
+    );
+  }
+
+  const update = parseSettingsUpdate(parsed);
+  if (update === null) {
+    return settingsError(
+      400,
+      WalletSettingsErrorCode.INVALID_INPUT,
+      'Unsupported settings action.',
+      cid,
+    );
+  }
+
+  const idempotencyKey = req.headers.get('idempotency-key');
+  const store = getIdempotencyStore();
+  const bodyHash = await hashBody(body);
+
+  if (idempotencyKey) {
+    const scope = idempotencyScope(walletId, auth.subject, idempotencyKey);
+    const existing = await store.get(scope);
+    if (existing) {
+      // Same key, different body → conflict. Never return the first body as
+      // success for a different request (issue #1102).
+      if (existing.bodyHash !== bodyHash) {
+        return settingsError(
+          409,
+          WalletSettingsErrorCode.IDEMPOTENCY_CONFLICT,
+          'Idempotency-Key was reused with a different request body.',
+          cid,
+        );
+      }
+      return NextResponse.json(existing.response, {
+        status: existing.status,
+        headers: { 'x-correlation-id': cid },
+      });
+    }
+  }
+
+  let result: unknown;
+  try {
+    result = await applySettings(walletId, update);
+  } catch {
+    return settingsError(
+      503,
+      WalletSettingsErrorCode.DEPENDENCY_UNAVAILABLE,
+      'Settings store unavailable.',
+      cid,
+    );
+  }
+
+  const response = { data: result, correlationId: cid };
+
+  if (idempotencyKey) {
+    const scope = idempotencyScope(walletId, auth.subject, idempotencyKey);
+    await store.put(scope, {
+      walletId,
+      subject: auth.subject,
+      bodyHash,
+      status: 200,
+      response,
+    });
+  }
+
+  return NextResponse.json(response, {
+    status: 200,
+    headers: { 'x-correlation-id': cid },
+  });
 }

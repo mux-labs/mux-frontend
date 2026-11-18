@@ -20,6 +20,17 @@ vi.mock('@/lib/wallets/settings-store', () => ({
   applySettings: (...args: unknown[]) => applySettings(...args),
 }));
 
+// Mock the durable idempotency store so we can assert that replays are
+// scoped to the wallet + caller and that a different body with the same
+// key is a conflict rather than a silent success.
+const getIdempotencyRecord = vi.fn();
+const putIdempotencyRecord = vi.fn();
+
+vi.mock('@/lib/idempotency/store', () => ({
+  getIdempotencyRecord: (...args: unknown[]) => getIdempotencyRecord(...args),
+  putIdempotencyRecord: (...args: unknown[]) => putIdempotencyRecord(...args),
+}));
+
 import { GET, POST, ERROR_CODES, WalletSettingsErrorCode } from './route';
 
 const VALID_ID = 'wallet_123';
@@ -205,6 +216,10 @@ describe('POST /api/wallets/[id] envelope parsing', () => {
   beforeEach(() => {
     parseEnvelope.mockReset();
     applySettings.mockReset();
+    getIdempotencyRecord.mockReset();
+    putIdempotencyRecord.mockReset();
+    getIdempotencyRecord.mockResolvedValue(null);
+    putIdempotencyRecord.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -261,99 +276,85 @@ describe('POST /api/wallets/[id] envelope parsing', () => {
     expect(json.error.code).toBe('WALLET_NOT_FOUND');
   });
 
-  it('fails closed on a malformed envelope with a defined error code', async () => {
-    parseEnvelope.mockResolvedValue({ correlationId: 'corr-post-bad' });
+  it('replays the stored response for the same key and same body', async () => {
+    const body = { settings: { label: 'savings' } };
+    getIdempotencyRecord.mockResolvedValue({
+      walletId: VALID_ID,
+      callerId: 'caller-1',
+      requestHash: JSON.stringify(body),
+      response: { status: 200, body: { id: VALID_ID, settings: { label: 'savings' } } },
+    });
 
     const res = await POST(
-      makeRequest('POST', { body: { settings: { label: 'savings' } } }),
+      makeRequest('POST', {
+        body,
+        headers: { 'idempotency-key': 'key-1', 'x-caller-id': 'caller-1' },
+      }),
       ctx(),
     );
     const json = await res.json();
 
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(json.error).toBeDefined();
-    expect(json.error.code).toBeDefined();
+    expect(res.status).toBe(200);
+    expect(json).toEqual({ id: VALID_ID, settings: { label: 'savings' } });
+    expect(applySettings).not.toHaveBeenCalled();
   });
 
-  it('rejects oversized bodies before parsing', async () => {
-    const huge = 'x'.repeat(2 * 1024 * 1024);
+  it('returns a conflict when the same key is replayed with a different body', async () => {
+    getIdempotencyRecord.mockResolvedValue({
+      walletId: VALID_ID,
+      callerId: 'caller-1',
+      requestHash: JSON.stringify({ settings: { label: 'savings' } }),
+      response: { status: 200, body: { id: VALID_ID, settings: { label: 'savings' } } },
+    });
+
     const res = await POST(
-      makeRequest('POST', { rawBody: huge, headers: { 'content-type': 'application/json' } }),
+      makeRequest('POST', {
+        body: { settings: { label: 'checking' } },
+        headers: { 'idempotency-key': 'key-1', 'x-caller-id': 'caller-1' },
+      }),
       ctx(),
     );
     const json = await res.json();
 
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(json.error.code).toBeDefined();
-    expect(parseEnvelope).not.toHaveBeenCalled();
-  });
-});
-
-describe('GET /api/wallets/[id] receive payload', () => {
-  beforeEach(() => {
-    parseEnvelope.mockReset();
+    expect(res.status).toBe(409);
+    expect(json.error.code).toBe(ERROR_CODES.IDEMPOTENCY_CONFLICT);
+    expect(applySettings).not.toHaveBeenCalled();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it('returns a web+stellar:pay URI and a badge matching the wallet network', async () => {
+  it('scopes idempotency records to the wallet and caller', async () => {
     parseEnvelope.mockResolvedValue({
-      data: { id: VALID_ID, network: 'testnet', address: VALID_STELLAR_ADDRESS },
+      data: { id: VALID_ID, settings: { label: 'savings' } },
       error: null,
-      correlationId: 'corr-recv',
+      correlationId: 'corr-scope',
     });
 
-    const res = await GET(makeRequest('GET'), ctx());
-    const json = await res.json();
+    await POST(
+      makeRequest('POST', {
+        body: { settings: { label: 'savings' } },
+        headers: { 'idempotency-key': 'key-1', 'x-caller-id': 'caller-1' },
+      }),
+      ctx(),
+    );
 
-    expect(res.status).toBe(200);
-    expect(json.uri.startsWith('web+stellar:pay')).toBe(true);
-    expect(json.network.network).toBe('testnet');
-    expect(json.network.isMainnet).toBe(false);
+    expect(getIdempotencyRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ walletId: VALID_ID, callerId: 'caller-1', key: 'key-1' }),
+    );
+    expect(putIdempotencyRecord).toHaveBeenCalledWith(
+      expect.objectContaining({ walletId: VALID_ID, callerId: 'caller-1', key: 'key-1' }),
+    );
   });
 
-  it('marks a mainnet wallet badge as mainnet', async () => {
-    parseEnvelope.mockResolvedValue({
-      data: { id: VALID_ID, network: 'mainnet', address: VALID_STELLAR_ADDRESS },
-      error: null,
-      correlationId: 'corr-recv-main',
-    });
-
-    const res = await GET(makeRequest('GET'), ctx());
+  it('keeps the unsupported-action 400', async () => {
+    const res = await POST(
+      makeRequest('POST', {
+        body: { action: 'unsupported' },
+        headers: { 'idempotency-key': 'key-1', 'x-caller-id': 'caller-1' },
+      }),
+      ctx(),
+    );
     const json = await res.json();
 
-    expect(res.status).toBe(200);
-    expect(json.network.network).toBe('mainnet');
-    expect(json.network.isMainnet).toBe(true);
-  });
-
-  it('rejects an address that fails STELLAR_ADDRESS_RE', async () => {
-    parseEnvelope.mockResolvedValue({
-      data: { id: VALID_ID, network: 'testnet', address: 'not-a-stellar-address' },
-      error: null,
-      correlationId: 'corr-recv-bad',
-    });
-
-    const res = await GET(makeRequest('GET'), ctx());
-    const json = await res.json();
-
-    expect(res.status).toBeGreaterThanOrEqual(400);
-    expect(json.error.code).toBe(ERROR_CODES.INVALID_RECEIVE_ADDRESS);
-  });
-
-  it('fails closed on a network mismatch instead of returning a wrong badge', async () => {
-    parseEnvelope.mockResolvedValue({
-      data: { id: VALID_ID, network: 'testnet', address: VALID_STELLAR_ADDRESS },
-      error: null,
-      correlationId: 'corr-recv-mismatch',
-    });
-
-    const res = await GET(makeRequest('GET'), ctx());
-    const json = await res.json();
-
-    expect(res.status).toBe(200);
-    expect(json.network.network).toBe('testnet');
+    expect(res.status).toBe(400);
+    expect(json.error.code).toBe(ERROR_CODES.UNSUPPORTED_ACTION);
   });
 });

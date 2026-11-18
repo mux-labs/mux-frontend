@@ -15,13 +15,11 @@ function makeRequest(
 }
 
 const adminHeaders = {
-  authorization: 'Bearer x',
-  'x-role': 'admin',
+  authorization: 'Bearer admin-token',
 };
 
 const developerHeaders = {
-  authorization: 'Bearer x',
-  'x-role': 'developer',
+  authorization: 'Bearer developer-token',
 };
 
 describe('/api/team route', () => {
@@ -49,6 +47,16 @@ describe('/api/team route', () => {
       expect(body.error.code).toBe('unauthorized');
     });
 
+    it('returns 401 unauthorized for an unverifiable bearer token even with x-role admin', async () => {
+      const response = await GET(
+        makeRequest('GET', { headers: { authorization: 'Bearer x', 'x-role': 'admin' } }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body.error.code).toBe('unauthorized');
+    });
+
     it('returns 200 with the member list for an authorized caller', async () => {
       const response = await GET(makeRequest('GET', { headers: adminHeaders }));
       const body = await response.json();
@@ -67,6 +75,18 @@ describe('/api/team route', () => {
       expect(response.status).toBe(503);
       expect(body.error.code).toBe('backend_unavailable');
     });
+
+    it('returns 401 before 503 in production for an unverifiable token', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+
+      const response = await GET(
+        makeRequest('GET', { headers: { authorization: 'Bearer x', 'x-role': 'admin' } }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body.error.code).toBe('unauthorized');
+    });
   });
 
   describe('POST', () => {
@@ -81,6 +101,19 @@ describe('/api/team route', () => {
       expect(response.status).toBe(401);
       expect(body.error.code).toBe('unauthorized');
       expect(response.headers.get('x-correlation-id')).toBeTruthy();
+    });
+
+    it('returns 401 unauthorized for an unverifiable bearer token even with x-role admin', async () => {
+      const response = await POST(
+        makeRequest('POST', {
+          headers: { authorization: 'Bearer x', 'x-role': 'admin' },
+          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
+        }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body.error.code).toBe('unauthorized');
     });
 
     it('returns 403 forbidden when a developer calls POST', async () => {
@@ -193,6 +226,21 @@ describe('/api/team route', () => {
 
       expect(response.status).toBe(503);
       expect(body.error.code).toBe('backend_unavailable');
+    });
+
+    it('returns 401 before 503 in production for an unverifiable token', async () => {
+      vi.stubEnv('NODE_ENV', 'production');
+
+      const response = await POST(
+        makeRequest('POST', {
+          headers: { authorization: 'Bearer x', 'x-role': 'admin' },
+          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
+        }),
+      );
+      const body = await response.json();
+
+      expect(response.status).toBe(401);
+      expect(body.error.code).toBe('unauthorized');
     });
   });
 });

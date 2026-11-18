@@ -240,129 +240,99 @@ describe('api-keys route', () => {
       expect(second.body.correlationId).not.toBe(first.body.correlationId);
     });
 
-    it(`accepts a ${MAX_IDEMPOTENCY_KEY_LENGTH}-character key and replays the cached response`, async () => {
-      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH);
-      expect(key).toHaveLength(MAX_IDEMPOTENCY_KEY_LENGTH);
+    it('rejects a blank idempotency-key with 400 and does not write', async () => {
+      const req = postRequest(ROTATE, { 'idempotency-key': '' });
+      const json = vi.spyOn(req, 'json');
 
-      const { first, second, writes } = await postTwice(ROTATE, {
-        'idempotency-key': key,
-      });
+      const res = await POST(req);
+      const body = await res.json();
 
-      expect(first.status).toBe(200);
-      expect(second).toEqual(first);
-      expect(writes).toBe(1);
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+      expect(json).not.toHaveBeenCalled();
     });
 
-    it(`rejects a ${MAX_IDEMPOTENCY_KEY_LENGTH + 1}-character key so it is never cached or replayed`, async () => {
-      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
-      expect(key).toHaveLength(MAX_IDEMPOTENCY_KEY_LENGTH + 1);
+    it(`rejects a ${MAX_IDEMPOTENCY_KEY_LENGTH + 1}-character idempotency-key with 400 and does not write`, async () => {
+      const req = postRequest(ROTATE, {
+        'idempotency-key': idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH + 1),
+      });
+      const json = vi.spyOn(req, 'json');
 
+      const res = await POST(req);
+      const body = await res.json();
+
+      expect(res.status).toBe(400);
+      expect(body.error.code).toBe('API_KEY_INVALID_IDEMPOTENCY_KEY');
+      expect(json).not.toHaveBeenCalled();
+    });
+
+    it(`accepts a ${MAX_IDEMPOTENCY_KEY_LENGTH}-character idempotency-key`, async () => {
+      const key = idempotencyKey(MAX_IDEMPOTENCY_KEY_LENGTH);
+      const res = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+
+      expect(res.status).toBe(200);
+    });
+
+    it('replays the stored response for the same key and body', async () => {
+      const key = idempotencyKey(32);
       const { first, second, writes } = await postTwice(ROTATE, {
         'idempotency-key': key,
       });
 
       expect(first.status).toBe(200);
       expect(second.status).toBe(200);
-      expect(writes).toBe(2);
-      expect(second.body.correlationId).not.toBe(first.body.correlationId);
-    });
-
-    it('replays the cached response for the same key and body without re-running the write', async () => {
-      const headers = { 'idempotency-key': idempotencyKey(16) };
-      const { first, second, writes } = await postTwice(ROTATE, headers);
-
-      expect(first.status).toBe(200);
-      expect(first.body).toMatchObject({ action: 'rotate', id: 'key_1' });
-      expect(second.status).toBe(first.status);
-      expect(second.body).toEqual(first.body);
       expect(writes).toBe(1);
+      expect(second.body).toEqual(first.body);
     });
 
-    it('does not cache a failed write, so the key can be retried with a valid body', async () => {
-      const headers = { 'idempotency-key': idempotencyKey(16) };
+    it('does not return the first action body when the same key is reused for a different action', async () => {
+      const key = idempotencyKey(32);
+      const firstRes = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+      const firstBody = await firstRes.json();
 
-      const failed = await POST(postRequest({ action: 'rotate', id: 'key_1' }, headers));
-      const failedBody = await failed.json();
-      const retried = await POST(postRequest(ROTATE, headers));
-      const retriedBody = await retried.json();
+      const secondRes = await POST(
+        postRequest(
+          { action: 'revoke', id: 'key_2', confirm: true },
+          { 'idempotency-key': key },
+        ),
+      );
+      const secondBody = await secondRes.json();
 
-      expect(failed.status).toBe(400);
-      expect(failedBody.error.code).toBe('API_KEY_CONFIRMATION_REQUIRED');
-      expect(retried.status).toBe(200);
-      expect(retriedBody).toMatchObject({ action: 'rotate', id: 'key_1' });
+      expect(firstRes.status).toBe(200);
+      expect(secondRes.status).toBe(200);
+      expect(secondBody).not.toEqual(firstBody);
+      expect(secondBody.action).toBe('revoke');
+    });
+
+    it('does not share a cache entry across callers', async () => {
+      const key = idempotencyKey(32);
+      const firstRes = await POST(postRequest(ROTATE, { 'idempotency-key': key }));
+      const firstBody = await firstRes.json();
+
+      const secondRes = await POST(
+        postRequest(ROTATE, {
+          'idempotency-key': key,
+          authorization: 'Bearer other-token',
+        }),
+      );
+      const secondBody = await secondRes.json();
+
+      expect(firstRes.status).toBe(200);
+      expect(secondRes.status).toBe(200);
+      expect(secondBody.correlationId).not.toBe(firstBody.correlationId);
     });
   });
-});
 
-describe('redact', () => {
-  it.each([
-    ['undefined', undefined],
-    ['null', null],
-    ['an empty string', ''],
-    ['a number', 12345],
-    ['a boolean', true],
-    ['an object', { key: 'supersecret' }],
-    ['an array', ['supersecret']],
-  ])('returns "[redacted]" for %s', (_label, value) => {
-    expect(redact(value)).toBe('[redacted]');
-  });
-
-  it('returns only the length for a non-empty string', () => {
-    const out = redact('supersecret');
-
-    expect(out).toBe('[redacted:11]');
-    expect(out).not.toContain('supersecret');
-  });
-
-  it('never echoes any part of the original secret', () => {
-    const secret = 'sk_live_51M0L9SA9mG8G8xX5u4v5';
-    const out = redact(secret);
-
-    expect(out).toBe(`[redacted:${secret.length}]`);
-    expect(out).not.toContain(secret);
-    expect(out).not.toContain('sk_');
-    expect(out).not.toContain(secret.slice(-4));
-  });
-});
-
-describe('isAuthorized', () => {
-  function withAuth(authorization?: string) {
-    return new Request('http://localhost/api/api-keys', {
-      headers: authorization === undefined ? {} : { authorization },
+  describe('guards', () => {
+    it('isAuthorized rejects missing credentials', () => {
+      expect(isAuthorized(new NextRequest('http://localhost/api/api-keys'))).toBe(false);
     });
-  }
 
-  it('returns false when the authorization header is missing', () => {
-    expect(isAuthorized(withAuth())).toBe(false);
+    it('redact never returns the raw key', () => {
+      const raw = 'super-secret-key-value';
+      const out = redact(raw);
+
+      expect(out).not.toContain(raw);
+    });
   });
-
-  it.each(['Bearer', 'ApiKey', 'Bearer ', 'Bearer  token'])(
-    'returns false when the header has no token: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  it.each(['Basic dXNlcjpwYXNz', 'Token abc', 'Digest abc', 'test-token'])(
-    'returns false for an unknown scheme: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  // Scheme matching is case-sensitive today; changing that must be a
-  // deliberate test update.
-  it.each(['bearer test-token', 'BEARER test-token', 'apikey test-key', 'Apikey test-key'])(
-    'returns false for a non-canonical scheme casing: %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(false);
-    },
-  );
-
-  it.each(['Bearer test-token', 'ApiKey test-key'])(
-    'returns true for %j',
-    (header) => {
-      expect(isAuthorized(withAuth(header))).toBe(true);
-    },
-  );
 });

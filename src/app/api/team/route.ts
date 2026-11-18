@@ -40,16 +40,35 @@ function errorResponse(
   );
 }
 
-/** Resolve caller role from the session/JWT. Deny-by-default: null = unauthorized. */
+/**
+ * Verify a bearer/API-key token and resolve the caller's role from it.
+ * Deny-by-default: null = unauthorized. The role is NEVER taken from a
+ * client-supplied header such as `x-role`.
+ */
 function resolveCallerRole(req: NextRequest): TeamRole | null {
   const auth = req.headers.get('authorization');
   if (!auth) return null;
   const [scheme, token] = auth.split(' ');
   if (!token || (scheme !== 'Bearer' && scheme !== 'ApiKey')) return null;
-  // Placeholder: real impl validates JWT/API-key and returns the resolved role.
-  const role = req.headers.get('x-role') as TeamRole | null;
-  if (role !== 'admin' && role !== 'developer') return null;
-  return role;
+
+  // Verify the token and derive the role from the verified claims. A token
+  // that does not verify yields null regardless of any `x-role` header.
+  const claims = verifyToken(token);
+  if (!claims) return null;
+  if (claims.role !== 'admin' && claims.role !== 'developer') return null;
+  return claims.role;
+}
+
+/**
+ * Placeholder token verification. Real impl validates the JWT signature /
+ * API-key lookup and returns the resolved claims. Returns null when the
+ * token cannot be verified.
+ */
+function verifyToken(token: string): { role: TeamRole } | null {
+  // No verifier configured yet: reject every token rather than trusting
+  // unverified input. Wire a real JWT/API-key verifier here.
+  void token;
+  return null;
 }
 
 function validateMemberPayload(body: unknown): {

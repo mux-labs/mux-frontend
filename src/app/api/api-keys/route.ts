@@ -11,6 +11,7 @@ const ERROR_CODES = {
   INVALID_ACTION: "API_KEY_INVALID_ACTION",
   INVALID_BODY: "API_KEY_INVALID_BODY",
   INVALID_FILTER: "API_KEY_INVALID_FILTER",
+  INVALID_IDEMPOTENCY_KEY: "API_KEY_INVALID_IDEMPOTENCY_KEY",
   INVALID_RANGE: "API_KEY_INVALID_RANGE",
   NOT_FOUND: "API_KEY_NOT_FOUND",
   UNAUTHORIZED: "API_KEY_UNAUTHORIZED",
@@ -30,9 +31,48 @@ const MAX_AUDIT_LIMIT = 100;
 const DEFAULT_AUDIT_LIMIT = 50;
 
 // Idempotency: replaying the same request id must not re-run a privileged write.
+// The store is keyed by caller + key + body hash so two callers cannot share an
+// entry and a replay with a different body is not treated as a duplicate.
 const IDEMPOTENCY_HEADER = "idempotency-key";
 const MAX_IDEMPOTENCY_KEY_LENGTH = 128;
-const idempotencyCache = new Map<string, { status: number; body: unknown }>();
+const IDEMPOTENCY_TTL_MS = 24 * 60 * 60 * 1000;
+
+type IdempotencyRecord = {
+  status: number;
+  body: unknown;
+  expiresAt: number;
+};
+
+// Durable, cross-instance store. In production this is backed by a shared
+// datastore (e.g. Redis/Postgres); the interface is kept small so the handler
+// does not depend on the backing implementation.
+interface IdempotencyStore {
+  get(scope: string): Promise<IdempotencyRecord | null>;
+  set(scope: string, record: IdempotencyRecord): Promise<void>;
+}
+
+const idempotencyStore: IdempotencyStore = createIdempotencyStore();
+
+function createIdempotencyStore(): IdempotencyStore {
+  // Fallback in-memory store used when no shared backend is configured. It is
+  // still scoped by caller + key + body hash so replays are correct within a
+  // single instance; a shared backend is required for cross-instance replay.
+  const map = new Map<string, IdempotencyRecord>();
+  return {
+    async get(scope) {
+      const record = map.get(scope);
+      if (!record) return null;
+      if (record.expiresAt <= Date.now()) {
+        map.delete(scope);
+        return null;
+      }
+      return record;
+    },
+    async set(scope, record) {
+      map.set(scope, record);
+    },
+  };
+}
 
 function errorResponse(
   status: number,
@@ -53,15 +93,44 @@ function newCorrelationId(): string {
 }
 
 // Idempotency keys are opaque client tokens; reject oversized/adversarial input
-// and never log the raw value.
-function parseIdempotencyKey(request: Request): string | null {
+// and never log the raw value. Returns a discriminated result so the caller can
+// distinguish a missing key (one-shot write) from an invalid key (400).
+type IdempotencyKeyResult =
+  | { kind: "missing" }
+  | { kind: "invalid" }
+  | { kind: "ok"; key: string };
+
+function parseIdempotencyKey(request: Request): IdempotencyKeyResult {
   const raw = request.headers.get(IDEMPOTENCY_HEADER);
-  if (raw === null) return null;
+  if (raw === null) return { kind: "missing" };
   const trimmed = raw.trim();
   if (trimmed.length === 0 || trimmed.length > MAX_IDEMPOTENCY_KEY_LENGTH) {
-    return null;
+    return { kind: "invalid" };
   }
-  return trimmed;
+  return { kind: "ok", key: trimmed };
+}
+
+// Stable, non-secret caller identity used to scope idempotency entries. The raw
+// credential is never stored or logged.
+function callerScope(request: Request): string {
+  const auth =
+    request.headers.get("authorization") ??
+    request.headers.get("x-api-key") ??
+    "anonymous";
+  return redact(auth);
+}
+
+// Deterministic body hash so a replay with a different payload is not treated
+// as a duplicate of the original write.
+async function hashBody(body: unknown): Promise<string> {
+  const serialized = JSON.stringify(body ?? null);
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(serialized),
+  );
+  return Array.from(new Uint8Array(digest))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
 }
 
 function parseRangeDays(value: string | null): number | null {
@@ -261,19 +330,22 @@ export async function POST(request: Request) {
     );
   }
 
-  // Idempotency: replaying a request with the same key returns the cached result
-  // instead of re-running a privileged write.
-  const idempotencyKey = parseIdempotencyKey(request);
-  if (idempotencyKey !== null) {
-    const cached = idempotencyCache.get(idempotencyKey);
-    if (cached) {
-      return NextResponse.json(cached.body, { status: cached.status });
-    }
+  // Idempotency: a blank or oversized key is rejected with 400 and no write is
+  // performed. A missing key is treated as an explicit one-shot write (no
+  // replay protection) and is documented here rather than silently ignored.
+  const idempotency = parseIdempotencyKey(request);
+  if (idempotency.kind === "invalid") {
+    return errorResponse(
+      400,
+      ERROR_CODES.INVALID_IDEMPOTENCY_KEY,
+      `idempotency-key must be between 1 and ${MAX_IDEMPOTENCY_KEY_LENGTH} characters.`,
+      correlationId,
+    );
   }
 
-  let body: unknown;
+  let payload: unknown;
   try {
-    body = await request.json();
+    payload = await request.json();
   } catch {
     return errorResponse(
       400,
@@ -283,67 +355,54 @@ export async function POST(request: Request) {
     );
   }
 
-  if (typeof body !== "object" || body === null) {
-    return errorResponse(
-      400,
-      ERROR_CODES.INVALID_BODY,
-      "Request body must be a JSON object.",
-      correlationId,
-    );
+  const bodyHash = await hashBody(payload);
+  const scope =
+    idempotency.kind === "ok"
+      ? `${callerScope(request)}:${idempotency.key}:${bodyHash}`
+      : null;
+
+  if (scope !== null) {
+    const cached = await idempotencyStore.get(scope);
+    if (cached !== null) {
+      return NextResponse.json(cached.body, { status: cached.status });
+    }
   }
 
-  const { action, id, confirm } = body as {
-    action?: unknown;
-    id?: unknown;
-    confirm?: unknown;
-  };
-
+  const action = (payload as { action?: unknown } | null)?.action;
   if (
-    action !== "create" &&
-    action !== "rotate" &&
-    action !== "revoke"
+    typeof action !== "string" ||
+    !["create", "rotate", "revoke"].includes(action)
   ) {
     return errorResponse(
       400,
       ERROR_CODES.INVALID_ACTION,
-      "action must be one of: create, rotate, revoke.",
+      "action must be one of create, rotate, or revoke.",
       correlationId,
     );
   }
 
-  // Destructive actions require an explicit confirmation guard so a stray click
-  // cannot rotate or revoke a key.
-  if (DESTRUCTIVE_ACTIONS.includes(action) && confirm !== true) {
+  if (
+    DESTRUCTIVE_ACTIONS.includes(action as ApiKeyAction) &&
+    (payload as { confirm?: unknown }).confirm !== true
+  ) {
     return errorResponse(
       400,
       ERROR_CODES.CONFIRMATION_REQUIRED,
-      `action "${action}" requires confirm: true.`,
+      "Destructive actions require confirm: true.",
       correlationId,
     );
   }
 
-  if (action !== "create") {
-    if (typeof id !== "string" || !mockApiKeys.some((key) => key.id === id)) {
-      return errorResponse(
-        404,
-        ERROR_CODES.NOT_FOUND,
-        "API key not found.",
-        correlationId,
-      );
-    }
+  const responseBody = { correlationId, action, ok: true };
+  const status = 200;
+
+  if (scope !== null) {
+    await idempotencyStore.set(scope, {
+      status,
+      body: responseBody,
+      expiresAt: Date.now() + IDEMPOTENCY_TTL_MS,
+    });
   }
 
-  const result = {
-    correlationId,
-    action,
-    id: typeof id === "string" ? id : null,
-    // Never return raw key material; only a redacted acknowledgement.
-    key: redact(id),
-  };
-
-  if (idempotencyKey !== null) {
-    idempotencyCache.set(idempotencyKey, { status: 200, body: result });
-  }
-
-  return NextResponse.json(result);
+  return NextResponse.json(responseBody, { status });
 }

@@ -47,9 +47,8 @@ function errorResponse(
 }
 
 function newCorrelationId(): string {
-  return `apikey_${Date.now().toString(36)}_${Math.random()
-    .toString(36)
-    .slice(2, 10)}`;
+  // CSPRNG-backed id: unique even when Date.now is fixed, unlike Math.random.
+  return `apikey_${crypto.randomUUID()}`;
 }
 
 // Idempotency keys are opaque client tokens; reject oversized/adversarial input
@@ -261,89 +260,6 @@ export async function POST(request: Request) {
     );
   }
 
-  // Idempotency: replaying a request with the same key returns the cached result
-  // instead of re-running a privileged write.
-  const idempotencyKey = parseIdempotencyKey(request);
-  if (idempotencyKey !== null) {
-    const cached = idempotencyCache.get(idempotencyKey);
-    if (cached) {
-      return NextResponse.json(cached.body, { status: cached.status });
-    }
-  }
+  // Idempotency: replaying a request with the same key returns the 
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return errorResponse(
-      400,
-      ERROR_CODES.INVALID_BODY,
-      "Request body must be valid JSON.",
-      correlationId,
-    );
-  }
-
-  if (typeof body !== "object" || body === null) {
-    return errorResponse(
-      400,
-      ERROR_CODES.INVALID_BODY,
-      "Request body must be a JSON object.",
-      correlationId,
-    );
-  }
-
-  const { action, id, confirm } = body as {
-    action?: unknown;
-    id?: unknown;
-    confirm?: unknown;
-  };
-
-  if (
-    action !== "create" &&
-    action !== "rotate" &&
-    action !== "revoke"
-  ) {
-    return errorResponse(
-      400,
-      ERROR_CODES.INVALID_ACTION,
-      "action must be one of: create, rotate, revoke.",
-      correlationId,
-    );
-  }
-
-  // Destructive actions require an explicit confirmation guard so a stray click
-  // cannot rotate or revoke a key.
-  if (DESTRUCTIVE_ACTIONS.includes(action) && confirm !== true) {
-    return errorResponse(
-      400,
-      ERROR_CODES.CONFIRMATION_REQUIRED,
-      `action "${action}" requires confirm: true.`,
-      correlationId,
-    );
-  }
-
-  if (action !== "create") {
-    if (typeof id !== "string" || !mockApiKeys.some((key) => key.id === id)) {
-      return errorResponse(
-        404,
-        ERROR_CODES.NOT_FOUND,
-        "API key not found.",
-        correlationId,
-      );
-    }
-  }
-
-  const result = {
-    correlationId,
-    action,
-    id: typeof id === "string" ? id : null,
-    // Never return raw key material; only a redacted acknowledgement.
-    key: redact(id),
-  };
-
-  if (idempotencyKey !== null) {
-    idempotencyCache.set(idempotencyKey, { status: 200, body: result });
-  }
-
-  return NextResponse.json(result);
-}
+/* … truncated 2027 chars — edit only what you need near the top … */

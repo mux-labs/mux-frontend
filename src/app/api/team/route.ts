@@ -1,140 +1,139 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { mockTeam, type TeamMember, type TeamRole } from './store';
 
-export const runtime = 'nodejs';
+import { randomUUID } from 'crypto';
 
-export type { TeamMember, TeamRole } from './store';
-export { mockTeam } from './store';
+type MemberRole = 'admin' | 'developer';
 
-export const TEAM_ERROR = {
-  UNAUTHORIZED: 'unauthorized',
-  FORBIDDEN: 'forbidden',
-  INVALID_MEMBER: 'invalid_member',
-  MEMBER_EXISTS: 'member_exists',
-  NOT_FOUND: 'not_found',
-  BACKEND_UNAVAILABLE: 'backend_unavailable',
-} as const;
+type Member = {
+  id: string;
+  name: string;
+  email: string;
+  role: MemberRole;
+};
 
-export type TeamErrorCode = (typeof TEAM_ERROR)[keyof typeof TEAM_ERROR];
+const members: Member[] = [
+  { id: 'm-1', name: 'Ada Lovelace', email: 'ada@mux.test', role: 'admin' },
+  { id: 'm-2', name: 'Grace Hopper', email: 'grace@mux.test', role: 'developer' },
+];
 
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-function isMockAllowed(): boolean {
-  return process.env.NODE_ENV !== 'production';
-}
-
-function newCorrelationId(): string {
-  return typeof crypto !== 'undefined' && crypto.randomUUID
-    ? crypto.randomUUID()
-    : `team_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
+function correlationId(request: NextRequest): string {
+  return request.headers.get('x-correlation-id') ?? randomUUID();
 }
 
 function errorResponse(
+  request: NextRequest,
   status: number,
-  code: TeamErrorCode,
+  code: string,
   message: string,
-  correlationId: string,
-) {
+): NextResponse {
   return NextResponse.json(
-    { error: { code, message, correlationId } },
-    { status, headers: { 'x-correlation-id': correlationId } },
+    { error: { code, message } },
+    { status, headers: { 'x-correlation-id': correlationId(request) } },
   );
 }
 
-/** Resolve caller role from the session/JWT. Deny-by-default: null = unauthorized. */
-function resolveCallerRole(req: NextRequest): TeamRole | null {
-  const auth = req.headers.get('authorization');
-  if (!auth) return null;
-  const [scheme, token] = auth.split(' ');
-  if (!token || (scheme !== 'Bearer' && scheme !== 'ApiKey')) return null;
-  // Placeholder: real impl validates JWT/API-key and returns the resolved role.
-  const role = req.headers.get('x-role') as TeamRole | null;
-  if (role !== 'admin' && role !== 'developer') return null;
-  return role;
+function isAuthorized(request: NextRequest): boolean {
+  const header = request.headers.get('authorization');
+  return typeof header === 'string' && header.startsWith('Bearer ');
 }
 
-function validateMemberPayload(body: unknown): {
-  name: string;
-  email: string;
-  role: TeamRole;
-} | null {
-  if (!body || typeof body !== 'object') return null;
-  const { name, email, role } = body as Record<string, unknown>;
-  if (typeof name !== 'string' || name.trim().length === 0 || name.length > 128) return null;
-  if (typeof email !== 'string' || !email.includes('@') || email.length > 254) return null;
-  if (role !== 'admin' && role !== 'developer') return null;
-  return { name: name.trim(), email: email.trim().toLowerCase(), role };
+function isAdmin(request: NextRequest): boolean {
+  return request.headers.get('x-role') === 'admin';
 }
 
-/** GET /api/team — list members. admin and developer may read. */
-export async function GET(req: NextRequest) {
-  const correlationId = req.headers.get('x-correlation-id') ?? newCorrelationId();
+function isProduction(): boolean {
+  return process.env.NODE_ENV === 'production';
+}
 
-  const callerRole = resolveCallerRole(req);
-  if (!callerRole) {
-    return errorResponse(401, TEAM_ERROR.UNAUTHORIZED, 'Authentication required.', correlationId);
+function validateMemberPayload(
+  payload: unknown,
+): { ok: true; member: Omit<Member, 'id'> } | { ok: false } {
+  if (typeof payload !== 'object' || payload === null) {
+    return { ok: false };
   }
 
-  if (!isMockAllowed()) {
-    return errorResponse(503, TEAM_ERROR.BACKEND_UNAVAILABLE, 'Team backend not configured.', correlationId);
+  const { name, email, role } = payload as Record<string, unknown>;
+
+  if (typeof name !== 'string') {
+    return { ok: false };
+  }
+
+  const trimmedName = name.trim();
+  if (trimmedName.length === 0 || trimmedName.length > 128) {
+    return { ok: false };
+  }
+
+  if (typeof email !== 'string') {
+    return { ok: false };
+  }
+
+  const trimmedEmail = email.trim();
+  if (trimmedEmail.length > 254 || !EMAIL_PATTERN.test(trimmedEmail)) {
+    return { ok: false };
+  }
+
+  if (role !== 'admin' && role !== 'developer') {
+    return { ok: false };
+  }
+
+  return { ok: true, member: { name: trimmedName, email: trimmedEmail, role } };
+}
+
+export async function GET(request: NextRequest): Promise<NextResponse> {
+  if (!isAuthorized(request)) {
+    return errorResponse(request, 401, 'unauthorized', 'Missing or invalid Authorization header.');
+  }
+
+  if (isProduction()) {
+    return errorResponse(request, 503, 'backend_unavailable', 'Team backend is unavailable.');
   }
 
   return NextResponse.json(
-    { members: mockTeam, correlationId },
-    { headers: { 'x-correlation-id': correlationId } },
+    { members },
+    { status: 200, headers: { 'x-correlation-id': correlationId(request) } },
   );
 }
 
-/** POST /api/team — add a member. admin only. Idempotent on email. */
-export async function POST(req: NextRequest) {
-  const correlationId = req.headers.get('x-correlation-id') ?? newCorrelationId();
-
-  const callerRole = resolveCallerRole(req);
-  if (!callerRole) {
-    return errorResponse(401, TEAM_ERROR.UNAUTHORIZED, 'Authentication required.', correlationId);
-  }
-  if (callerRole !== 'admin') {
-    return errorResponse(403, TEAM_ERROR.FORBIDDEN, 'Only admins may add team members.', correlationId);
+export async function POST(request: NextRequest): Promise<NextResponse> {
+  if (!isAuthorized(request)) {
+    return errorResponse(request, 401, 'unauthorized', 'Missing or invalid Authorization header.');
   }
 
-  if (!isMockAllowed()) {
-    return errorResponse(503, TEAM_ERROR.BACKEND_UNAVAILABLE, 'Team backend not configured.', correlationId);
+  if (!isAdmin(request)) {
+    return errorResponse(request, 403, 'forbidden', 'Only admins may add team members.');
   }
 
-  let raw: unknown;
+  if (isProduction()) {
+    return errorResponse(request, 503, 'backend_unavailable', 'Team backend is unavailable.');
+  }
+
+  let payload: unknown;
   try {
-    raw = await req.json();
+    payload = await request.json();
   } catch {
-    return errorResponse(400, TEAM_ERROR.INVALID_MEMBER, 'Request body must be valid JSON.', correlationId);
+    return errorResponse(request, 400, 'invalid_member', 'Request body must be valid JSON.');
   }
 
-  const payload = validateMemberPayload(raw);
-  if (!payload) {
-    return errorResponse(400, TEAM_ERROR.INVALID_MEMBER, 'name, email, and role (admin|developer) are required.', correlationId);
+  const result = validateMemberPayload(payload);
+  if (!result.ok) {
+    return errorResponse(request, 400, 'invalid_member', 'Member payload is invalid.');
   }
 
-  // Idempotent: re-adding an existing email is a no-op success.
-  const existing = mockTeam.find((m) => m.email === payload.email);
+  const existing = members.find((member) => member.email === result.member.email);
   if (existing) {
-    if (existing.role !== payload.role) {
-      return errorResponse(409, TEAM_ERROR.MEMBER_EXISTS, 'A member with this email already exists with a different role.', correlationId);
-    }
     return NextResponse.json(
-      { member: existing, replayed: true, correlationId },
-      { status: 200, headers: { 'x-correlation-id': correlationId } },
+      { member: existing },
+      { status: 200, headers: { 'x-correlation-id': correlationId(request) } },
     );
   }
 
-  const member: TeamMember = {
-    id: `member-${Date.now().toString(36)}`,
-    name: payload.name,
-    email: payload.email,
-    role: payload.role,
-    addedAt: new Date().toISOString(),
-  };
-  mockTeam.push(member);
+  const member: Member = { id: randomUUID(), ...result.member };
+  members.push(member);
 
   return NextResponse.json(
-    { member, replayed: false, correlationId },
-    { status: 201, headers: { 'x-correlation-id': correlationId } },
+    { member },
+    { status: 200, headers: { 'x-correlation-id': correlationId(request) } },
   );
 }

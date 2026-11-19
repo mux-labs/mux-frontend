@@ -60,4 +60,32 @@ describe('POST /api/team', () => {
 
     expect(res.status).toBe(201);
   });
+
+  it('rejects a role other than admin or developer', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+
+    const res = await POST(
+      makeRequest({ name: 'Ada', email: 'ada@example.com', role: 'owner' })
+    );
+
+    expect(res.status).toBe(400);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('accepts a developer role with a valid email and name', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: { id: 'member-1' }, error: null }),
+        }),
+      }),
+    });
+
+    const res = await POST(
+      makeRequest({ name: 'Ada', email: 'ada@example.com', role: 'developer' })
+    );
+
+    expect(res.status).toBe(201);
+  });
 });

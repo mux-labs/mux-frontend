@@ -38,3 +38,6 @@ End-to-end tests live in [`tests/e2e/`](tests/e2e/).
 
 <!-- handsoff-issue-1147 -->
 - #1147: Add a regression test for parseConnectSrcOrigins in next.config.csp.ts
+
+<!-- handsoff-issue-1148 -->
+- #1148: Add a regression test for resolveConnectSrcOrigins in next.config.csp.ts

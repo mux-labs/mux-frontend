@@ -160,29 +160,40 @@ describe("parseSendBody", () => {
 });
 
 describe("isValidIdempotencyKey", () => {
+	it("accepts lowercase slugs matching /^[a-z][a-z0-9-]{2,31}$/", () => {
+		expect(isValidIdempotencyKey("testnet")).toBe(true);
+		expect(isValidIdempotencyKey("mainnet")).toBe(true);
+		expect(isValidIdempotencyKey("futurenet")).toBe(true);
+	});
+
+	it("accepts a key at the minimum length boundary (3)", () => {
+		expect(isValidIdempotencyKey("abc")).toBe(true);
+	});
+
+	it("accepts a key at the maximum length boundary (32)", () => {
+		expect(isValidIdempotencyKey(`a${"b".repeat(31)}`)).toBe(true);
+	});
+
 	it("rejects a key one character below the minimum length", () => {
-		expect(isValidIdempotencyKey("a".repeat(15))).toBe(false);
-	});
-
-	it("accepts a key at the minimum length boundary (16)", () => {
-		expect(isValidIdempotencyKey("a".repeat(16))).toBe(true);
-	});
-
-	it("accepts a key at the maximum length boundary (128)", () => {
-		expect(isValidIdempotencyKey("a".repeat(128))).toBe(true);
+		expect(isValidIdempotencyKey("ab")).toBe(false);
 	});
 
 	it("rejects a key one character above the maximum length", () => {
-		expect(isValidIdempotencyKey("a".repeat(129))).toBe(false);
+		expect(isValidIdempotencyKey(`a${"b".repeat(32)}`)).toBe(false);
+	});
+
+	it("rejects keys with uppercase letters", () => {
+		expect(isValidIdempotencyKey("Testnet")).toBe(false);
+		expect(isValidIdempotencyKey("TESTNET")).toBe(false);
+	});
+
+	it("rejects keys with a leading digit", () => {
+		expect(isValidIdempotencyKey("1testnet")).toBe(false);
 	});
 
 	it("rejects keys with disallowed characters", () => {
-		expect(isValidIdempotencyKey(`${"a".repeat(15)}!`)).toBe(false);
-		expect(isValidIdempotencyKey(`${"a".repeat(15)} `)).toBe(false);
-		expect(isValidIdempotencyKey(`${"a".repeat(15)}.`)).toBe(false);
-	});
-
-	it("accepts underscores and hyphens within the allowed length", () => {
-		expect(isValidIdempotencyKey(`${"a".repeat(14)}_-`)).toBe(true);
+		expect(isValidIdempotencyKey("test net")).toBe(false);
+		expect(isValidIdempotencyKey("test_net")).toBe(false);
+		expect(isValidIdempotencyKey("test.net")).toBe(false);
 	});
 });

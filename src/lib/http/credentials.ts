@@ -94,3 +94,70 @@ export function isCsrfSafe(request: Request): boolean {
 		return false;
 	}
 }
+
+if (import.meta.vitest) {
+	const { describe, it, expect } = import.meta.vitest;
+
+	const APP_ORIGIN = "https://app.example.com";
+	const WRITE_URL = `${APP_ORIGIN}/api/proxy/write`;
+
+	function makeRequest(headers: Record<string, string>): Request {
+		return new Request(WRITE_URL, { method: "POST", headers });
+	}
+
+	describe("isCsrfSafe", () => {
+		it("passes requests carrying an explicit Authorization header", () => {
+			expect(
+				isCsrfSafe(
+					makeRequest({
+						authorization: "Bearer token",
+						origin: "https://evil.example.com",
+					}),
+				),
+			).toBe(true);
+			expect(
+				isCsrfSafe(makeRequest({ authorization: "Bearer token" })),
+			).toBe(true);
+		});
+
+		it("passes requests carrying an explicit API-key header", () => {
+			expect(
+				isCsrfSafe(
+					makeRequest({
+						"x-api-key": "key",
+						origin: "https://evil.example.com",
+					}),
+				),
+			).toBe(true);
+			expect(isCsrfSafe(makeRequest({ "x-api-key": "key" }))).toBe(true);
+		});
+
+		it("passes a cookie-only request with a matching Origin", () => {
+			expect(
+				isCsrfSafe(
+					makeRequest({
+						cookie: `${SESSION_COOKIE_NAME}=abc`,
+						origin: APP_ORIGIN,
+					}),
+				),
+			).toBe(true);
+		});
+
+		it("rejects a cookie-only request with a missing Origin", () => {
+			expect(
+				isCsrfSafe(makeRequest({ cookie: `${SESSION_COOKIE_NAME}=abc` })),
+			).toBe(false);
+		});
+
+		it("rejects a cookie-only request with a mismatched Origin", () => {
+			expect(
+				isCsrfSafe(
+					makeRequest({
+						cookie: `${SESSION_COOKIE_NAME}=abc`,
+						origin: "https://evil.example.com",
+					}),
+				),
+			).toBe(false);
+		});
+	});
+}

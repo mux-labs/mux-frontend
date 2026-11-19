@@ -18,7 +18,15 @@ const loginSchema = z.object({
 
 type AuthResult = { token: string; maxAge: number };
 
-function parseMaxAge(payload: Record<string, unknown>): number {
+/**
+ * Resolve the session lifetime (in seconds) from an upstream auth payload.
+ *
+ * Uses `expiresIn`/`expires_in` when it is a usable positive finite number
+ * (numeric strings are accepted). Otherwise falls back to
+ * `DEFAULT_SESSION_MAX_AGE_SECONDS` so the cookie stays bounded and aligned
+ * with the backend token instead of becoming an unbounded session cookie.
+ */
+export function parseMaxAge(payload: Record<string, unknown>): number {
 	const raw = payload.expiresIn ?? payload.expires_in;
 	const value = typeof raw === "string" ? Number(raw) : raw;
 	if (typeof value === "number" && Number.isFinite(value) && value > 0) {

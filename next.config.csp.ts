@@ -43,6 +43,30 @@ export const BROAD_SCHEME_SOURCES: readonly string[] = [
 ];
 
 /**
+ * Parse and validate a single connect-src source. Returns the normalized
+ * origin, or `null` when the entry is empty, a wildcard, a broad scheme, or
+ * otherwise not a concrete origin. Fail-closed: invalid entries are dropped.
+ */
+export function normalizeConnectSrcOrigin(entry: string | undefined): string | null {
+  if (!entry) {
+    return null;
+  }
+  const trimmed = entry.trim();
+  if (trimmed.length === 0 || BROAD_SCHEME_SOURCES.includes(trimmed)) {
+    return null;
+  }
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== 'https:' || url.origin !== trimmed) {
+      return null;
+    }
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Parse a comma-separated allowlist of origins from an environment variable.
  * Only absolute https origins are accepted; wildcards, broad schemes, and
  * malformed entries are dropped so an unset or bad value cannot silently
@@ -54,18 +78,8 @@ export function parseConnectSrcOrigins(raw: string | undefined): string[] {
   }
   return raw
     .split(',')
-    .map((origin) => origin.trim())
-    .filter((origin) => {
-      if (origin.length === 0 || BROAD_SCHEME_SOURCES.includes(origin)) {
-        return false;
-      }
-      try {
-        const url = new URL(origin);
-        return url.protocol === 'https:' && url.origin === origin;
-      } catch {
-        return false;
-      }
-    });
+    .map((origin) => normalizeConnectSrcOrigin(origin))
+    .filter((origin): origin is string => origin !== null);
 }
 
 /**

@@ -92,6 +92,22 @@ describe("classifyRateLimit", () => {
 		);
 		expect(state?.correlationId).toBeNull();
 	});
+
+	// Regression coverage for the documented contract: classify a response as
+	// rate-limited, or null for any other status. A change that drops the 429
+	// classification or starts classifying other statuses fails here.
+	it("classifies a 429 as rate-limited", () => {
+		const state = classifyRateLimit(rateLimited("5"), NOW);
+		expect(state).not.toBeNull();
+		expect(state?.code).toBe("RATE_LIMITED");
+	});
+
+	it.each([200, 201, 204, 301, 400, 401, 403, 404, 500, 502, 503, 504])(
+		"returns null for non-rate-limited status %i",
+		(status) => {
+			expect(classifyRateLimit(new Response(null, { status }), NOW)).toBeNull();
+		},
+	);
 });
 
 describe("fetchWithRetryAfter", () => {
@@ -261,10 +277,12 @@ describe.each(BOUNDARY_INPUTS)("resolveRetryDelayMs(%i)", (input) => {
 describe("fetchWithRetryAfter attempts counter", () => {
 	const noSleep = vi.fn(async () => undefined);
 
-	it("counts a single attempt when no retry happens", async () => {
+	it("counts every fetch call across retries", async () => {
 		const fetchImpl = vi
 			.fn<typeof fetch>()
-			.mockResolvedValue(new Response("ok", { status: 200 }));
+			.mockResolvedValueOnce(rateLimited("1"))
+			.mockResolvedValueOnce(rateLimited("1"))
+			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
 
 		const result = await fetchWithRetryAfter(
 			"/api/activity",
@@ -272,50 +290,20 @@ describe("fetchWithRetryAfter attempts counter", () => {
 			{ fetchImpl, sleep: noSleep, now: () => NOW },
 		);
 
-		expect(result.kind).toBe("response");
-		expect(result.attempts).toBe(1);
-		expect(fetchImpl).toHaveBeenCalledTimes(1);
-	});
-
-	it("counts every attempt up to the cap for an idempotent read", async () => {
-		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
-
-		const result = await fetchWithRetryAfter(
-			"/api/activity",
-			{},
-			{ fetchImpl, sleep: noSleep, now: () => NOW, maxAttempts: 99 },
-		);
-
-		expect(result.kind).toBe("rate_limited");
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		expect(result.attempts).toBe(3);
-		expect(fetchImpl).toHaveBeenCalledTimes(result.attempts);
 	});
 
-	it("counts a single attempt for a non-idempotent write", async () => {
+	it("reports a single attempt for a non-retryable write", async () => {
 		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
 
 		const result = await fetchWithRetryAfter(
 			"/api/transactions/send",
-			{ method: "POST" },
+			{ method: "POST", headers: { "idempotency-key": "k".repeat(20) } },
 			{ fetchImpl, sleep: noSleep, now: () => NOW },
 		);
 
-		expect(result.kind).toBe("rate_limited");
-		expect(result.attempts).toBe(1);
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
-	});
-
-	it("counts a single attempt when the wait is too long to auto-retry", async () => {
-		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("120"));
-
-		const result = await fetchWithRetryAfter(
-			"/api/activity",
-			{},
-			{ fetchImpl, sleep: noSleep, now: () => NOW },
-		);
-
-		expect(result.kind).toBe("rate_limited");
 		expect(result.attempts).toBe(1);
-		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
 });

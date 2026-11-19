@@ -141,12 +141,17 @@ function isNetwork(value: unknown): value is OnboardingNetwork {
   return value === 'testnet' || value === 'mainnet';
 }
 
-function parseBody(raw: unknown): OnboardingRequest | null {
+/** Maximum accepted wallet label length. */
+export const MAX_LABEL_LENGTH = 128;
+
+export function parseBody(raw: unknown): OnboardingRequest | null {
   if (raw === null || typeof raw !== 'object') return null;
   const body = raw as Record<string, unknown>;
   const out: OnboardingRequest = {};
   if (body.label !== undefined) {
-    if (typeof body.label !== 'string' || body.label.length > 128) return null;
+    if (typeof body.label !== 'string' || body.label.length > MAX_LABEL_LENGTH) {
+      return null;
+    }
     out.label = body.label;
   }
   if (body.owner !== undefined) {
@@ -272,6 +277,23 @@ export async function POST(
     );
   }
 
+  try {
+    const { wallet, replayed } = await provisionFirstWallet(
+      owner,
+      body.label ?? null,
+      network,
+      idempotencyKey,
+    );
+    return NextResponse.json(
+      { wallet, replayed, correlationId },
+      { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
+  } catch {
+      403,
+      correlationId,
+    );
+  }
+
       'Caller is not authorized to onboard this owner.',
       owner,
       body.label ?? null,
@@ -283,16 +305,23 @@ export async function POST(
       { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
     );
   } catch {
-
-  return NextResponse.json(
-    {
-      wallet: provisioned.wallet,
-      replayed: provisioned.replayed,
-      correlationId,
-    },
-    { status: provisioned.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
-  );
-
+  try {
+    const { wallet, replayed } = await provisionFirstWallet(
+      owner,
+      body.label ?? null,
+      network,
+      idempotencyKey,
+    );
+    return NextResponse.json(
+      {
+        wallet: provisioned.wallet,
+        replayed: provisioned.replayed,
+        correlationId,
+      },
+      { status: provisioned.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
+  } catch {
+    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
       'Wallet provisioning is temporarily unavailable.',
@@ -300,10 +329,9 @@ export async function POST(
       correlationId,
     );
   }
-    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
-      'Wallet provisioning is temporarily unavailable.',
+      'Onboarding is temporarily unavailable.',
       503,
       correlationId,
     );

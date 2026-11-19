@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { POST } from "./route";
+import { describe, expect, it } from "vitest";
+import { parseRangeDays, POST } from "./route";
 
 function postRequest(body: unknown): Request {
   return new Request("http://localhost/api/api-keys", {
@@ -15,6 +16,20 @@ async function errorCode(response: Response): Promise<string | undefined> {
   };
   return json.error?.code;
 }
+
+describe("parseRangeDays", () => {
+  it("rejects an audit range above 90 days", () => {
+    expect(parseRangeDays("91")).toBeNull();
+  });
+
+  it("rejects a range of 0 days", () => {
+    expect(parseRangeDays("0")).toBeNull();
+  });
+
+  it("defaults to 30 days when the parameter is missing", () => {
+    expect(parseRangeDays(null)).toBe(30);
+  });
+});
 
 describe("POST /api/api-keys confirmation guard", () => {
   it("rejects rotate without confirm:true with 400 API_KEY_CONFIRMATION_REQUIRED", async () => {
@@ -32,5 +47,7 @@ describe("POST /api/api-keys confirmation guard", () => {
   it("does not require confirm for create", async () => {
     const response = await POST(postRequest({ action: "create", name: "ci" }));
     expect(await errorCode(response)).not.toBe("API_KEY_CONFIRMATION_REQUIRED");
+  });
+});
   });
 });

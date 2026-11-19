@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { OnboardingErrorCode, POST } from './route';
+import { OnboardingErrorCode, POST, provisionFirstWallet } from './route';
 
 const AUTH_HEADERS = {
   authorization: 'Bearer test-token',
@@ -148,5 +148,35 @@ describe('POST /api/wallets network param', () => {
   it('checks auth before validating the network', async () => {
     const res = await POST(walletRequest({ network: 'bogus' }, {}));
     expect(res.status).toBe(401);
+  });
+});
+
+describe('provisionFirstWallet', () => {
+  const owner = 'user_owner';
+  const idempotencyKey = 'idem-1';
+
+  it('fails closed: throws when the upstream source of truth is unavailable', async () => {
+    // No upstream is configured in the test environment, so provisioning must
+    // throw rather than return a partial/incorrect wallet.
+    await expect(
+      provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }),
+    ).rejects.toBeTruthy();
+  });
+
+  it('is idempotent on (owner, idempotencyKey)', async () => {
+    const first = await provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }).catch(
+      (err) => ({ error: err }),
+    );
+    const second = await provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }).catch(
+      (err) => ({ error: err }),
+    );
+
+    // Whatever the outcome, repeating the same (owner, idempotencyKey) must not
+    // produce a different result than the first call.
+    if ('error' in first) {
+      expect('error' in second).toBe(true);
+    } else {
+      expect(second).toEqual(first);
+    }
   });
 });

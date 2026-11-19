@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { OnboardingErrorCode, POST } from './route';
+import { OnboardingErrorCode, POST, resolveAuthContext } from './route';
 
 const AUTH_HEADERS = {
   authorization: 'Bearer test-token',
@@ -34,6 +34,54 @@ async function errorCode(res: Response) {
 
 afterEach(() => {
   vi.unstubAllEnvs();
+});
+
+describe('resolveAuthContext', () => {
+  it('returns a valid auth context for a well-formed owner credential', () => {
+    const ctx = resolveAuthContext(walletRequest({}));
+    expect(ctx).not.toBeNull();
+    expect(ctx?.subject).toBe('user_owner');
+    expect(ctx?.role).toBe('owner');
+  });
+
+  it('accepts an API key in place of a bearer token', () => {
+    const ctx = resolveAuthContext(
+      walletRequest({}, { ...without('authorization'), 'x-api-key': 'key_123' }),
+    );
+    expect(ctx).not.toBeNull();
+  });
+
+  it('returns null when no credential is present', () => {
+    const ctx = resolveAuthContext(
+      walletRequest({}, { 'x-subject': 'user_owner', 'x-role': 'owner' }),
+    );
+    expect(ctx).toBeNull();
+  });
+
+  it('returns null when the subject or role cannot be resolved', () => {
+    expect(resolveAuthContext(walletRequest({}, without('x-subject')))).toBeNull();
+    expect(resolveAuthContext(walletRequest({}, without('x-role')))).toBeNull();
+  });
+
+  it('returns null for an unknown role', () => {
+    expect(
+      resolveAuthContext(walletRequest({}, { ...AUTH_HEADERS, 'x-role': 'admin' })),
+    ).toBeNull();
+  });
+
+  it('returns null for an expired token', () => {
+    expect(
+      resolveAuthContext(walletRequest({}, { ...AUTH_HEADERS, 'x-token-expires-at': '0' })),
+    ).toBeNull();
+  });
+
+  it('returns null for a revoked delegate', () => {
+    expect(
+      resolveAuthContext(
+        walletRequest({}, { ...AUTH_HEADERS, 'x-role': 'delegate', 'x-delegate-revoked': 'true' }),
+      ),
+    ).toBeNull();
+  });
 });
 
 describe('POST /api/wallets auth checks', () => {

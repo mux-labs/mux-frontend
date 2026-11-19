@@ -1,14 +1,41 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import { POST } from './route';
-import { mockTeam, resetMockTeam, issueToken } from './store';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
 
-function postRequest(body: unknown, token?: string): Request {
-  const headers: Record<string, string> = { 'content-type': 'application/json' };
-  if (token) headers.authorization = `Bearer ${token}`;
-  return new Request('http://localhost/api/team', {
+const mockGetUser = vi.fn();
+const mockFrom = vi.fn();
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(async () => ({
+    auth: { getUser: mockGetUser },
+    from: mockFrom,
+  })),
+}));
+
+import { POST } from './route';
+
+function makeRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/team', {
     method: 'POST',
-    headers,
     body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
+  });
+}
+
+describe('POST /api/team', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('rejects unauthenticated requests', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    const res = await POST(makeRequest({ name: 'Ada', email: 'ada@example.com', role: 'developer' }));
+
+    expect(res.status).toBe(401);
+  });
+
+  it('rejects a name longer than 128 characters', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: {
   });
 }
 

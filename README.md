@@ -33,3 +33,8 @@ in the CSP configuration and document the origin here so reviewers can verify it
 ## Testing
 
 End-to-end tests live in [`tests/e2e/`](tests/e2e/).
+
+## Handsoff notes
+
+<!-- handsoff-issue-1152 -->
+- #1152: Add a regression test for Set in next.config.ts

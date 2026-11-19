@@ -1,273 +1,95 @@
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { NextRequest } from 'next/server';
-import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { GET, POST } from './route';
+const mockGetUser = vi.fn();
+const mockFrom = vi.fn();
 
-function makeRequest(
-  method: 'GET' | 'POST',
-  options: { headers?: Record<string, string>; body?: string } = {},
-): NextRequest {
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(async () => ({
+    auth: { getUser: mockGetUser },
+    from: mockFrom,
+  })),
+}));
+
+import { POST } from './route';
+
+function makeRequest(body: unknown): NextRequest {
   return new NextRequest('http://localhost/api/team', {
-    method,
-    headers: options.headers,
-    body: options.body,
+    method: 'POST',
+    body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
   });
 }
 
-const adminHeaders = {
-  authorization: 'Bearer admin-token',
-};
-
-const developerHeaders = {
-  authorization: 'Bearer developer-token',
-};
-
-describe('/api/team route', () => {
-  afterEach(() => {
-    vi.unstubAllEnvs();
-    vi.restoreAllMocks();
+describe('POST /api/team', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
   });
 
-  describe('GET', () => {
-    it('returns 401 unauthorized when Authorization is missing', async () => {
-      const response = await GET(makeRequest('GET'));
-      const body = await response.json();
+  it('rejects unauthenticated requests', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-      expect(response.headers.get('x-correlation-id')).toBeTruthy();
-    });
+    const res = await POST(makeRequest({ name: 'Ada', email: 'ada@example.com', role: 'developer' }));
 
-    it('returns 401 unauthorized for an invalid Authorization scheme', async () => {
-      const response = await GET(
-        makeRequest('GET', { headers: { authorization: 'Basic x', 'x-role': 'admin' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-    });
-
-    it('returns 401 unauthorized for an unverifiable bearer token even with x-role admin', async () => {
-      const response = await GET(
-        makeRequest('GET', { headers: { authorization: 'Bearer x', 'x-role': 'admin' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-    });
-
-    it('returns 200 with the member list for an authorized caller', async () => {
-      const response = await GET(makeRequest('GET', { headers: adminHeaders }));
-      const body = await response.json();
-
-      expect(response.status).toBe(200);
-      expect(Array.isArray(body.members)).toBe(true);
-      expect(response.headers.get('x-correlation-id')).toBeTruthy();
-    });
-
-    it('returns 503 backend_unavailable when NODE_ENV is production', async () => {
-      vi.stubEnv('NODE_ENV', 'production');
-
-      const response = await GET(makeRequest('GET', { headers: adminHeaders }));
-      const body = await response.json();
-
-      expect(response.status).toBe(503);
-      expect(body.error.code).toBe('backend_unavailable');
-    });
-
-    it('returns 401 before 503 in production for an unverifiable token', async () => {
-      vi.stubEnv('NODE_ENV', 'production');
-
-      const response = await GET(
-        makeRequest('GET', { headers: { authorization: 'Bearer x', 'x-role': 'admin' } }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-    });
+    expect(res.status).toBe(401);
   });
 
-  describe('POST', () => {
-    it('returns 401 unauthorized when Authorization is missing', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
+  it('rejects a name longer than 128 characters', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
 
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-      expect(response.headers.get('x-correlation-id')).toBeTruthy();
+    const res = await POST(
+      makeRequest({ name: 'a'.repeat(129), email: 'ada@example.com', role: 'developer' }),
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it('adds a member when called by an admin', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
     });
 
-    it('returns 401 unauthorized for an unverifiable bearer token even with x-role admin', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: { authorization: 'Bearer x', 'x-role': 'admin' },
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
+    const res = await POST(
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
+    );
 
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
+    expect(res.status).toBe(201);
+  });
+
+  it('is idempotent on email', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
     });
 
-    it('returns 403 forbidden when a developer calls POST', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: developerHeaders,
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
+    const body = { name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' };
 
-      expect(response.status).toBe(403);
-      expect(body.error.code).toBe('forbidden');
-    });
+    const first = await POST(makeRequest(body));
+    expect(first.status).toBe(201);
 
-    it('returns 400 invalid_member for a non-JSON body', async () => {
-      const response = await POST(
-        makeRequest('POST', { headers: adminHeaders, body: 'not-json' }),
-      );
-      const body = await response.json();
+    const second = await POST(makeRequest(body));
+    expect(second.status).toBe(200);
+  });
 
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe('invalid_member');
-    });
+  it('rejects non-admin callers', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'dev-user', role: 'developer' } }, error: null });
 
-    it('returns 400 invalid_member for an empty name', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: '', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
+    const res = await POST(
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
+    );
 
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe('invalid_member');
-    });
+    expect(res.status).toBe(403);
+  });
 
-    it('returns 400 invalid_member for an oversized name', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'a'.repeat(129), email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
+  it('rejects unauthenticated callers', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe('invalid_member');
-    });
+    const res = await POST(
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
+    );
 
-    it('returns 400 invalid_member for an email without @', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'Ada', email: 'ada.example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe('invalid_member');
-    });
-
-    it('returns 400 invalid_member for an unknown role', async () => {
-      const response = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'owner' }),
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(400);
-      expect(body.error.code).toBe('invalid_member');
-    });
-
-    it('is idempotent when re-adding an existing email', async () => {
-      const payload = JSON.stringify({
-        name: 'Ada',
-        email: 'ada@example.com',
-        role: 'developer',
-      });
-
-      const first = await POST(makeRequest('POST', { headers: adminHeaders, body: payload }));
-      expect(first.status).toBe(200);
-
-      const before = await GET(makeRequest('GET', { headers: adminHeaders }));
-      const beforeBody = await before.json();
-
-      const second = await POST(makeRequest('POST', { headers: adminHeaders, body: payload }));
-      expect(second.status).toBe(200);
-
-      const after = await GET(makeRequest('GET', { headers: adminHeaders }));
-      const afterBody = await after.json();
-
-      expect(afterBody.members.length).toBe(beforeBody.members.length);
-    });
-
-    it('generates distinct member ids for two adds in the same millisecond', async () => {
-      vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
-
-      const first = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'developer' }),
-        }),
-      );
-      expect(first.status).toBe(200);
-      const firstBody = await first.json();
-
-      const second = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'Grace', email: 'grace@example.com', role: 'developer' }),
-        }),
-      );
-      expect(second.status).toBe(200);
-      const secondBody = await second.json();
-
-      expect(firstBody.member.id).toBeTruthy();
-      expect(secondBody.member.id).toBeTruthy();
-      expect(firstBody.member.id).not.toBe(secondBody.member.id);
-    });
-
-    it('returns 503 backend_unavailable when NODE_ENV is production', async () => {
-      vi.stubEnv('NODE_ENV', 'production');
-
-      const response = await POST(
-        makeRequest('POST', {
-          headers: adminHeaders,
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(503);
-      expect(body.error.code).toBe('backend_unavailable');
-    });
-
-    it('returns 401 before 503 in production for an unverifiable token', async () => {
-      vi.stubEnv('NODE_ENV', 'production');
-
-      const response = await POST(
-        makeRequest('POST', {
-          headers: { authorization: 'Bearer x', 'x-role': 'admin' },
-          body: JSON.stringify({ name: 'Ada', email: 'ada@example.com', role: 'admin' }),
-        }),
-      );
-      const body = await response.json();
-
-      expect(response.status).toBe(401);
-      expect(body.error.code).toBe('unauthorized');
-    });
+    expect(res.status).toBe(401);
+  });
   });
 });

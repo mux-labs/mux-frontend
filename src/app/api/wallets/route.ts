@@ -81,7 +81,7 @@ export interface OnboardingErrorBody {
   };
 }
 
-interface AuthContext {
+export interface AuthContext {
   subject: string;
   role: OnboardingRole;
   /** Subjects this caller may onboard a wallet for. */
@@ -114,7 +114,7 @@ async function verifyCredential(
  * credential, expired token, or revoked delegate yields null. Subject, role,
  * and owner scopes come only from the verified credential.
  */
-async function resolveAuthContext(
+export async function resolveAuthContext(
   req: NextRequest,
 ): Promise<AuthContext | null> {
   const authz = req.headers.get('authorization');
@@ -141,12 +141,17 @@ function isNetwork(value: unknown): value is OnboardingNetwork {
   return value === 'testnet' || value === 'mainnet';
 }
 
-function parseBody(raw: unknown): OnboardingRequest | null {
+/** Maximum accepted wallet label length. */
+export const MAX_LABEL_LENGTH = 128;
+
+export function parseBody(raw: unknown): OnboardingRequest | null {
   if (raw === null || typeof raw !== 'object') return null;
   const body = raw as Record<string, unknown>;
   const out: OnboardingRequest = {};
   if (body.label !== undefined) {
-    if (typeof body.label !== 'string' || body.label.length > 128) return null;
+    if (typeof body.label !== 'string' || body.label.length > MAX_LABEL_LENGTH) {
+      return null;
+    }
     out.label = body.label;
   }
   if (body.owner !== undefined) {
@@ -188,6 +193,13 @@ async function provisionFirstWallet(
   // concurrent/replayed requests return the same wallet.
   throw new Error('provisioning not wired');
 }
+
+/**
+ * Test-only export of the provisioning seam so a focused regression test can
+ * assert its documented contract (fail-closed on upstream failure, idempotent
+ * on (owner, idempotencyKey)). Not part of the public HTTP surface.
+ */
+export const __test__ = { provisionFirstWallet };
 
 export async function POST(
   req: NextRequest,
@@ -259,22 +271,57 @@ export async function POST(
   if (!isAuthorizedForOwner(auth, owner)) {
     return errorResponse(
       OnboardingErrorCode.FORBIDDEN,
-      'Not authorized to onboard this owner.',
+      'Caller is not authorized to onboard this owner.',
       403,
       correlationId,
     );
   }
 
-  let result: { wallet: OnboardingWallet; replayed: boolean };
   try {
-    result = await provisionFirstWallet(
+    const { wallet, replayed } = await provisionFirstWallet(
       owner,
       body.label ?? null,
       network,
       idempotencyKey,
     );
+    return NextResponse.json(
+      { wallet, replayed, correlationId },
+      { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
   } catch {
-    // Fail-closed: never return a partial wallet on upstream outage.
+      403,
+      correlationId,
+    );
+  }
+
+      'Caller is not authorized to onboard this owner.',
+      owner,
+      body.label ?? null,
+      network,
+      idempotencyKey,
+    );
+    return NextResponse.json(
+      { wallet, replayed, correlationId },
+      { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
+  } catch {
+  try {
+    const { wallet, replayed } = await provisionFirstWallet(
+      owner,
+      body.label ?? null,
+      network,
+      idempotencyKey,
+    );
+    return NextResponse.json(
+      {
+        wallet: provisioned.wallet,
+        replayed: provisioned.replayed,
+        correlationId,
+      },
+      { status: provisioned.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
+  } catch {
+    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
       'Wallet provisioning is temporarily unavailable.',
@@ -282,9 +329,11 @@ export async function POST(
       correlationId,
     );
   }
-
-  return NextResponse.json(
-    { ...result, correlationId },
-    { status: result.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
-  );
+    return errorResponse(
+      OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
+      'Onboarding is temporarily unavailable.',
+      503,
+      correlationId,
+    );
+  }
 }

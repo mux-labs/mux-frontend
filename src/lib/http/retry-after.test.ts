@@ -92,6 +92,22 @@ describe("classifyRateLimit", () => {
 		);
 		expect(state?.correlationId).toBeNull();
 	});
+
+	// Regression coverage for the documented contract: classify a response as
+	// rate-limited, or null for any other status. A change that drops the 429
+	// classification or starts classifying other statuses fails here.
+	it("classifies a 429 as rate-limited", () => {
+		const state = classifyRateLimit(rateLimited("5"), NOW);
+		expect(state).not.toBeNull();
+		expect(state?.code).toBe("RATE_LIMITED");
+	});
+
+	it.each([200, 201, 204, 301, 400, 401, 403, 404, 500, 502, 503, 504])(
+		"returns null for non-rate-limited status %i",
+		(status) => {
+			expect(classifyRateLimit(new Response(null, { status }), NOW)).toBeNull();
+		},
+	);
 });
 
 describe("fetchWithRetryAfter", () => {
@@ -288,5 +304,43 @@ describe.each(BOUNDARY_INPUTS)("resolveRetryDelayMs(%i)", (input) => {
 		expect(resolveRetryDelayMs(String(input), NOW)).toBe(
 			resolveRetryDelayMs(String(input), NOW),
 		);
+	});
+});
+
+// Regression coverage for the `attempts` counter documented in
+// src/lib/http/retry-after.ts (issue #801 / #1141). The counter must reflect
+// the number of fetch calls actually made, so a change that drops the
+// idempotent-only retry, the attempt cap, or the safe fallback delay fails here.
+describe("fetchWithRetryAfter attempts counter", () => {
+	const noSleep = vi.fn(async () => undefined);
+
+	it("counts every fetch call across retries", async () => {
+		const fetchImpl = vi
+			.fn<typeof fetch>()
+			.mockResolvedValueOnce(rateLimited("1"))
+			.mockResolvedValueOnce(rateLimited("1"))
+			.mockResolvedValueOnce(new Response("ok", { status: 200 }));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(3);
+		expect(result.attempts).toBe(3);
+	});
+
+	it("reports a single attempt for a non-retryable write", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
+
+		const result = await fetchWithRetryAfter(
+			"/api/transactions/send",
+			{ method: "POST", headers: { "idempotency-key": "k".repeat(20) } },
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(result.attempts).toBe(1);
 	});
 });

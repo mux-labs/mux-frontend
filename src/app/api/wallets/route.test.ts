@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { OnboardingErrorCode, POST } from './route';
+import { OnboardingErrorCode, POST, provisionFirstWallet, resolveAuthContext } from './route';
 
 const AUTH_HEADERS = {
   authorization: 'Bearer test-token',
@@ -36,6 +36,54 @@ afterEach(() => {
   vi.unstubAllEnvs();
 });
 
+describe('resolveAuthContext', () => {
+  it('returns a valid auth context for a well-formed owner credential', () => {
+    const ctx = resolveAuthContext(walletRequest({}));
+    expect(ctx).not.toBeNull();
+    expect(ctx?.subject).toBe('user_owner');
+    expect(ctx?.role).toBe('owner');
+  });
+
+  it('accepts an API key in place of a bearer token', () => {
+    const ctx = resolveAuthContext(
+      walletRequest({}, { ...without('authorization'), 'x-api-key': 'key_123' }),
+    );
+    expect(ctx).not.toBeNull();
+  });
+
+  it('returns null when no credential is present', () => {
+    const ctx = resolveAuthContext(
+      walletRequest({}, { 'x-subject': 'user_owner', 'x-role': 'owner' }),
+    );
+    expect(ctx).toBeNull();
+  });
+
+  it('returns null when the subject or role cannot be resolved', () => {
+    expect(resolveAuthContext(walletRequest({}, without('x-subject')))).toBeNull();
+    expect(resolveAuthContext(walletRequest({}, without('x-role')))).toBeNull();
+  });
+
+  it('returns null for an unknown role', () => {
+    expect(
+      resolveAuthContext(walletRequest({}, { ...AUTH_HEADERS, 'x-role': 'admin' })),
+    ).toBeNull();
+  });
+
+  it('returns null for an expired token', () => {
+    expect(
+      resolveAuthContext(walletRequest({}, { ...AUTH_HEADERS, 'x-token-expires-at': '0' })),
+    ).toBeNull();
+  });
+
+  it('returns null for a revoked delegate', () => {
+    expect(
+      resolveAuthContext(
+        walletRequest({}, { ...AUTH_HEADERS, 'x-role': 'delegate', 'x-delegate-revoked': 'true' }),
+      ),
+    ).toBeNull();
+  });
+});
+
 describe('POST /api/wallets auth checks', () => {
   it('returns 401 without any credential', async () => {
     const res = await POST(
@@ -53,6 +101,25 @@ describe('POST /api/wallets auth checks', () => {
   it('returns 401 for an unknown role', async () => {
     const res = await POST(walletRequest({}, { ...AUTH_HEADERS, 'x-role': 'admin' }));
     expect(res.status).toBe(401);
+  });
+
+  it('rejects an unknown role header even with all other placeholder headers present', async () => {
+    // `admin` is not one of the roles resolveAuthContext accepts (owner, delegate,
+    // guardian), so the request must be denied before any onboarding work runs.
+    // Once real token verification lands, swap the placeholder headers for a
+    // verified token whose role is admin and keep expecting a denial.
+    const res = await POST(
+      walletRequest(
+        {},
+        {
+          ...AUTH_HEADERS,
+          authorization: 'Bearer verified-admin-token',
+          'x-role': 'admin',
+        },
+      ),
+    );
+    expect(res.status).toBe(401);
+    expect(await errorCode(res)).toBe(OnboardingErrorCode.UNAUTHORIZED);
   });
 
   it('accepts an API key in place of a bearer token', async () => {
@@ -148,5 +215,35 @@ describe('POST /api/wallets network param', () => {
   it('checks auth before validating the network', async () => {
     const res = await POST(walletRequest({ network: 'bogus' }, {}));
     expect(res.status).toBe(401);
+  });
+});
+
+describe('provisionFirstWallet', () => {
+  const owner = 'user_owner';
+  const idempotencyKey = 'idem-1';
+
+  it('fails closed: throws when the upstream source of truth is unavailable', async () => {
+    // No upstream is configured in the test environment, so provisioning must
+    // throw rather than return a partial/incorrect wallet.
+    await expect(
+      provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }),
+    ).rejects.toBeTruthy();
+  });
+
+  it('is idempotent on (owner, idempotencyKey)', async () => {
+    const first = await provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }).catch(
+      (err) => ({ error: err }),
+    );
+    const second = await provisionFirstWallet({ owner, idempotencyKey, network: 'testnet' }).catch(
+      (err) => ({ error: err }),
+    );
+
+    // Whatever the outcome, repeating the same (owner, idempotencyKey) must not
+    // produce a different result than the first call.
+    if ('error' in first) {
+      expect('error' in second).toBe(true);
+    } else {
+      expect(second).toEqual(first);
+    }
   });
 });

@@ -35,7 +35,7 @@ function errorResponse(
 }
 
 /** Resolve caller role from the session/JWT. Deny-by-default: null = unauthorized. */
-function resolveCallerRole(req: NextRequest): 'admin' | 'developer' | null {
+export function resolveCallerRole(req: NextRequest): 'admin' | 'developer' | null {
   const auth = req.headers.get('authorization');
   if (!auth) return null;
   const [scheme, token] = auth.split(' ');

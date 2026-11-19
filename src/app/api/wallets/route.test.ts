@@ -55,6 +55,25 @@ describe('POST /api/wallets auth checks', () => {
     expect(res.status).toBe(401);
   });
 
+  it('rejects an unknown role header even with all other placeholder headers present', async () => {
+    // `admin` is not one of the roles resolveAuthContext accepts (owner, delegate,
+    // guardian), so the request must be denied before any onboarding work runs.
+    // Once real token verification lands, swap the placeholder headers for a
+    // verified token whose role is admin and keep expecting a denial.
+    const res = await POST(
+      walletRequest(
+        {},
+        {
+          ...AUTH_HEADERS,
+          authorization: 'Bearer verified-admin-token',
+          'x-role': 'admin',
+        },
+      ),
+    );
+    expect(res.status).toBe(401);
+    expect(await errorCode(res)).toBe(OnboardingErrorCode.UNAUTHORIZED);
+  });
+
   it('accepts an API key in place of a bearer token', async () => {
     const res = await POST(
       walletRequest({}, { ...without('authorization'), 'x-api-key': 'key_123' }),

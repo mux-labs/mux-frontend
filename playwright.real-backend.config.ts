@@ -41,7 +41,7 @@ import { defineConfig, devices } from "@playwright/test";
  * Set E2E_REAL_BACKEND_ALLOW_MISSING_API_URL=1 to opt out (e.g. when
  * merely collecting/listing specs in CI without a backend available).
  */
-function assertRealBackendConfigured(): void {
+export function assertRealBackendConfigured(): void {
 	if (process.env.E2E_REAL_BACKEND_ALLOW_MISSING_API_URL === "1") {
 		return;
 	}
@@ -61,7 +61,7 @@ function assertRealBackendConfigured(): void {
  * critical path. Require them unless the caller explicitly opts out (the
  * same opt-out used for NEXT_PUBLIC_API_URL, e.g. when only listing specs).
  */
-function assertRealBackendCredentials(): void {
+export function assertRealBackendCredentials(): void {
 	if (process.env.E2E_REAL_BACKEND_ALLOW_MISSING_API_URL === "1") {
 		return;
 	}

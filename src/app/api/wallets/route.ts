@@ -189,6 +189,13 @@ async function provisionFirstWallet(
   throw new Error('provisioning not wired');
 }
 
+/**
+ * Test-only export of the provisioning seam so a focused regression test can
+ * assert its documented contract (fail-closed on upstream failure, idempotent
+ * on (owner, idempotencyKey)). Not part of the public HTTP surface.
+ */
+export const __test__ = { provisionFirstWallet };
+
 export async function POST(
   req: NextRequest,
 ): Promise<NextResponse<OnboardingResponse | OnboardingErrorBody>> {
@@ -259,14 +266,13 @@ export async function POST(
   if (!isAuthorizedForOwner(auth, owner)) {
     return errorResponse(
       OnboardingErrorCode.FORBIDDEN,
-      'Caller is not authorized to onboard this wallet.',
+      'Caller is not authorized to onboard this owner.',
       403,
       correlationId,
     );
   }
 
-  try {
-    const { wallet, replayed } = await provisionFirstWallet(
+      'Caller is not authorized to onboard this owner.',
       owner,
       body.label ?? null,
       network,
@@ -277,6 +283,24 @@ export async function POST(
       { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
     );
   } catch {
+
+  return NextResponse.json(
+    {
+      wallet: provisioned.wallet,
+      replayed: provisioned.replayed,
+      correlationId,
+    },
+    { status: provisioned.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+  );
+
+    return errorResponse(
+      OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
+      'Wallet provisioning is temporarily unavailable.',
+      503,
+      correlationId,
+    );
+  }
+    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
       'Wallet provisioning is temporarily unavailable.',

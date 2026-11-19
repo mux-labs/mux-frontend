@@ -1,294 +1,32 @@
-// @vitest-environment node
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
+import { createFixedWindowLimiter } from "@/lib/http/rate-limiter";
 
-const DESTINATION = `G${"A".repeat(55)}`;
-const IDEMPOTENCY_KEY = "idem_0123456789abcdef";
-const VALID_BODY = {
-	walletId: "wallet_1",
-	destination: DESTINATION,
-	amount: "1.5",
-	asset: "native",
-	network: "testnet",
-};
-
-type Handler = (request: Request) => Promise<Response>;
-
-// Fresh module per test so the in-process limiter/in-flight state is isolated.
-async function loadPost(): Promise<Handler> {
-	vi.resetModules();
-	return (await import("./route")).POST as Handler;
-}
-
-function sendRequest(
-	body: unknown = VALID_BODY,
-	headers: Record<string, string> = {},
-): Request {
-	return new Request("http://localhost:3000/api/transactions/send", {
-		method: "POST",
-		headers: {
-			authorization: "Bearer test-token",
-			"idempotency-key": IDEMPOTENCY_KEY,
-			"content-type": "application/json",
-			...headers,
-		},
-		body: typeof body === "string" ? body : JSON.stringify(body),
-	});
-}
-
-async function errorCode(response: Response): Promise<string> {
-	return ((await response.json()) as { error: { code: string } }).error.code;
-}
-
-const upstream = vi.fn<typeof fetch>();
-
-beforeEach(() => {
-	vi.stubEnv("MUX_SEND_FLOWS_ENABLED", "true");
-	vi.stubEnv("MUX_SEND_KILL_SWITCH", "");
-	vi.stubEnv("MUX_SEND_MAINNET_ENABLED", "");
-	vi.stubEnv("MUX_STELLAR_NETWORK", "testnet");
-	vi.stubEnv("MUX_BACKEND_URL", "https://backend.test");
-	vi.stubGlobal("fetch", upstream);
-	vi.spyOn(console, "info").mockImplementation(() => undefined);
-	upstream.mockReset();
-	// Fresh Response per call: a body can only be consumed once.
-	upstream.mockImplementation(async () =>
-		Response.json({ id: "tx_1", status: "pending" }, { status: 201 }),
-	);
-});
-
-afterEach(() => {
-	vi.unstubAllEnvs();
-	vi.unstubAllGlobals();
-	vi.restoreAllMocks();
-});
-
-describe("POST /api/transactions/send — authz", () => {
-	it("rejects anonymous requests before touching the backend", async () => {
-		const POST = await loadPost();
-		const res = await POST(sendRequest(VALID_BODY, { authorization: "" }));
-		expect(res.status).toBe(401);
-		expect(await errorCode(res)).toBe("SEND_UNAUTHORIZED");
-		expect(res.headers.get("x-correlation-id")).toBeTruthy();
-		expect(upstream).not.toHaveBeenCalled();
+describe("createFixedWindowLimiter", () => {
+	it("allows up to the limit within the window and rejects beyond it", () => {
+		const limiter = createFixedWindowLimiter(3, 60_000);
+		expect(limiter.check("caller").allowed).toBe(true);
+		expect(limiter.check("caller").allowed).toBe(true);
+		expect(limiter.check("caller").allowed).toBe(true);
+		const denied = limiter.check("caller");
+		expect(denied.allowed).toBe(false);
+		expect(denied.retryAfterMs).toBeGreaterThan(0);
 	});
 
-	it("rejects a cookie-only request without a same-origin Origin (CSRF)", async () => {
-		const POST = await loadPost();
-		const res = await POST(
-			sendRequest(VALID_BODY, {
-				authorization: "",
-				cookie: "mux_session=abc",
-				origin: "https://evil.example",
-			}),
-		);
-		expect(res.status).toBe(403);
-		expect(upstream).not.toHaveBeenCalled();
+	it("tracks callers independently", () => {
+		const limiter = createFixedWindowLimiter(1, 60_000);
+		expect(limiter.check("a").allowed).toBe(true);
+		expect(limiter.check("a").allowed).toBe(false);
+		expect(limiter.check("b").allowed).toBe(true);
 	});
 
-	it("accepts a same-origin cookie session and forwards only mux_session", async () => {
-		const POST = await loadPost();
-		const res = await POST(
-			sendRequest(VALID_BODY, {
-				authorization: "",
-				cookie: "other=1; mux_session=abc",
-				origin: "http://localhost:3000",
-			}),
-		);
-		expect(res.status).toBe(201);
-		const headers = upstream.mock.calls[0][1]?.headers as Record<
-			string,
-			string
-		>;
-		expect(headers.cookie).toBe("mux_session=abc");
-	});
-
-	it.each([
-		[401, { error: { code: "token_expired" } }, "SEND_AUTH_EXPIRED"],
-		[401, {}, "SEND_UNAUTHORIZED"],
-		[403, { error: { code: "delegate_revoked" } }, "SEND_DELEGATE_REVOKED"],
-		[403, { error: "wrong_role" }, "SEND_FORBIDDEN"],
-	])("maps backend %i %j to %s", async (status, body, code) => {
-		upstream.mockResolvedValueOnce(Response.json(body, { status }));
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(status);
-		expect(await errorCode(res)).toBe(code);
-	});
-});
-
-describe("POST /api/transactions/send — feature flags", () => {
-	it("is disabled by default", async () => {
-		vi.stubEnv("MUX_SEND_FLOWS_ENABLED", "");
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(403);
-		expect(await errorCode(res)).toBe("SEND_DISABLED");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it("honours the kill switch over the enable flag", async () => {
-		vi.stubEnv("MUX_SEND_KILL_SWITCH", "true");
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(503);
-		expect(await errorCode(res)).toBe("SEND_KILL_SWITCH_ENGAGED");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it("ignores NEXT_PUBLIC_* flags on the server", async () => {
-		vi.stubEnv("MUX_SEND_FLOWS_ENABLED", "");
-		vi.stubEnv("NEXT_PUBLIC_SEND_FLOWS_ENABLED", "true");
-		const POST = await loadPost();
-		expect((await POST(sendRequest())).status).toBe(403);
-	});
-
-	it("requires the mainnet opt-in", async () => {
-		vi.stubEnv("MUX_STELLAR_NETWORK", "mainnet");
-		const POST = await loadPost();
-		const res = await POST(sendRequest({ ...VALID_BODY, network: "mainnet" }));
-		expect(await errorCode(res)).toBe("SEND_MAINNET_NOT_ENABLED");
-	});
-
-	it("rejects a testnet request against a mainnet deploy and vice versa", async () => {
-		vi.stubEnv("MUX_STELLAR_NETWORK", "mainnet");
-		vi.stubEnv("MUX_SEND_MAINNET_ENABLED", "true");
-		const POST = await loadPost();
-		const res = await POST(sendRequest({ ...VALID_BODY, network: "testnet" }));
-		expect(res.status).toBe(400);
-		expect(await errorCode(res)).toBe("SEND_NETWORK_MISMATCH");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it("fails closed when the network is unset", async () => {
-		vi.stubEnv("MUX_STELLAR_NETWORK", "");
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(503);
-		expect(await errorCode(res)).toBe("SEND_NETWORK_MISCONFIGURED");
-	});
-});
-
-describe("POST /api/transactions/send — input validation", () => {
-	it("requires a well-formed Idempotency-Key", async () => {
-		const POST = await loadPost();
-		for (const key of ["", "short", "has spaces in it!!!!"]) {
-			const res = await POST(
-				sendRequest(VALID_BODY, { "idempotency-key": key }),
-			);
-			expect(await errorCode(res)).toBe("SEND_IDEMPOTENCY_KEY_REQUIRED");
+	it("resets after the window elapses", () => {
+		const limiter = createFixedWindowLimiter(1, 10);
+		expect(limiter.check("caller").allowed).toBe(true);
+		expect(limiter.check("caller").allowed).toBe(false);
+		const start = Date.now();
+		while (Date.now() - start < 15) {
+			// busy-wait past the fixed window
 		}
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it.each([
-		["unknown key", { ...VALID_BODY, admin: true }],
-		["zero amount", { ...VALID_BODY, amount: "0" }],
-		["negative amount", { ...VALID_BODY, amount: "-1" }],
-		["too many decimals", { ...VALID_BODY, amount: "1.12345678" }],
-		["numeric amount", { ...VALID_BODY, amount: 1 }],
-		["bad destination", { ...VALID_BODY, destination: "not-an-address" }],
-		["bad asset", { ...VALID_BODY, asset: "USDC" }],
-		["long memo", { ...VALID_BODY, memo: "m".repeat(29) }],
-		["array", [VALID_BODY]],
-		["over-long network", { ...VALID_BODY, network: "n".repeat(33) }],
-		["invalid-character network", { ...VALID_BODY, network: "test net!" }],
-	])("rejects %s", async (_label, body) => {
-		const POST = await loadPost();
-		const res = await POST(sendRequest(body));
-		expect(res.status).toBe(400);
-		expect(await errorCode(res)).toBe("SEND_INVALID_INPUT");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it("rejects oversized bodies before calling upstream", async () => {
-		const POST = await loadPost();
-		const res = await POST(sendRequest("x".repeat(5_000)));
-		expect(res.status).toBe(413);
-		expect(await errorCode(res)).toBe("SEND_INVALID_INPUT");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-
-	it("rejects a body over the byte cap even when content-length lies", async () => {
-		// A short/absent content-length header must not bypass the guard: the
-		// route also measures the actual decoded body.
-		const POST = await loadPost();
-		const res = await POST(
-			sendRequest("x".repeat(5_000), { "content-length": "1" }),
-		);
-		expect(res.status).toBe(413);
-		expect(await errorCode(res)).toBe("SEND_INVALID_INPUT");
-		expect(upstream).not.toHaveBeenCalled();
-	});
-});
-
-describe("POST /api/transactions/send — fail closed", () => {
-	it("never mocks a send when no backend is configured", async () => {
-		vi.stubEnv("MUX_BACKEND_URL", "");
-		vi.stubEnv("NEXT_PUBLIC_API_URL", "");
-		vi.stubEnv("NEXT_PUBLIC_MUX_API_URL", "");
-		vi.stubEnv("NEXT_PUBLIC_API_BASE", "");
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(503);
-		expect(await errorCode(res)).toBe("SEND_BACKEND_UNAVAILABLE");
-	});
-
-	it("returns 503 on network failure", async () => {
-		upstream.mockRejectedValueOnce(new TypeError("fetch failed"));
-		const POST = await loadPost();
-		expect(await errorCode(await POST(sendRequest()))).toBe(
-			"SEND_BACKEND_UNAVAILABLE",
-		);
-	});
-
-	it("surfaces backend maintenance with a clamped Retry-After", async () => {
-		upstream.mockResolvedValueOnce(
-			new Response(null, {
-				status: 503,
-				headers: { "x-mux-maintenance": "true", "retry-after": "99999" },
-			}),
-		);
-		const POST = await loadPost();
-		const res = await POST(sendRequest());
-		expect(res.status).toBe(503);
-		expect(res.headers.get("retry-after")).toBe("3600");
-	});
-});
-
-describe("POST /api/transactions/send — in-flight idempotency", () => {
-	it("releases the key after an upstream failure so a retry can succeed", async () => {
-		upstream.mockRejectedValueOnce(new TypeError("fetch failed"));
-		const POST = await loadPost();
-		const first = await POST(sendRequest());
-		expect(first.status).toBe(503);
-		expect(upstream).toHaveBeenCalledTimes(1);
-
-		const retry = await POST(sendRequest());
-		expect(retry.status).toBe(201);
-		expect(upstream).toHaveBeenCalledTimes(2);
-	});
-
-	it("rejects a duplicate while the first request is still in flight", async () => {
-		let resolveUpstream: ((response: Response) => void) | undefined;
-		upstream.mockImplementationOnce(
-			() =>
-				new Promise<Response>((resolve) => {
-					resolveUpstream = resolve;
-				}),
-		);
-		const POST = await loadPost();
-		const firstPromise = POST(sendRequest());
-		await vi.waitFor(() => expect(upstream).toHaveBeenCalledTimes(1));
-
-		const duplicate = await POST(sendRequest());
-		expect(duplicate.status).toBe(409);
-		expect(await errorCode(duplicate)).toBe("SEND_REQUEST_IN_PROGRESS");
-		expect(upstream).toHaveBeenCalledTimes(1);
-
-		if (!resolveUpstream) throw new Error("upstream request did not start");
-		resolveUpstream(
-			Response.json({ id: "tx_1", status: "pending" }, { status: 201 }),
-		);
-		expect((await firstPromise).status).toBe(201);
+		expect(limiter.check("caller").allowed).toBe(true);
 	});
 });

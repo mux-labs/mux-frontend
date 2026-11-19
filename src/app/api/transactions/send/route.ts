@@ -296,7 +296,6 @@ export async function POST(request: Request): Promise<NextResponse> {
 				headers: forwardHeaders,
 				body: JSON.stringify(body),
 				signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-				cache: "no-store",
 			});
 		} catch {
 			return errorResponse(
@@ -309,130 +308,100 @@ export async function POST(request: Request): Promise<NextResponse> {
 			);
 		}
 
-		const upstreamBody = await readUpstreamJson(upstream);
-
-		if (upstream.ok) {
-			if (typeof upstreamBody !== "object" || upstreamBody === null) {
+		if (upstream.status === 503) {
+			const classification = classifyServiceUnavailable(upstream);
+			if (classification === SERVICE_UNAVAILABLE_CODES.MAINTENANCE) {
 				return errorResponse(
-					502,
-					SEND_ERROR_CODES.UPSTREAM_ERROR,
-					"The send result could not be confirmed. Check activity before retrying.",
+					503,
+					SEND_ERROR_CODES.MAINTENANCE,
+					"Sending is paused for scheduled maintenance.",
 					correlationId,
-					{},
+					{
+						[MAINTENANCE_HEADER]: "1",
+						"retry-after": maintenanceRetryAfterSeconds(
+							upstream,
+							resolveRetryDelayMs(upstream),
+						),
+					},
 					gate.network,
 				);
 			}
-			logSendEvent({
+			return errorResponse(
+				503,
+				SEND_ERROR_CODES.BACKEND_UNAVAILABLE,
+				"Sending is temporarily unavailable.",
 				correlationId,
-				code: "SEND_ACCEPTED",
-				status: upstream.status,
-				network: gate.network,
-			});
-			return NextResponse.json(
-				{ transaction: upstreamBody, correlationId },
-				{
-					status: upstream.status,
-					headers: { [CORRELATION_HEADER]: correlationId },
-				},
+				{},
+				gate.network,
 			);
 		}
 
 		if (upstream.status === 429) {
-			const delay = resolveRetryDelayMs(upstream.headers.get("retry-after"));
 			return errorResponse(
 				429,
 				SEND_ERROR_CODES.RATE_LIMITED,
 				"Too many send requests. Wait before retrying.",
 				correlationId,
-				{ "retry-after": formatRetryAfterSeconds(delay) },
+				{ "retry-after": formatRetryAfterSeconds(resolveRetryDelayMs(upstream)) },
 				gate.network,
 			);
 		}
-
-		const unavailable = classifyServiceUnavailable(upstream, upstreamBody);
-		if (unavailable !== null) {
-			return errorResponse(
-				503,
-				unavailable.code === SERVICE_UNAVAILABLE_CODES.MAINTENANCE
-					? SEND_ERROR_CODES.MAINTENANCE
-					: SEND_ERROR_CODES.BACKEND_UNAVAILABLE,
-				"Sending is temporarily unavailable.",
-				correlationId,
-				{
-					[MAINTENANCE_HEADER]: String(
-						unavailable.code === SERVICE_UNAVAILABLE_CODES.MAINTENANCE,
-					),
-					"retry-after": maintenanceRetryAfterSeconds(
-						upstream,
-						unavailable.retryAfterMs,
-					),
-				},
-				gate.network,
-			);
-		}
-
-		const code = upstreamCode(upstreamBody);
 
 		if (upstream.status === 401 || upstream.status === 403) {
-			if (code === "token_expired") {
-				return errorResponse(
-					401,
-					SEND_ERROR_CODES.AUTH_EXPIRED,
-					"The credential has expired. Sign in again.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			}
-			if (code === "delegate_revoked") {
-				return errorResponse(
-					403,
-					SEND_ERROR_CODES.DELEGATE_REVOKED,
-					"This delegate's access has been revoked.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			}
-			if (upstream.status === 401) {
-				return errorResponse(
-					401,
-					SEND_ERROR_CODES.UNAUTHORIZED,
-					"A valid owner, delegate, API key, or JWT credential is required.",
-					correlationId,
-					{},
-					gate.network,
-				);
-			}
 			return errorResponse(
-				403,
-				SEND_ERROR_CODES.FORBIDDEN,
-				"This credential is not allowed to send.",
+				upstream.status,
+				SEND_ERROR_CODES.UNAUTHORIZED,
+				"The credential is not authorized to send.",
 				correlationId,
 				{},
 				gate.network,
 			);
 		}
 
-		if (upstream.status === 400 || upstream.status === 422) {
+		if (upstream.status === 409) {
 			return errorResponse(
-				400,
-				SEND_ERROR_CODES.INVALID_INPUT,
-				"The send request was rejected.",
+				409,
+				SEND_ERROR_CODES.REQUEST_IN_PROGRESS,
+				"An identical send is already in progress.",
 				correlationId,
 				{},
 				gate.network,
 			);
 		}
 
-		return errorResponse(
-			502,
-			SEND_ERROR_CODES.UPSTREAM_ERROR,
-			`Upstream send failed${code ? `: ${code}` : ""}.`,
+		if (!upstream.ok) {
+			const code = upstreamCode(await readUpstreamJson(upstream));
+			if (code === "insufficient_funds") {
+				return errorResponse(
+					402,
+					SEND_ERROR_CODES.INSUFFICIENT_FUNDS,
+					"Insufficient funds for this send.",
+					correlationId,
+					{},
+					gate.network,
+				);
+			}
+			return errorResponse(
+				502,
+				SEND_ERROR_CODES.UPSTREAM_ERROR,
+				"The send could not be completed.",
+				correlationId,
+				{},
+				gate.network,
+			);
+		}
+
+		const payload = await readUpstreamJson(upstream);
+		logSendEvent({
 			correlationId,
-			{},
-			gate.network,
-		);
+			code: "SEND_ACCEPTED",
+			status: 202,
+			network: gate.network,
+		});
+		return NextResponse.json(payload, {
+			status: 202,
+			headers: { [CORRELATION_HEADER]: correlationId },
+		});
 	} finally {
 		inFlight.delete(flightKey);
 	}

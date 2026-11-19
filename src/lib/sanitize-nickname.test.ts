@@ -1,77 +1,37 @@
 import { describe, expect, it } from "vitest";
+import { MAX_NICKNAME_LENGTH, normalizeNickname } from "./sanitize-nickname";
 
-import {
-  MAX_NICKNAME_LENGTH,
-  isValidNickname,
-  sanitizeNickname,
-} from "./sanitize-nickname";
+describe("normalizeNickname", () => {
+	it("strips control characters", () => {
+		expect(normalizeNickname("ali\u0000ce\u0007")).toBe("alice");
+		expect(normalizeNickname("a\u001Fb\u007Fc")).toBe("abc");
+	});
 
-describe("sanitizeNickname", () => {
-  it("strips control characters", () => {
-    expect(sanitizeNickname("\u0000\u0001alice\u0002")).toBe("alice");
-  });
+	it("trims surrounding whitespace", () => {
+		expect(normalizeNickname("   alice   ")).toBe("alice");
+		expect(normalizeNickname("\t\n alice \r\n")).toBe("alice");
+	});
 
-  it("trims surrounding whitespace", () => {
-    expect(sanitizeNickname("  alice  ")).toBe("alice");
-  });
+	it("HTML-escapes & < > \" '", () => {
+		expect(normalizeNickname("a&b")).toBe("a&amp;b");
+		expect(normalizeNickname("<script>")).toBe("&lt;script&gt;");
+		expect(normalizeNickname('say "hi"')).toBe("say &quot;hi&quot;");
+		expect(normalizeNickname("it's")).toBe("it&#39;s");
+	});
 
-  it("escapes HTML so markup is not executable", () => {
-    const sanitized = sanitizeNickname("<img src=x onerror=alert(1)>");
-    expect(sanitized).toBe("&lt;img src=x onerror=alert(1)&gt;");
-    expect(sanitized).not.toContain("<");
-    expect(sanitized).not.toContain(">");
-  });
+	it("enforces MAX_NICKNAME_LENGTH on the escaped result", () => {
+		// Each '<' escapes to '&lt;' (4 chars), so the escaped value is longer
+		// than the raw input. The cap must apply post-escaping.
+		const raw = "<".repeat(MAX_NICKNAME_LENGTH);
+		const result = normalizeNickname(raw);
+		expect(result.length).toBeLessThanOrEqual(MAX_NICKNAME_LENGTH);
+		expect(result).toBe("&lt;".repeat(Math.floor(MAX_NICKNAME_LENGTH / 4)));
+	});
 
-  it("escapes ampersands and quotes", () => {
-    expect(sanitizeNickname(`a&b"c'd`)).toBe("a&amp;b&quot;c&#39;d");
-  });
-
-  it("caps the escaped output at MAX_NICKNAME_LENGTH", () => {
-    const sanitized = sanitizeNickname("&".repeat(MAX_NICKNAME_LENGTH));
-    expect(sanitized.length).toBeLessThanOrEqual(MAX_NICKNAME_LENGTH);
-  });
-});
-
-describe("isValidNickname", () => {
-  it("rejects control-char-only input", () => {
-    expect(sanitizeNickname("\u0000\u0001")).toBe("");
-    expect(isValidNickname("\u0000\u0001")).toBe(false);
-  });
-
-  it("rejects whitespace-only input", () => {
-    expect(sanitizeNickname("   \t\n ")).toBe("");
-    expect(isValidNickname("   \t\n ")).toBe(false);
-  });
-
-  it("rejects empty input", () => {
-    expect(isValidNickname("")).toBe(false);
-  });
-
-  it("accepts a normal nickname", () => {
-    expect(isValidNickname("alice")).toBe(true);
-  });
-
-  it("accepts exactly MAX_NICKNAME_LENGTH characters", () => {
-    const input = "a".repeat(MAX_NICKNAME_LENGTH);
-    expect(isValidNickname(input)).toBe(true);
-    expect(sanitizeNickname(input).length).toBe(MAX_NICKNAME_LENGTH);
-  });
-
-  it("rejects MAX_NICKNAME_LENGTH + 1 characters", () => {
-    expect(isValidNickname("a".repeat(MAX_NICKNAME_LENGTH + 1))).toBe(false);
-  });
-
-  it("agrees with sanitizeNickname on the length cap at the boundary", () => {
-    const input = "&".repeat(MAX_NICKNAME_LENGTH);
-    const sanitized = sanitizeNickname(input);
-    expect(sanitized.length).toBeLessThanOrEqual(MAX_NICKNAME_LENGTH);
-    expect(isValidNickname(input)).toBe(sanitized.length > 0);
-  });
-
-  it("accepts input containing & and < at the boundary", () => {
-    const input = "<&".repeat(MAX_NICKNAME_LENGTH / 2);
-    const sanitized = sanitizeNickname(input);
-    expect(sanitized.length).toBeLessThanOrEqual(MAX_NICKNAME_LENGTH);
-    expect(isValidNickname(input)).toBe(true);
-  });
+	it("does not exceed the cap for plain input at the limit", () => {
+		const raw = "a".repeat(MAX_NICKNAME_LENGTH + 10);
+		const result = normalizeNickname(raw);
+		expect(result.length).toBeLessThanOrEqual(MAX_NICKNAME_LENGTH);
+		expect(result).toBe("a".repeat(MAX_NICKNAME_LENGTH));
+	});
 });

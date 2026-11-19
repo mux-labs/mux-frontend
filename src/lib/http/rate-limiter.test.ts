@@ -141,4 +141,21 @@ describe("callerKey", () => {
 		expect(key).toMatch(/^[0-9a-f]{64}$/);
 		expect(key).not.toContain(credential);
 	});
+
+	it("shares a single bucket for requests with neither credential nor IP", () => {
+		// No authorization header and no x-forwarded-for / x-real-ip: both the
+		// credential fingerprint and the IP component fall back to sentinels, so
+		// every such request must collapse into one bucket.
+		const a = makeRequest();
+		const b = makeRequest({ "user-agent": "different-client" });
+		expect(callerKey(a)).toBe(callerKey(b));
+	});
+
+	it("discriminates credential-less callers by IP", () => {
+		// Without a credential the IP component is the only discriminator, so
+		// distinct IPs must not share a bucket.
+		const a = makeRequest({ "x-forwarded-for": "203.0.113.7" });
+		const b = makeRequest({ "x-forwarded-for": "203.0.113.8" });
+		expect(callerKey(a)).not.toBe(callerKey(b));
+	});
 });

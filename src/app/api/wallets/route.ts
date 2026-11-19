@@ -141,12 +141,17 @@ function isNetwork(value: unknown): value is OnboardingNetwork {
   return value === 'testnet' || value === 'mainnet';
 }
 
-function parseBody(raw: unknown): OnboardingRequest | null {
+/** Maximum accepted wallet label length. */
+export const MAX_LABEL_LENGTH = 128;
+
+export function parseBody(raw: unknown): OnboardingRequest | null {
   if (raw === null || typeof raw !== 'object') return null;
   const body = raw as Record<string, unknown>;
   const out: OnboardingRequest = {};
   if (body.label !== undefined) {
-    if (typeof body.label !== 'string' || body.label.length > 128) return null;
+    if (typeof body.label !== 'string' || body.label.length > MAX_LABEL_LENGTH) {
+      return null;
+    }
     out.label = body.label;
   }
   if (body.owner !== undefined) {
@@ -259,32 +264,29 @@ export async function POST(
   if (!isAuthorizedForOwner(auth, owner)) {
     return errorResponse(
       OnboardingErrorCode.FORBIDDEN,
-      'Not authorized to onboard this owner.',
+      'Not authorized to onboard a wallet for this owner.',
       403,
       correlationId,
     );
   }
 
-  let result: { wallet: OnboardingWallet; replayed: boolean };
   try {
-    result = await provisionFirstWallet(
+    const { wallet, replayed } = await provisionFirstWallet(
       owner,
       body.label ?? null,
       network,
       idempotencyKey,
     );
+    return NextResponse.json(
+      { wallet, replayed, correlationId },
+      { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
+    );
   } catch {
-    // Fail-closed: never return a partial wallet on upstream outage.
     return errorResponse(
       OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
-      'Wallet provisioning is temporarily unavailable.',
+      'Onboarding is temporarily unavailable.',
       503,
       correlationId,
     );
   }
-
-  return NextResponse.json(
-    { ...result, correlationId },
-    { status: result.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
-  );
 }

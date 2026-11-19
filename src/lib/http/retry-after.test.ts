@@ -253,3 +253,69 @@ describe.each(BOUNDARY_INPUTS)("resolveRetryDelayMs(%i)", (input) => {
 		);
 	});
 });
+
+// Regression coverage for the `attempts` counter documented in
+// src/lib/http/retry-after.ts (issue #801 / #1141). The counter must reflect
+// the number of fetch calls actually made, so a change that drops the
+// idempotent-only retry, the attempt cap, or the safe fallback delay fails here.
+describe("fetchWithRetryAfter attempts counter", () => {
+	const noSleep = vi.fn(async () => undefined);
+
+	it("counts a single attempt when no retry happens", async () => {
+		const fetchImpl = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response("ok", { status: 200 }));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(result.kind).toBe("response");
+		expect(result.attempts).toBe(1);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it("counts every attempt up to the cap for an idempotent read", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW, maxAttempts: 99 },
+		);
+
+		expect(result.kind).toBe("rate_limited");
+		expect(result.attempts).toBe(3);
+		expect(fetchImpl).toHaveBeenCalledTimes(result.attempts);
+	});
+
+	it("counts a single attempt for a non-idempotent write", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
+
+		const result = await fetchWithRetryAfter(
+			"/api/transactions/send",
+			{ method: "POST" },
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(result.kind).toBe("rate_limited");
+		expect(result.attempts).toBe(1);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+
+	it("counts a single attempt when the wait is too long to auto-retry", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("120"));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(result.kind).toBe("rate_limited");
+		expect(result.attempts).toBe(1);
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+	});
+});

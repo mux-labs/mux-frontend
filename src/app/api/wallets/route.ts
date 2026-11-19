@@ -81,7 +81,7 @@ export interface OnboardingErrorBody {
   };
 }
 
-interface AuthContext {
+export interface AuthContext {
   subject: string;
   role: OnboardingRole;
   /** Subjects this caller may onboard a wallet for. */
@@ -114,7 +114,7 @@ async function verifyCredential(
  * credential, expired token, or revoked delegate yields null. Subject, role,
  * and owner scopes come only from the verified credential.
  */
-async function resolveAuthContext(
+export async function resolveAuthContext(
   req: NextRequest,
 ): Promise<AuthContext | null> {
   const authz = req.headers.get('authorization');
@@ -272,23 +272,17 @@ export async function POST(
     );
   }
 
-  let provisioned: { wallet: OnboardingWallet; replayed: boolean };
-  try {
-    provisioned = await provisionFirstWallet(
+      'Caller is not authorized to onboard this owner.',
       owner,
       body.label ?? null,
       network,
       idempotencyKey,
     );
-  } catch {
-    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
-    return errorResponse(
-      OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
-      'Wallet provisioning is temporarily unavailable.',
-      503,
-      correlationId,
+    return NextResponse.json(
+      { wallet, replayed, correlationId },
+      { status: replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
     );
-  }
+  } catch {
 
   return NextResponse.json(
     {
@@ -298,4 +292,20 @@ export async function POST(
     },
     { status: provisioned.replayed ? 200 : 201, headers: { 'x-correlation-id': correlationId } },
   );
+
+    return errorResponse(
+      OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
+      'Wallet provisioning is temporarily unavailable.',
+      503,
+      correlationId,
+    );
+  }
+    // Fail-closed: never return a partial/incorrect wallet on upstream failure.
+    return errorResponse(
+      OnboardingErrorCode.UPSTREAM_UNAVAILABLE,
+      'Wallet provisioning is temporarily unavailable.',
+      503,
+      correlationId,
+    );
+  }
 }

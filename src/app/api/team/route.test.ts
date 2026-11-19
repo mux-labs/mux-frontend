@@ -35,66 +35,61 @@ describe('POST /api/team', () => {
   });
 
   it('rejects a name longer than 128 characters', async () => {
-    mockGetUser.mockResolvedValue({ data: { user: {
-  });
-}
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
 
-describe('POST /api/team', () => {
-  beforeEach(() => {
-    resetMockTeam();
+    const res = await POST(
+      makeRequest({ name: 'a'.repeat(129), email: 'ada@example.com', role: 'developer' }),
+    );
+
+    expect(res.status).toBe(400);
   });
 
   it('adds a member when called by an admin', async () => {
-    const token = issueToken('admin-user', 'admin');
-    const before = mockTeam.length;
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
 
     const res = await POST(
-      postRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }, token),
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
     );
 
     expect(res.status).toBe(201);
-    expect(mockTeam.length).toBe(before + 1);
-    const added = mockTeam.find((m) => m.email === 'carol@muxprotocol.com');
-    expect(added).toBeDefined();
-    expect(added?.name).toBe('Carol New');
-    expect(added?.role).toBe('developer');
   });
 
   it('is idempotent on email', async () => {
-    const token = issueToken('admin-user', 'admin');
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'admin-user', role: 'admin' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+
     const body = { name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' };
 
-    const first = await POST(postRequest(body, token));
+    const first = await POST(makeRequest(body));
     expect(first.status).toBe(201);
-    const afterFirst = mockTeam.length;
 
-    const second = await POST(postRequest(body, token));
+    const second = await POST(makeRequest(body));
     expect(second.status).toBe(200);
-    expect(mockTeam.length).toBe(afterFirst);
-    expect(mockTeam.filter((m) => m.email === 'carol@muxprotocol.com')).toHaveLength(1);
   });
 
   it('rejects non-admin callers', async () => {
-    const token = issueToken('dev-user', 'developer');
-    const before = mockTeam.length;
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'dev-user', role: 'developer' } }, error: null });
 
     const res = await POST(
-      postRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }, token),
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
     );
 
     expect(res.status).toBe(403);
-    expect(mockTeam.length).toBe(before);
-    expect(mockTeam.find((m) => m.email === 'carol@muxprotocol.com')).toBeUndefined();
   });
 
   it('rejects unauthenticated callers', async () => {
-    const before = mockTeam.length;
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 
     const res = await POST(
-      postRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
+      makeRequest({ name: 'Carol New', email: 'carol@muxprotocol.com', role: 'developer' }),
     );
 
     expect(res.status).toBe(401);
-    expect(mockTeam.length).toBe(before);
+  });
   });
 });

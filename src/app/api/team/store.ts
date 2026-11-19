@@ -7,7 +7,6 @@ export interface TeamMember {
   role: TeamRole;
   addedAt: string;
 }
-
 export interface VerifiedCaller {
   role: TeamRole;
   subject: string;
@@ -39,6 +38,38 @@ export const mockTeam: TeamMember[] = seedTeam();
 export function resetMockTeam(): void {
   mockTeam.length = 0;
   mockTeam.push(...seedTeam());
+}
+
+/**
+ * Add a member to the mock store, enforcing idempotency on (email, role).
+ *
+ * - Same email + same role: returns the existing member (replay, no duplicate).
+ * - Same email + different role: returns `{ conflict: true }` so the route can
+ *   respond with 409 `MEMBER_EXISTS`.
+ * - New email: appends and returns the created member.
+ */
+export function addMockTeamMember(input: {
+  name: string;
+  email: string;
+  role: TeamRole;
+}): { member: TeamMember; conflict: boolean } {
+  const existing = mockTeam.find((m) => m.email === input.email);
+  if (existing) {
+    if (existing.role === input.role) {
+      return { member: existing, conflict: false };
+    }
+    return { member: existing, conflict: true };
+  }
+
+  const member: TeamMember = {
+    id: `member-${mockTeam.length + 1}`,
+    name: input.name,
+    email: input.email,
+    role: input.role,
+    addedAt: new Date().toISOString(),
+  };
+  mockTeam.push(member);
+  return { member, conflict: false };
 }
 
 /**

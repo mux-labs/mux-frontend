@@ -201,6 +201,43 @@ describe("fetchWithRetryAfter", () => {
 		await expect(pending).rejects.toThrow("cancelled");
 		expect(fetchImpl).toHaveBeenCalledTimes(1);
 	});
+
+	it("returns a typed rate_limited result with a countdown-ready retryAt", async () => {
+		const fetchImpl = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(rateLimited("3", "corr-abc"));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(result.kind).toBe("rate_limited");
+		if (result.kind !== "rate_limited") throw new Error("unreachable");
+		expect(result.rateLimit).toEqual({
+			code: "RATE_LIMITED",
+			retryAfterMs: 3_000,
+			retryAt: NOW + 3_000,
+			correlationId: "corr-abc",
+		});
+	});
+
+	it("returns non-429 responses untouched without retrying", async () => {
+		const fetchImpl = vi
+			.fn<typeof fetch>()
+			.mockResolvedValue(new Response("ok", { status: 200 }));
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{ fetchImpl, sleep: noSleep, now: () => NOW },
+		);
+
+		expect(fetchImpl).toHaveBeenCalledTimes(1);
+		expect(result.kind).toBe("response");
+		expect(result.attempts).toBe(1);
+	});
 });
 
 describe("formatRetryCountdown", () => {

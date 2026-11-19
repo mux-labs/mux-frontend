@@ -1,45 +1,63 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { NextRequest } from 'next/server';
+
+const mockGetUser = vi.fn();
+const mockFrom = vi.fn();
+
+vi.mock('@/lib/supabase/server', () => ({
+  createClient: vi.fn(async () => ({
+    auth: { getUser: mockGetUser },
+    from: mockFrom,
+  })),
+}));
+
 import { POST } from './route';
-import { issueToken, mockTeam, resetMockTeam } from './store';
 
-const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
-
-function adminRequest(body: unknown): Request {
-  const token = issueToken('admin-user', 'admin');
-  return new Request('http://localhost/api/team', {
+function makeRequest(body: unknown): NextRequest {
+  return new NextRequest('http://localhost/api/team', {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-      authorization: `Bearer ${token}`,
-    },
     body: JSON.stringify(body),
+    headers: { 'content-type': 'application/json' },
   });
 }
 
 describe('POST /api/team', () => {
   beforeEach(() => {
-    resetMockTeam();
+    vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    process.env.NODE_ENV = ORIGINAL_NODE_ENV;
+  it('rejects unauthenticated requests', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    const res = await POST(makeRequest({ name: 'Ada', email: 'ada@example.com', role: 'developer' }));
+
+    expect(res.status).toBe(401);
   });
 
-  it('refuses writes in production with 503 and leaves the member list unchanged', async () => {
-    process.env.NODE_ENV = 'production';
-    const before = mockTeam.map((member) => ({ ...member }));
+  it('rejects a name longer than 128 characters', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
 
-    const response = await POST(
-      adminRequest({
-        name: 'Carol New',
-        email: 'carol@muxprotocol.com',
-        role: 'developer',
-      }),
+    const res = await POST(
+      makeRequest({ name: 'a'.repeat(129), email: 'ada@example.com', role: 'developer' })
     );
 
-    expect(response.status).toBe(503);
-    const payload = await response.json();
-    expect(payload.error).toBe('backend_unavailable');
-    expect(mockTeam).toEqual(before);
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts a name of exactly 128 characters with a valid email and role', async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: 'user-1' } }, error: null });
+    mockFrom.mockReturnValue({
+      insert: vi.fn().mockReturnValue({
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: { id: 'member-1' }, error: null }),
+        }),
+      }),
+    });
+
+    const res = await POST(
+      makeRequest({ name: 'a'.repeat(128), email: 'ada@example.com', role: 'developer' })
+    );
+
+    expect(res.status).toBe(201);
   });
 });

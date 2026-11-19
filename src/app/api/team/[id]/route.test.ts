@@ -2,7 +2,7 @@
 import { describe, it, expect } from 'vitest';
 import { NextRequest } from 'next/server';
 
-import { GET, PATCH, DELETE } from './route';
+import { GET, PATCH, DELETE, resolveCallerRole } from './route';
 
 const MEMBER_ID = 'member-1';
 const BASE_URL = `http://localhost/api/team/${MEMBER_ID}`;
@@ -35,6 +35,30 @@ function makeRequest(
 const params = { params: { id: MEMBER_ID } };
 
 const MUTATION_BODY = { role: 'admin' };
+
+describe('resolveCallerRole', () => {
+  it('resolves the caller role from the session/JWT', () => {
+    expect(resolveCallerRole(makeRequest('GET', ADMIN_HEADERS))).toBe('admin');
+    expect(resolveCallerRole(makeRequest('GET', DEVELOPER_HEADERS))).toBe(
+      'developer',
+    );
+  });
+
+  it('denies by default: returns null when no credentials are present', () => {
+    expect(resolveCallerRole(makeRequest('GET'))).toBeNull();
+  });
+
+  it('returns null for an unrecognized role', () => {
+    expect(
+      resolveCallerRole(
+        makeRequest('GET', {
+          authorization: 'Bearer test-token',
+          'x-role': 'not-a-real-role',
+        }),
+      ),
+    ).toBeNull();
+  });
+});
 
 describe('team [id] route', () => {
   describe('authorization', () => {

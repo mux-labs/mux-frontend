@@ -12,13 +12,25 @@ const store = (initial: number) => {
 };
 
 describe("canApplyOptimistic", () => {
-	it("requires an idempotency key", () => {
-		expect(canApplyOptimistic({})).toBe(false);
-		expect(canApplyOptimistic({ idempotencyKey: " " })).toBe(false);
+	it("allows optimistic UI when an idempotency key is present and it is not a money-path write", () => {
 		expect(canApplyOptimistic({ idempotencyKey: "k1" })).toBe(true);
+		expect(
+			canApplyOptimistic({ idempotencyKey: "k1", moneyPath: false }),
+		).toBe(true);
 	});
 
-	it("never allows money-path writes", () => {
+	it("fails closed when the idempotency key is missing", () => {
+		expect(canApplyOptimistic({})).toBe(false);
+		expect(canApplyOptimistic({ moneyPath: false })).toBe(false);
+	});
+
+	it("fails closed when the idempotency key is blank", () => {
+		expect(canApplyOptimistic({ idempotencyKey: "" })).toBe(false);
+		expect(canApplyOptimistic({ idempotencyKey: " " })).toBe(false);
+		expect(canApplyOptimistic({ idempotencyKey: "   " })).toBe(false);
+	});
+
+	it("never allows money-path writes, even with an idempotency key", () => {
 		expect(canApplyOptimistic({ idempotencyKey: "k1", moneyPath: true })).toBe(
 			false,
 		);

@@ -39,6 +39,15 @@ End-to-end tests live in [`tests/e2e/`](tests/e2e/).
 <!-- handsoff-issue-1146 -->
 - #1146: Add a regression test for ActivityPage in src/app/dashboard/activity/page.tsx
 
+<!-- handsoff-issue-1147 -->
+- #1147: Add a regression test for parseConnectSrcOrigins in next.config.csp.ts
+
+<!-- handsoff-issue-1148 -->
+- #1148: Add a regression test for resolveConnectSrcOrigins in next.config.csp.ts
+
+<!-- handsoff-issue-1150 -->
+- #1150: Add a regression test for getConnectSrcAllowlist in next.config.csp.ts
+
 <!-- handsoff-issue-1152 -->
 - #1152: Add a regression test for Set in next.config.ts
 

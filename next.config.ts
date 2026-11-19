@@ -64,7 +64,7 @@ export const BROAD_SCHEME_SOURCES = new Set([
  * origin, or `null` when the entry is empty, a wildcard, a broad scheme, or
  * otherwise not a concrete origin. Fail-closed: invalid entries are dropped.
  */
-function normalizeConnectSrcOrigin(raw: string): string | null {
+export function normalizeConnectSrcOrigin(raw: string): string | null {
 	const value = raw.trim();
 	if (value.length === 0) return null;
 	if (value === "'self'") return value;

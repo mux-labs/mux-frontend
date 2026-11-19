@@ -2,7 +2,7 @@ import path from "path";
 import react from "@vitejs/plugin-react";
 import { configDefaults, defineConfig } from "vitest/config";
 
-export default defineConfig({
+const config = defineConfig({
 	plugins: [react()],
 	test: {
 		environment: "jsdom",
@@ -36,3 +36,5 @@ export default defineConfig({
 		},
 	},
 });
+
+export default config;

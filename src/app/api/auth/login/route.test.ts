@@ -97,6 +97,46 @@ describe("POST /api/auth/login", () => {
 		);
 	});
 
+	it("falls back to the default maxAge when the upstream lifetime is non-numeric", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN, expiresIn: "soon" })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.cookies.get("mux_session")?.maxAge).toBe(
+			DEFAULT_SESSION_MAX_AGE_SECONDS,
+		);
+	});
+
+	it("falls back to the default maxAge when the upstream lifetime is zero", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN, expires_in: 0 })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		expect(res.cookies.get("mux_session")?.maxAge).toBe(
+			DEFAULT_SESSION_MAX_AGE_SECONDS,
+		);
+	});
+
+	it("bounds the fallback cookie so it never becomes an unbounded session cookie", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ token: TOKEN })),
+		);
+		const res = await POST(
+			loginRequest({ email: "alice@mux.io", password: PASSWORD }),
+		);
+		expect(res.status).toBe(200);
+		const maxAge = res.cookies.get("mux_session")?.maxAge;
+		expect(maxAge).toBe(DEFAULT_SESSION_MAX_AGE_SECONDS);
+		expect(Number.isFinite(maxAge)).toBe(true);
+		expect(maxAge).toBeGreaterThan(0);
+	});
+
 	it("maps an upstream 429 to a stable error code without echoing the upstream body", async () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(
 			new Response(null, { status: 429 }),

@@ -18,8 +18,8 @@
  * gate the request instead of discovering the failure as an opaque 403.
  */
 
-const CSRF_COOKIE_NAME = "csrf_token";
-const CSRF_HEADER_NAME = "x-csrf-token";
+export const CSRF_COOKIE_NAME = "csrf_token";
+export const CSRF_HEADER_NAME = "x-csrf-token";
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 

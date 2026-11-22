@@ -260,9 +260,28 @@ describe("hasCsrfToken", () => {
 		expect(hasCsrfToken(`mux_session=s; ${CSRF_COOKIE_NAME}=abc`)).toBe(true);
 	});
 
+	it("returns true when the token cookie is the only cookie", () => {
+		expect(hasCsrfToken(`${CSRF_COOKIE_NAME}=abc`)).toBe(true);
+	});
+
 	it("returns false when the token cookie is absent or empty", () => {
 		expect(hasCsrfToken("")).toBe(false);
 		expect(hasCsrfToken("mux_session=s")).toBe(false);
 		expect(hasCsrfToken(`${CSRF_COOKIE_NAME}=`)).toBe(false);
+	});
+
+	it("returns false when no cookie source is available", () => {
+		expect(hasCsrfToken(undefined)).toBe(false);
+		expect(hasCsrfToken({ cookie: "" })).toBe(false);
+	});
+
+	it("agrees with tryWithCsrf on whether a token can be attached", () => {
+		const withToken = `mux_session=s; ${CSRF_COOKIE_NAME}=abc`;
+		expect(hasCsrfToken(withToken)).toBe(
+			tryWithCsrf({ method: "POST" }, withToken).ok,
+		);
+		expect(hasCsrfToken("mux_session=s")).toBe(
+			tryWithCsrf({ method: "POST" }, "mux_session=s").ok,
+		);
 	});
 });

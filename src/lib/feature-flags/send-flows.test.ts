@@ -247,4 +247,51 @@ describe("evaluateSendFlowGate", () => {
 			code: SEND_GATE_CODES.NETWORK_MISMATCH,
 		});
 	});
+
+	it("kill switch wins over a network mismatch and a disabled flag", () => {
+		const result = evaluateSendFlowGate(
+			{ ...TESTNET_ON, enabled: false, killSwitch: true },
+			"mainnet",
+		);
+		expect(result).toEqual({
+			allowed: false,
+			code: SEND_GATE_CODES.KILL_SWITCH_ENGAGED,
+		});
+	});
+
+	it("allows an undefined requested network and uses the configured one", () => {
+		const result = evaluateSendFlowGate(TESTNET_ON);
+		expect(result).toEqual({
+			allowed: true,
+			code: SEND_GATE_CODES.OK,
+			network: "testnet",
+		});
+	});
+
+	it("rejects a null requested network", () => {
+		const result = evaluateSendFlowGate(TESTNET_ON, null);
+		expect(result).toEqual({
+			allowed: false,
+			code: SEND_GATE_CODES.NETWORK_MISMATCH,
+		});
+	});
+
+	it("rejects a blank requested network", () => {
+		for (const blank of ["", "   "]) {
+			const result = evaluateSendFlowGate(TESTNET_ON, blank);
+			expect(result).toEqual({
+				allowed: false,
+				code: SEND_GATE_CODES.NETWORK_MISMATCH,
+			});
+		}
+	});
+
+	it("accepts a requested network that matches the configured one", () => {
+		const result = evaluateSendFlowGate(TESTNET_ON, " TESTNET ");
+		expect(result).toEqual({
+			allowed: true,
+			code: SEND_GATE_CODES.OK,
+			network: "testnet",
+		});
+	});
 });

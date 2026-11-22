@@ -59,6 +59,23 @@ describe("parseSendBody", () => {
 		).toBeNull();
 	});
 
+	it("accepts a 56-character StrKey account (G…) address as destination", () => {
+		// Doc comment: "StrKey account (G…) or contract (C…) address: 56 base32 characters."
+		const result = parseSendBody(validBody({ destination: VALID_DESTINATION }));
+		expect(result).not.toBeNull();
+		expect(result?.destination).toBe(VALID_DESTINATION);
+	});
+
+	it("returns null when destination is not exactly 56 characters", () => {
+		// One character short and one character long must both fail.
+		expect(
+			parseSendBody(validBody({ destination: `G${"A".repeat(54)}` })),
+		).toBeNull();
+		expect(
+			parseSendBody(validBody({ destination: `G${"A".repeat(56)}` })),
+		).toBeNull();
+	});
+
 	it("returns null for amount of '0'", () => {
 		expect(parseSendBody(validBody({ amount: "0" }))).toBeNull();
 	});

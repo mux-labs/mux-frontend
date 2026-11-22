@@ -545,6 +545,67 @@ describe("audit cursors", () => {
 		expect(decodeAuditCursor("AAAA", {})).toBeNull();
 		expect(decodeAuditCursor(btoa('{"v":2}'), {})).toBeNull();
 	});
+
+	// #1194: regression coverage for the documented contract of
+	// decodeAuditCursor — null for forged, stale, or mismatched cursors, and the
+	// decoded key for valid ones.
+	describe("decodeAuditCursor contract (#1194)", () => {
+		const filters = { actor: "a" };
+		const fingerprint = filterFingerprint(filters);
+
+		function forge(payload: unknown): string {
+			return btoa(JSON.stringify(payload))
+				.replace(/\+/g, "-")
+				.replace(/\//g, "_")
+				.replace(/=+$/, "");
+		}
+
+		it("returns the decoded key for a valid cursor", () => {
+			expect(decodeAuditCursor(encodeAuditCursor(key, filters), filters)).toEqual(
+				key,
+			);
+			expect(decodeAuditCursor(encodeAuditCursor(key, {}), {})).toEqual(key);
+		});
+
+		it("returns null for non-base64url or non-JSON input", () => {
+			expect(decodeAuditCursor("", filters)).toBeNull();
+			expect(decodeAuditCursor("not base64!", filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("not json"), filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("null"), filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("42"), filters)).toBeNull();
+		});
+
+		it("returns null for forged payloads that fail shape checks", () => {
+			expect(decodeAuditCursor(forge({ v: 2, c: key.createdAt, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ c: key.createdAt, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: 1, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: 7, f: fingerprint }), filters)).toBeNull();
+		});
+
+		it("returns null for stale or malformed keys", () => {
+			expect(decodeAuditCursor(forge({ v: 1, c: "not-a-date", i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "bad id", f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "", f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "x".repeat(129), f: fingerprint }), filters)).toBeNull();
+		});
+
+		it("returns null when the cursor is replayed against different filters", () => {
+			const cursor = encodeAuditCursor(key, filters);
+			expect(decodeAuditCursor(cursor, {})).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "b" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", action: "login" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", from: "2026-01-01" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", to: "2026-01-01" })).toBeNull();
+		});
+
+		it("returns null when the fingerprint is forged or missing", () => {
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id, f: "00000000" }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id, f: 1 }), filters)).toBeNull();
+		});
+	});
 });
 
 describe("paginateAuditEntries", () => {

@@ -91,6 +91,52 @@ describe("useInFlightAction (#828)", () => {
 		});
 		expect(result.current.pending).toBe(false);
 	});
+
+	it("exposes pending and ignores repeat clicks, including the failure path", async () => {
+		let reject!: (err: Error) => void;
+		const action = vi.fn(
+			() =>
+				new Promise<void>((_r, rj) => {
+					reject = rj;
+				}),
+		);
+		const { result } = renderHook(() => useInFlightAction(action));
+		expect(result.current.pending).toBe(false);
+		expect(result.current.ctaProps).toEqual({
+			disabled: false,
+			"aria-busy": false,
+		});
+
+		let first!: Promise<unknown>;
+		act(() => {
+			first = result.current.run();
+		});
+		expect(result.current.pending).toBe(true);
+		expect(result.current.ctaProps).toEqual({
+			disabled: true,
+			"aria-busy": true,
+		});
+
+		// Repeated clicks while pending are ignored and resolve to undefined.
+		await act(async () => {
+			await expect(result.current.run()).resolves.toBeUndefined();
+		});
+		expect(action).toHaveBeenCalledTimes(1);
+
+		// Failure path: the error propagates and pending is cleared.
+		await act(async () => {
+			reject(new Error("boom"));
+			await expect(first).rejects.toThrow("boom");
+		});
+		expect(result.current.pending).toBe(false);
+		expect(result.current.ctaProps.disabled).toBe(false);
+
+		// The guard is released, so a later click runs the action again.
+		await act(async () => {
+			await expect(result.current.run()).resolves.toBeUndefined();
+		});
+		expect(action).toHaveBeenCalledTimes(2);
+	});
 });
 
 describe("NetworkBadge contrast (#826)", () => {

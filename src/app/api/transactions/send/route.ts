@@ -62,7 +62,7 @@ const UPSTREAM_TIMEOUT_MS = 15_000;
  */
 const MAX_MAINTENANCE_RETRY_AFTER_SECONDS = 3_600;
 
-function maintenanceRetryAfterSeconds(
+export function maintenanceRetryAfterSeconds(
 	upstream: Response,
 	fallbackMs: number,
 ): string {

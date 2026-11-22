@@ -1,4 +1,5 @@
 import { defineConfig, devices } from "@playwright/test";
+import { loudly } from "./src/lib/e2e-env-guard";
 
 /**
  * Playwright configuration for the real-backend CONTRACT specs in
@@ -42,16 +43,7 @@ import { defineConfig, devices } from "@playwright/test";
  * merely collecting/listing specs in CI without a backend available).
  */
 export function assertRealBackendConfigured(): void {
-	if (process.env.E2E_REAL_BACKEND_ALLOW_MISSING_API_URL === "1") {
-		return;
-	}
-	const apiUrl = process.env.NEXT_PUBLIC_API_URL;
-	if (!apiUrl || apiUrl.trim() === "") {
-		throw new Error(
-			"playwright.real-backend.config.ts requires NEXT_PUBLIC_API_URL to point at a real mux-backend (fail-closed). " +
-				"Set NEXT_PUBLIC_API_URL, or set E2E_REAL_BACKEND_ALLOW_MISSING_API_URL=1 to explicitly opt out.",
-		);
-	}
+	loudly("NEXT_PUBLIC_API_URL");
 }
 
 /**
@@ -62,20 +54,8 @@ export function assertRealBackendConfigured(): void {
  * same opt-out used for NEXT_PUBLIC_API_URL, e.g. when only listing specs).
  */
 export function assertRealBackendCredentials(): void {
-	if (process.env.E2E_REAL_BACKEND_ALLOW_MISSING_API_URL === "1") {
-		return;
-	}
-	const missing = ["E2E_TEST_EMAIL", "E2E_TEST_PASSWORD"].filter(
-		(name) => !process.env[name] || process.env[name]?.trim() === "",
-	);
-	if (missing.length > 0) {
-		throw new Error(
-			`playwright.real-backend.config.ts requires ${missing.join(
-				", ",
-			)} to authenticate against the real backend (fail-closed). ` +
-				"Set them, or set E2E_REAL_BACKEND_ALLOW_MISSING_API_URL=1 to explicitly opt out.",
-		);
-	}
+	loudly("E2E_TEST_EMAIL");
+	loudly("E2E_TEST_PASSWORD");
 }
 
 assertRealBackendConfigured();

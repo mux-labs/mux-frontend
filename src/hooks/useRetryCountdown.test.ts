@@ -79,6 +79,31 @@ describe("useRetryCountdown", () => {
 		expect(result.current).toEqual({ remainingMs: 0, ready: true });
 	});
 
+	it("never enables early when the wall clock lags behind the tick count", () => {
+		const { result } = renderHook(() => useRetryCountdown(START + 1_000, now));
+
+		// Many ticks fire while the wall clock barely moves (a throttled tab
+		// whose timers are coalesced): a per-tick decrement would reach zero.
+		for (let i = 0; i < 20; i += 1) {
+			clockMs = START + 10 * (i + 1);
+			tick();
+		}
+
+		expect(result.current).toEqual({ remainingMs: 800, ready: false });
+	});
+
+	it("does not leave retry stuck disabled when the clock jumps past retryAt", () => {
+		const { result } = renderHook(() => useRetryCountdown(START + 1_000, now));
+
+		// The tab was suspended: the clock jumps far past retryAt while the
+		// interval callback runs only once.
+		clockMs = START + 5 * 60_000;
+		tick();
+
+		expect(result.current).toEqual({ remainingMs: 0, ready: true });
+		expect(vi.getTimerCount()).toBe(0);
+	});
+
 	it("clears the interval once the clock passes retryAt", () => {
 		const { result } = renderHook(() => useRetryCountdown(START + 500, now));
 		expect(vi.getTimerCount()).toBe(1);

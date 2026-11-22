@@ -1,5 +1,52 @@
 import { describe, expect, it } from "vitest";
 import { createFixedWindowLimiter } from "@/lib/http/rate-limiter";
+import { maintenanceRetryAfterSeconds } from "./route";
+
+function maintenanceUpstream(retryAfter?: string): Response {
+	const headers = new Headers();
+	if (retryAfter !== undefined) headers.set("retry-after", retryAfter);
+	return new Response(null, { status: 503, headers });
+}
+
+describe("maintenanceRetryAfterSeconds", () => {
+	it("clamps waits over an hour to 3600 seconds", () => {
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream("86400"), 0)).toBe(
+			"3600",
+		);
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream("3601"), 0)).toBe(
+			"3600",
+		);
+	});
+
+	it("keeps waits within the hour unchanged", () => {
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream("3600"), 0)).toBe(
+			"3600",
+		);
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream("120"), 0)).toBe(
+			"120",
+		);
+	});
+
+	it("falls back to the resolved delay when retry-after is missing or invalid", () => {
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream(), 90_000)).toBe(
+			"90",
+		);
+		expect(
+			maintenanceRetryAfterSeconds(maintenanceUpstream("soon"), 90_000),
+		).toBe("90");
+	});
+
+	it("clamps the fallback delay to an hour as well", () => {
+		expect(
+			maintenanceRetryAfterSeconds(maintenanceUpstream(), 7_200_000),
+		).toBe("3600");
+	});
+
+	it("never returns less than one second", () => {
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream("0"), 0)).toBe("1");
+		expect(maintenanceRetryAfterSeconds(maintenanceUpstream(), 0)).toBe("1");
+	});
+});
 
 describe("createFixedWindowLimiter", () => {
 	it("allows up to the limit within the window and rejects beyond it", () => {

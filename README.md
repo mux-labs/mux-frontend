@@ -56,3 +56,6 @@ End-to-end tests live in [`tests/e2e/`](tests/e2e/).
 
 <!-- handsoff-issue-1155 -->
 - #1155: Add a regression test for buildConnectSrcDirective in next.config.ts
+
+<!-- handsoff-issue-1158 -->
+- #1158: Add a regression test for headers in next.config.ts

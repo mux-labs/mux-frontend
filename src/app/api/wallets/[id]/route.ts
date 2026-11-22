@@ -80,7 +80,7 @@ const WRITE_ROLES: ReadonlySet<WalletRole> = new Set([
   'guardian',
 ]);
 
-const MAX_REQUEST_BYTES = 8 * 1024;
+export const MAX_REQUEST_BYTES = 8 * 1024;
 const MAX_LABEL_LENGTH = 128;
 
 /**
@@ -190,7 +190,7 @@ function settingsError(
 }
 
 /** Reject a body over `MAX_REQUEST_BYTES` before any parsing (issue #952). */
-async function readBoundedBody(req: NextRequest): Promise<string | null> {
+export async function readBoundedBody(req: NextRequest): Promise<string | null> {
   const declared = Number(req.headers.get('content-length') ?? '0');
   if (declared > MAX_REQUEST_BYTES) return null;
   const text = await req.text();
@@ -199,7 +199,7 @@ async function readBoundedBody(req: NextRequest): Promise<string | null> {
 }
 
 /** Map a known upstream error code to a status when the envelope omits one. */
-function fallbackStatusFor(code: string): number {
+export function fallbackStatusFor(code: string): number {
   switch (code) {
     case 'WALLET_NOT_FOUND':
       return 404;

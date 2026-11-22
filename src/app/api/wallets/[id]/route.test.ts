@@ -31,7 +31,14 @@ vi.mock('@/lib/idempotency/store', () => ({
   putIdempotencyRecord: (...args: unknown[]) => putIdempotencyRecord(...args),
 }));
 
-import { GET, POST, ERROR_CODES, WalletSettingsErrorCode } from './route';
+import {
+  GET,
+  POST,
+  ERROR_CODES,
+  MAX_REQUEST_BYTES,
+  WalletSettingsErrorCode,
+  readBoundedBody,
+} from './route';
 
 const VALID_ID = 'wallet_123';
 
@@ -209,6 +216,119 @@ describe('GET /api/wallets/[id] envelope parsing', () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
     expect(json.error).toBeDefined();
     expect(json.error.code).toBeDefined();
+  });
+});
+
+describe('readBoundedBody', () => {
+  beforeEach(() => {
+    parseEnvelope.mockReset();
+  });
+
+  it('rejects a body over MAX_REQUEST_BYTES before any parsing', async () => {
+    const oversized = 'x'.repeat(MAX_REQUEST_BYTES + 1);
+    const req = makeRequest('POST', {
+      rawBody: oversized,
+      headers: { 'content-type': 'application/json' },
+    });
+    const textSpy = vi.spyOn(req, 'text');
+
+    await expect(readBoundedBody(req)).resolves.toBeNull();
+    // The declared content-length alone must short-circuit the read.
+    expect(textSpy).not.toHaveBeenCalled();
+  });
+
+  it('rejects an oversized body even when content-length is absent', async () => {
+    const oversized = 'x'.repeat(MAX_REQUEST_BYTES + 1);
+    const req = new NextRequest(`http://localhost/api/wallets/${VALID_ID}`, {
+      method: 'POST',
+      body: oversized,
+    });
+    req.headers.delete('content-length');
+
+    await expect(readBoundedBody(req)).resolves.toBeNull();
+  });
+
+  it('accepts a body at exactly MAX_REQUEST_BYTES', async () => {
+    const atLimit = 'x'.repeat(MAX_REQUEST_BYTES);
+    const req = makeRequest('POST', {
+      rawBody: atLimit,
+      headers: { 'content-type': 'application/json' },
+    });
+
+    await expect(readBoundedBody(req)).resolves.toBe(atLimit);
+  });
+
+  it('surfaces the failure path as a 413 with a stable error code', async () => {
+    const oversized = 'x'.repeat(MAX_REQUEST_BYTES + 1);
+    const res = await GET(
+      makeRequest('GET', {
+        rawBody: oversized,
+        headers: { 'content-type': 'application/json' },
+      }),
+      ctx(),
+    );
+    const json = await res.json();
+
+    expect(res.status).toBe(413);
+    expect(json.error.code).toBe(ERROR_CODES.REQUEST_TOO_LARGE);
+    expect(parseEnvelope).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/wallets/[id] receive URI (buildReceiveUri)', () => {
+  beforeEach(() => {
+    parseEnvelope.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('builds a SEP-0007 web+stellar:pay URI for the wallet address', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: VALID_STELLAR_ADDRESS, network: 'testnet' },
+      error: null,
+      correlationId: 'corr-receive-testnet',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.receive.uri).toBe(
+      `web+stellar:pay?destination=${VALID_STELLAR_ADDRESS}&network=testnet`,
+    );
+  });
+
+  it('maps mainnet to the SEP-0007 public network passphrase name', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: VALID_STELLAR_ADDRESS, network: 'mainnet' },
+      error: null,
+      correlationId: 'corr-receive-mainnet',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.receive.uri).toBe(
+      `web+stellar:pay?destination=${VALID_STELLAR_ADDRESS}&network=public`,
+    );
+  });
+
+  it('fails closed with INVALID_RECEIVE_ADDRESS instead of building a URI for a bad address', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: 'not-a-stellar-address', network: 'testnet' },
+      error: null,
+      correlationId: 'corr-receive-invalid',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.error.code).toBe(ERROR_CODES.INVALID_RECEIVE_ADDRESS);
+    expect(json.receive).toBeUndefined();
   });
 });
 

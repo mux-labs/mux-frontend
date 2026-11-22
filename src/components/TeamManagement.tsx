@@ -32,7 +32,7 @@ export interface TeamManagementProps {
   onError?: (code: TeamErrorCode, correlationId: string, message: string) => void;
 }
 
-function newCorrelationId(): string {
+export function newCorrelationId(): string {
   return typeof crypto !== 'undefined' && crypto.randomUUID
     ? crypto.randomUUID()
     : `tm_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;

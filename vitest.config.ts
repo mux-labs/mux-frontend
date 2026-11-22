@@ -33,6 +33,14 @@ const config = defineConfig({
 	resolve: {
 		alias: {
 			"@": path.resolve(__dirname, "./src"),
+			// @playwright/test is not installed in the Vitest environment (it
+			// runs under `playwright test` instead). Stub it so that files that
+			// re-export non-Playwright helpers (e.g. assertRealBackendConfigured)
+			// can be imported in unit tests without a resolution error.
+			"@playwright/test": path.resolve(
+				__dirname,
+				"src/test/stubs/playwright-test.ts",
+			),
 		},
 	},
 });

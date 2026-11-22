@@ -207,6 +207,17 @@ describe("withCsrf", () => {
 		expect(withCsrf(init, `${CSRF_COOKIE_NAME}=`)).toBe(init);
 	});
 
+	it("attaches the header to unsafe requests and returns init unchanged without a token", () => {
+		const unsafe: RequestInit = { method: "POST", body: "{}" };
+		const attached = withCsrf(unsafe, `${CSRF_COOKIE_NAME}=abc`);
+		expect(new Headers(attached.headers).get(CSRF_HEADER_NAME)).toBe("abc");
+		expect(attached.method).toBe("POST");
+		expect(attached.body).toBe("{}");
+
+		const noToken: RequestInit = { method: "POST", body: "{}" };
+		expect(withCsrf(noToken, "mux_session=s")).toBe(noToken);
+	});
+
 	it("does not mutate the caller's init when attaching the token", () => {
 		const init: RequestInit = { method: "POST" };
 		const result = withCsrf(init, `${CSRF_COOKIE_NAME}=abc`);
@@ -233,15 +244,47 @@ describe("tryWithCsrf", () => {
 		expect(init).toBe(original);
 	});
 
-	it.each(["GET", "HEAD", "OPTIONS"])(
-		"returns init unchanged and not ok for safe method %s",
+	it.each(["GET", "HEAD", "OPTIONS", "get", "head", "options"])(
+		"returns init unchanged and ok for safe method %s",
 		(method) => {
 			const original: RequestInit = { method, headers: { accept: "text/plain" } };
 			const { init, ok } = tryWithCsrf(original, `${CSRF_COOKIE_NAME}=abc`);
-			expect(ok).toBe(false);
+			expect(ok).toBe(true);
 			expect(init).toBe(original);
+			expect(new Headers(init.headers).get(CSRF_HEADER_NAME)).toBeNull();
 		},
 	);
+
+	it("returns init unchanged and ok when no method is given (defaults to GET)", () => {
+		const original: RequestInit = { headers: { accept: "text/plain" } };
+		const { init, ok } = tryWithCsrf(original, `${CSRF_COOKIE_NAME}=abc`);
+		expect(ok).toBe(true);
+		expect(init).toBe(original);
+	});
+
+	it.each(["POST", "PUT", "PATCH", "DELETE"])(
+		"reports ok and attaches the token for unsafe method %s",
+		(method) => {
+			const { init, ok } = tryWithCsrf(
+				{ method, headers: { accept: "application/json" } },
+				`mux_session=s; ${CSRF_COOKIE_NAME}=abc`,
+			);
+			const headers = new Headers(init.headers);
+			expect(ok).toBe(true);
+			expect(init.method).toBe(method);
+			expect(headers.get(CSRF_HEADER_NAME)).toBe("abc");
+			expect(headers.get("accept")).toBe("application/json");
+		},
+	);
+
+	it("reports failure for an unsafe method when the cookie is empty or unrelated", () => {
+		const original: RequestInit = { method: "POST", body: "{}" };
+		for (const cookie of ["", "mux_session=s; other=1", `${CSRF_COOKIE_NAME}=`]) {
+			const { init, ok } = tryWithCsrf(original, cookie);
+			expect(ok).toBe(false);
+			expect(init).toBe(original);
+		}
+	});
 
 	it("defaults credentials to same-origin and preserves an explicit value", () => {
 		const defaulted = tryWithCsrf({ method: "POST" }, `${CSRF_COOKIE_NAME}=abc`);
@@ -260,9 +303,28 @@ describe("hasCsrfToken", () => {
 		expect(hasCsrfToken(`mux_session=s; ${CSRF_COOKIE_NAME}=abc`)).toBe(true);
 	});
 
+	it("returns true when the token cookie is the only cookie", () => {
+		expect(hasCsrfToken(`${CSRF_COOKIE_NAME}=abc`)).toBe(true);
+	});
+
 	it("returns false when the token cookie is absent or empty", () => {
 		expect(hasCsrfToken("")).toBe(false);
 		expect(hasCsrfToken("mux_session=s")).toBe(false);
 		expect(hasCsrfToken(`${CSRF_COOKIE_NAME}=`)).toBe(false);
+	});
+
+	it("returns false when no cookie source is available", () => {
+		expect(hasCsrfToken(undefined)).toBe(false);
+		expect(hasCsrfToken({ cookie: "" })).toBe(false);
+	});
+
+	it("agrees with tryWithCsrf on whether a token can be attached", () => {
+		const withToken = `mux_session=s; ${CSRF_COOKIE_NAME}=abc`;
+		expect(hasCsrfToken(withToken)).toBe(
+			tryWithCsrf({ method: "POST" }, withToken).ok,
+		);
+		expect(hasCsrfToken("mux_session=s")).toBe(
+			tryWithCsrf({ method: "POST" }, "mux_session=s").ok,
+		);
 	});
 });

@@ -136,6 +136,59 @@ describe("parseAuditPageParams", () => {
 	});
 });
 
+describe("toAuditSearchParams", () => {
+	it("serializes a validated query back into URL params", () => {
+		const params = toAuditSearchParams({
+			filters: {
+				actor: "member_admin",
+				action: "wallet.send",
+				from: "2026-01-01T00:00:00.000Z",
+				to: "2026-01-02T00:00:00.000Z",
+			},
+			cursor: "abc",
+			limit: 25,
+		});
+
+		expect(params.get("actor")).toBe("member_admin");
+		expect(params.get("action")).toBe("wallet.send");
+		expect(params.get("from")).toBe("2026-01-01T00:00:00.000Z");
+		expect(params.get("to")).toBe("2026-01-02T00:00:00.000Z");
+		expect(params.get("cursor")).toBe("abc");
+		expect(params.get("limit")).toBe("25");
+	});
+
+	it("omits absent filters and a null cursor, but always sets limit", () => {
+		const params = toAuditSearchParams({
+			filters: {},
+			cursor: null,
+			limit: DEFAULT_AUDIT_PAGE_SIZE,
+		});
+
+		expect(params.has("actor")).toBe(false);
+		expect(params.has("action")).toBe(false);
+		expect(params.has("from")).toBe(false);
+		expect(params.has("to")).toBe(false);
+		expect(params.has("cursor")).toBe(false);
+		expect(params.get("limit")).toBe(String(DEFAULT_AUDIT_PAGE_SIZE));
+	});
+
+	it("fails closed: a query it cannot serialize is rejected by the parser", () => {
+		// The doc comment promises the output is a validated query, so a
+		// malformed value must not silently round-trip as an unfiltered page.
+		const params = toAuditSearchParams({
+			filters: { actor: "not a token!" },
+			cursor: null,
+			limit: DEFAULT_AUDIT_PAGE_SIZE,
+		});
+
+		expect(parseAuditPageParams(params)).toEqual({
+			ok: false,
+			code: "invalid_filter",
+			field: "actor",
+		});
+	});
+});
+
 describe("parseAuditPageParams rejection branches", () => {
 	const DAY_MS = 24 * 60 * 60 * 1000;
 

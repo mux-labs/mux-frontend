@@ -67,4 +67,10 @@ describe("theme tokens", () => {
 		expect(() => themeCssVars(unknown)).not.toThrow(TypeError);
 		expect(themeCssVars(unknown)).toEqual({});
 	});
+
+	it("does not resolve inherited object properties as themes", () => {
+		for (const name of ["toString", "constructor", "__proto__"]) {
+			expect(themeCssVars(name as ThemeName)).toEqual({});
+		}
+	});
 });

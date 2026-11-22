@@ -49,6 +49,33 @@ describe("readRealBackendEnv", () => {
 		vi.stubEnv("E2E_TEST_PASSWORD", "correct-horse");
 		expect(readRealBackendEnv()).toBeNull();
 	});
+
+	it("returns the required env when all pieces are present", () => {
+		vi.stubEnv("NEXT_PUBLIC_API_URL", "https://api.example.com");
+		vi.stubEnv("E2E_TEST_EMAIL", "qa@example.com");
+		vi.stubEnv("E2E_TEST_PASSWORD", "correct-horse");
+		expect(readRealBackendEnv()).toEqual({
+			apiUrl: "https://api.example.com",
+			email: "qa@example.com",
+			password: "correct-horse",
+		});
+	});
+
+	it("returns null when any single required piece is missing", () => {
+		const complete = {
+			NEXT_PUBLIC_API_URL: "https://api.example.com",
+			E2E_TEST_EMAIL: "qa@example.com",
+			E2E_TEST_PASSWORD: "correct-horse",
+		} as const;
+
+		for (const key of Object.keys(complete) as (keyof typeof complete)[]) {
+			vi.unstubAllEnvs();
+			for (const [name, value] of Object.entries(complete)) {
+				vi.stubEnv(name, name === key ? "" : value);
+			}
+			expect(readRealBackendEnv()).toBeNull();
+		}
+	});
 });
 
 describe("redactToken", () => {

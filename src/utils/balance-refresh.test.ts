@@ -50,6 +50,30 @@ describe("balanceReducer", () => {
 
 		expect(state).toBe(loaded);
 	});
+
+	it("preserves the last stable state so a stale failure is a true no-op", () => {
+		const loaded = reduce([start(1), success(1, 250)]);
+		const refreshing = reduce([start(2)], loaded);
+
+		expect(refreshing.lastStable).toBe(loaded);
+
+		const state = reduce([failure(1)], refreshing);
+
+		expect(state).toBe(loaded);
+		expect(state.balance).toBe(250);
+		expect(state.refreshing).toBe(false);
+		expect(state.error).toBeNull();
+		expect(state.requestId).toBe(1);
+	});
+
+	it("keeps the original last stable state across overlapping refreshes", () => {
+		const loaded = reduce([start(1), success(1, 250)]);
+		const state = reduce([start(2), start(3), failure(2)], loaded);
+
+		expect(state).toBe(loaded);
+		expect(state.balance).toBe(250);
+		expect(state.refreshing).toBe(false);
+	});
 });
 
 describe("useBalanceRefresh", () => {

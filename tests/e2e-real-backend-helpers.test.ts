@@ -75,4 +75,20 @@ describe("redactToken", () => {
 		const redacted = redactToken(token);
 		expect(redacted).not.toContain("SECRET-MIDDLE");
 	});
+
+	it("redacts a bearer token for safe logging", () => {
+		const token = "Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature";
+		const redacted = redactToken(token);
+		expect(redacted).toBe("Bear…ture");
+		expect(redacted).not.toContain("eyJhbGciOiJIUzI1NiJ9");
+		expect(redacted).not.toContain("payload");
+	});
+
+	it("fails closed on the short-token path named in the doc comment", () => {
+		// Doc comment: never print raw tokens or key material. Tokens too
+		// short to keep a prefix/suffix must be fully masked, not echoed.
+		const shortToken = "abc123";
+		expect(redactToken(shortToken)).toBe("***");
+		expect(redactToken(shortToken)).not.toContain(shortToken);
+	});
 });

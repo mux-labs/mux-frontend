@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { isValidCorrelationId } from "./correlation";
+import {
+	CORRELATION_HEADER,
+	isValidCorrelationId,
+	readCorrelationId,
+} from "./correlation";
 
 describe("isValidCorrelationId", () => {
 	it("accepts conservative opaque ids", () => {
@@ -46,5 +50,68 @@ describe("isValidCorrelationId", () => {
 		expect(isValidCorrelationId("abc def")).toBe(false);
 		expect(isValidCorrelationId("abc/def")).toBe(false);
 		expect(isValidCorrelationId("abc;def")).toBe(false);
+	});
+});
+
+describe("readCorrelationId", () => {
+	function headers(init: Record<string, string> = {}): Headers {
+		return new Headers(init);
+	}
+
+	it("reads the correlation id from the correlation header", () => {
+		expect(
+			readCorrelationId(headers({ [CORRELATION_HEADER]: "abc-123" })),
+		).toBe("abc-123");
+	});
+
+	it("falls back to the x-request-id header", () => {
+		expect(readCorrelationId(headers({ "x-request-id": "req_42" }))).toBe(
+			"req_42",
+		);
+	});
+
+	it("prefers the correlation header over x-request-id", () => {
+		expect(
+			readCorrelationId(
+				headers({
+					[CORRELATION_HEADER]: "primary-id",
+					"x-request-id": "fallback-id",
+				}),
+			),
+		).toBe("primary-id");
+	});
+
+	it("returns null when no correlation header is present", () => {
+		expect(readCorrelationId(headers())).toBeNull();
+	});
+
+	it("returns null for unsafe values", () => {
+		const unsafe = [
+			"",
+			"   ",
+			"has space",
+			"line\nbreak",
+			"<script>alert(1)</script>",
+			"a".repeat(129),
+			"---",
+		];
+		for (const value of unsafe) {
+			expect(
+				readCorrelationId(headers({ [CORRELATION_HEADER]: value })),
+			).toBeNull();
+		}
+	});
+
+	it("returns null when only the fallback header is unsafe", () => {
+		expect(
+			readCorrelationId(headers({ "x-request-id": "bad value" })),
+		).toBeNull();
+	});
+
+	it("accepts ids at the length boundary", () => {
+		const value = "a".repeat(128);
+		expect(readCorrelationId(headers({ [CORRELATION_HEADER]: value }))).toBe(
+			value,
+		);
 	});
 });

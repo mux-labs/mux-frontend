@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { TeamManagement } from '@/components/TeamManagement';
+import { TeamManagement, newCorrelationId } from '@/components/TeamManagement';
 import type { TeamMember } from '@/components/TeamManagement';
 
 const MEMBERS: TeamMember[] = [
@@ -198,5 +198,27 @@ describe('TeamManagement', () => {
     expect(screen.getByTestId('team-error')).toHaveTextContent('Only admins may remove team members.');
     expect(fetchMock).toHaveBeenCalledWith('/api/team/m1', { method: 'DELETE' });
     expect(screen.getByText('Alice Admin')).toBeInTheDocument();
+  });
+
+  describe('newCorrelationId', () => {
+    it('returns a non-empty string that is unique per call', () => {
+      const a = newCorrelationId();
+      const b = newCorrelationId();
+      expect(typeof a).toBe('string');
+      expect(a.length).toBeGreaterThan(0);
+      expect(a).not.toBe(b);
+    });
+
+    it('uses crypto.randomUUID when available', () => {
+      const randomUUID = vi.fn(() => '11111111-2222-3333-4444-555555555555');
+      vi.stubGlobal('crypto', { randomUUID });
+      expect(newCorrelationId()).toBe('11111111-2222-3333-4444-555555555555');
+      expect(randomUUID).toHaveBeenCalledOnce();
+    });
+
+    it('falls back to a tm_ prefixed id when crypto.randomUUID is unavailable', () => {
+      vi.stubGlobal('crypto', {});
+      expect(newCorrelationId()).toMatch(/^tm_[a-z0-9]+_[a-z0-9]+$/);
+    });
   });
 });

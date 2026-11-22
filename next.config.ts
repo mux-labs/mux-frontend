@@ -37,9 +37,9 @@ const isDevOrTest =
  *   an unset or typo'd origin can never widen the policy.
  * - `'self'` is always included; the directive is never empty.
  *
- * The construction below is exported so tests/csp-connect-src.test.ts can
- * assert the resolved directive against the README's fail-closed contract
- * (issue #979).
+ * The construction below is exported so tests/csp-connect-src.test.ts and
+ * tests/next-config-connect-src.test.ts can assert the resolved directive
+ * against the README's fail-closed contract (issues #979, #1155).
  */
 export const DEFAULT_CONNECT_SRC_ORIGINS = [
 	"'self'",
@@ -97,9 +97,17 @@ export function resolveConnectSrcOrigins(): string[] {
 /**
  * Build the `connect-src` directive value from the resolved allowlist.
  * Exported so tests can assert on the actual header value.
+ *
+ * Failure path: the directive is never empty. If the resolved allowlist is
+ * empty (e.g. a caller passes an empty list), the directive falls back to
+ * `'self'` so the policy stays fail-closed instead of emitting a bare
+ * `connect-src` that would block every request.
  */
-export function buildConnectSrcDirective(): string {
-	return `connect-src ${resolveConnectSrcOrigins().join(" ")}`;
+export function buildConnectSrcDirective(
+	origins: readonly string[] = resolveConnectSrcOrigins(),
+): string {
+	const sources = origins.length > 0 ? origins : ["'self'"];
+	return `connect-src ${sources.join(" ")}`;
 }
 
 /**

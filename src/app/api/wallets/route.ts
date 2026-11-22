@@ -199,7 +199,7 @@ async function provisionFirstWallet(
  * assert its documented contract (fail-closed on upstream failure, idempotent
  * on (owner, idempotencyKey)). Not part of the public HTTP surface.
  */
-export const __test__ = { provisionFirstWallet };
+export const __test__ = { provisionFirstWallet, isMainnetEnabled };
 
 export async function POST(
   req: NextRequest,

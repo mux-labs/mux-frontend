@@ -543,6 +543,78 @@ describe("parseAuditPage", () => {
 	] as const)("fails closed on %s", (_label, body, limit) => {
 		expect(parseAuditPage(body, limit)).toBeNull();
 	});
+
+	// #1197: regression coverage for the documented fail-closed paths.
+	it("accepts an empty page with a null cursor", () => {
+		expect(parseAuditPage({ items: [], nextCursor: null }, 10)).toEqual({
+			items: [],
+			nextCursor: null,
+			hasMore: false,
+		});
+	});
+
+	it("accepts a page exactly at the requested limit", () => {
+		const items = [entry, { ...entry, id: "second" }];
+		expect(parseAuditPage({ items, nextCursor: null }, 2)).toEqual({
+			items,
+			nextCursor: null,
+			hasMore: false,
+		});
+	});
+
+	it.each([
+		["null", null],
+		["an array", []],
+		["a string", "nope"],
+		["a number", 42],
+	] as const)("fails closed when the body is %s", (_label, body) => {
+		expect(parseAuditPage(body, 10)).toBeNull();
+	});
+
+	it.each([
+		["items is not an array", { items: "nope", nextCursor: null }],
+		["items is missing", { nextCursor: null }],
+		["an entry is not an object", { items: [null], nextCursor: null }],
+		["an entry has an empty id", { items: [{ ...entry, id: "" }], nextCursor: null }],
+		[
+			"an entry has an unparseable createdAt",
+			{ items: [{ ...entry, createdAt: "not-a-date" }], nextCursor: null },
+		],
+		[
+			"an entry has a non-string actor",
+			{ items: [{ ...entry, actor: 7 }], nextCursor: null },
+		],
+		["the cursor is empty", { items: [entry], nextCursor: "" }],
+		[
+			"the cursor exceeds MAX_CURSOR_LENGTH",
+			{ items: [entry], nextCursor: "a".repeat(MAX_CURSOR_LENGTH + 1) },
+		],
+		["the cursor is not a string", { items: [entry], nextCursor: 7 }],
+	] as const)("fails closed when %s", (_label, body) => {
+		expect(parseAuditPage(body, 10)).toBeNull();
+	});
+
+	it("fails closed on an oversized page even when every entry is valid", () => {
+		const items = Array.from({ length: 3 }, (_, index) => ({
+			...entry,
+			id: `entry-${index}`,
+		}));
+		expect(parseAuditPage({ items, nextCursor: null }, 2)).toBeNull();
+	});
+
+	it("fails closed on duplicate ids even when the page fits the limit", () => {
+		const items = [entry, { ...entry }];
+		expect(parseAuditPage({ items, nextCursor: null }, 10)).toBeNull();
+	});
+
+	it("derives hasMore from the cursor rather than trusting the body", () => {
+		expect(
+			parseAuditPage({ items: [entry], nextCursor: "abc", hasMore: false }, 10),
+		).toEqual({ items: [entry], nextCursor: "abc", hasMore: true });
+		expect(
+			parseAuditPage({ items: [entry], nextCursor: null, hasMore: true }, 10),
+		).toEqual({ items: [entry], nextCursor: null, hasMore: false });
+	});
 });
 
 describe("auditPaginationReducer", () => {

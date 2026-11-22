@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { getBackendApiBaseUrl } from "@/lib/api/config";
 import {
 	BACKEND_URL_CANDIDATES,
 	configuredNetwork,
 	getBackendBaseUrl,
 	isMockFallbackAllowed,
 } from "./backend-url";
+
+vi.mock("@/lib/api/config", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("@/lib/api/config")>();
+	return { ...actual, getBackendApiBaseUrl: vi.fn(actual.getBackendApiBaseUrl) };
+});
 
 describe("getBackendBaseUrl", () => {
 	it("returns null when no candidate is set", () => {
@@ -83,6 +89,80 @@ describe("getBackendBaseUrl", () => {
 		expect(
 			getBackendBaseUrl({ NEXT_PUBLIC_API_URL: "http://localhost:4000/api///" }),
 		).toBe("http://localhost:4000/api");
+	});
+
+	it("delegates each candidate to getBackendApiBaseUrl with the trimmed value", () => {
+		const spy = vi.mocked(getBackendApiBaseUrl);
+		spy.mockClear();
+
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "  https://backend.test/api/  ",
+				NEXT_PUBLIC_MUX_BACKEND_URL: "https://ignored.test",
+			}),
+		).toBe("https://backend.test/api");
+
+		expect(spy).toHaveBeenCalledTimes(1);
+		expect(spy).toHaveBeenCalledWith({ MUX_BACKEND_URL: "https://backend.test/api/" });
+	});
+
+	it("returns the delegated normalized value verbatim", () => {
+		const spy = vi.mocked(getBackendApiBaseUrl);
+		spy.mockClear();
+		spy.mockReturnValueOnce("https://delegated.test/base");
+
+		expect(getBackendBaseUrl({ MUX_BACKEND_URL: "https://backend.test" })).toBe(
+			"https://delegated.test/base",
+		);
+	});
+
+	it("continues to the next candidate when delegation rejects a value", () => {
+		const spy = vi.mocked(getBackendApiBaseUrl);
+		spy.mockClear();
+		spy.mockReturnValueOnce(null);
+
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "https://backend.test",
+				NEXT_PUBLIC_MUX_BACKEND_URL: "https://fallback.test",
+			}),
+		).toBe("https://fallback.test");
+		expect(spy).toHaveBeenCalledTimes(2);
+	});
+
+	it("returns null when delegation rejects every candidate", () => {
+		const spy = vi.mocked(getBackendApiBaseUrl);
+		spy.mockClear();
+		spy.mockReturnValue(null);
+
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "https://backend.test",
+				NEXT_PUBLIC_MUX_BACKEND_URL: "https://fallback.test",
+				BACKEND_URL: "https://third.test",
+			}),
+		).toBeNull();
+		expect(spy).toHaveBeenCalledTimes(BACKEND_URL_CANDIDATES.length);
+	});
+
+	it("rejects URLs with embedded credentials", () => {
+		expect(
+			getBackendBaseUrl({ MUX_BACKEND_URL: "https://user:pass@backend.test" }),
+		).toBeNull();
+		expect(
+			getBackendBaseUrl({ MUX_BACKEND_URL: "https://user@backend.test" }),
+		).toBeNull();
+	});
+
+	it("normalizes to origin + pathname, dropping query, hash and trailing slash", () => {
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "https://backend.test:8443/api/v1/?token=secret#frag",
+			}),
+		).toBe("https://backend.test:8443/api/v1");
+		expect(getBackendBaseUrl({ MUX_BACKEND_URL: "https://backend.test/" })).toBe(
+			"https://backend.test",
+		);
 	});
 });
 

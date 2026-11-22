@@ -207,6 +207,17 @@ describe("withCsrf", () => {
 		expect(withCsrf(init, `${CSRF_COOKIE_NAME}=`)).toBe(init);
 	});
 
+	it("attaches the header to unsafe requests and returns init unchanged without a token", () => {
+		const unsafe: RequestInit = { method: "POST", body: "{}" };
+		const attached = withCsrf(unsafe, `${CSRF_COOKIE_NAME}=abc`);
+		expect(new Headers(attached.headers).get(CSRF_HEADER_NAME)).toBe("abc");
+		expect(attached.method).toBe("POST");
+		expect(attached.body).toBe("{}");
+
+		const noToken: RequestInit = { method: "POST", body: "{}" };
+		expect(withCsrf(noToken, "mux_session=s")).toBe(noToken);
+	});
+
 	it("does not mutate the caller's init when attaching the token", () => {
 		const init: RequestInit = { method: "POST" };
 		const result = withCsrf(init, `${CSRF_COOKIE_NAME}=abc`);

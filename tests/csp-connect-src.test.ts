@@ -73,3 +73,35 @@ describe('CSP connect-src fail-closed contract', () => {
     expect(sources).not.toContain('http://evil.example');
   });
 });
+
+describe('buildConnectSrcDirective', () => {
+  afterEach(() => {
+    restoreEnv();
+  });
+
+  it('builds the full directive string from the documented defaults', () => {
+    delete process.env.NEXT_PUBLIC_API_ORIGINS;
+
+    expect(buildConnectSrcDirective()).toBe(
+      `connect-src ${DEFAULT_CONNECT_SRC_ORIGINS.join(' ')}`,
+    );
+  });
+
+  it('appends configured origins after the defaults', () => {
+    expect(buildConnectSrcDirective('https://extra.example,https://other.example')).toBe(
+      `connect-src ${[...DEFAULT_CONNECT_SRC_ORIGINS, 'https://extra.example', 'https://other.example'].join(' ')}`,
+    );
+  });
+
+  it('drops broad scheme and wildcard sources from the directive', () => {
+    expect(buildConnectSrcDirective('*, https:, wss:, https://extra.example')).toBe(
+      `connect-src ${[...DEFAULT_CONNECT_SRC_ORIGINS, 'https://extra.example'].join(' ')}`,
+    );
+  });
+
+  it('falls back to the defaults when the configured value is empty', () => {
+    expect(buildConnectSrcDirective('')).toBe(
+      `connect-src ${DEFAULT_CONNECT_SRC_ORIGINS.join(' ')}`,
+    );
+  });
+});

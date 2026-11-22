@@ -66,6 +66,44 @@ describe("resolveRetryDelayMs", () => {
 		expect(resolveRetryDelayMs("0", NOW)).toBe(MIN_RETRY_AFTER_MS);
 		expect(resolveRetryDelayMs("999999", NOW)).toBe(MAX_RETRY_AFTER_MS);
 	});
+
+	// Regression coverage for the documented contract: the resolved delay is
+	// always clamped to [MIN_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS] and always
+	// positive, including the failure path (missing/malformed header).
+	it("always returns a clamped, positive delay", () => {
+		const pastDate = new Date(NOW - 60_000).toUTCString();
+		const futureDate = new Date(NOW + 60 * 60_000).toUTCString();
+		const values = [
+			null,
+			undefined,
+			"",
+			"garbage",
+			"-5",
+			"1.5",
+			"0",
+			"1",
+			"999999",
+			"9".repeat(40),
+			pastDate,
+			futureDate,
+		];
+
+		for (const value of values) {
+			const delay = resolveRetryDelayMs(value, NOW);
+			expect(Number.isFinite(delay)).toBe(true);
+			expect(delay).toBeGreaterThan(0);
+			expect(delay).toBeGreaterThanOrEqual(MIN_RETRY_AFTER_MS);
+			expect(delay).toBeLessThanOrEqual(MAX_RETRY_AFTER_MS);
+		}
+	});
+
+	it("falls back to the default on the failure path, not to retry-immediately", () => {
+		expect(resolveRetryDelayMs(undefined, NOW)).toBe(DEFAULT_RETRY_AFTER_MS);
+		expect(resolveRetryDelayMs("", NOW)).toBe(DEFAULT_RETRY_AFTER_MS);
+		expect(resolveRetryDelayMs("not-a-date", NOW)).toBe(
+			DEFAULT_RETRY_AFTER_MS,
+		);
+	});
 });
 
 describe("classifyRateLimit", () => {

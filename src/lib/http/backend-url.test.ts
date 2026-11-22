@@ -76,6 +76,38 @@ describe("getBackendBaseUrl", () => {
 		).toBeNull();
 	});
 
+	it("first non-empty candidate wins, including the failure path", () => {
+		// Documented rule: the first non-empty candidate wins.
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "https://first.test",
+				NEXT_PUBLIC_API_URL: "https://second.test",
+				NEXT_PUBLIC_MUX_API_URL: "https://third.test",
+				NEXT_PUBLIC_API_BASE: "https://fourth.test",
+			}),
+		).toBe("https://first.test");
+
+		// Empty/whitespace candidates are skipped, not treated as winners.
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "  ",
+				NEXT_PUBLIC_API_URL: "",
+				NEXT_PUBLIC_MUX_API_URL: "https://third.test",
+				NEXT_PUBLIC_API_BASE: "https://fourth.test",
+			}),
+		).toBe("https://third.test");
+
+		// Failure path: no non-empty candidate yields null.
+		expect(
+			getBackendBaseUrl({
+				MUX_BACKEND_URL: "",
+				NEXT_PUBLIC_API_URL: "   ",
+				NEXT_PUBLIC_MUX_API_URL: undefined,
+				NEXT_PUBLIC_API_BASE: "\t",
+			}),
+		).toBeNull();
+	});
+
 	it("trims whitespace and strips trailing slashes from valid URLs", () => {
 		expect(getBackendBaseUrl({ MUX_BACKEND_URL: " https://backend.test/ " })).toBe(
 			"https://backend.test",

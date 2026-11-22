@@ -94,6 +94,23 @@ describe("AuditLogPagination", () => {
 		expect(rows()).toHaveLength(0);
 	});
 
+	it("keeps write actions disabled while the notice is shown", async () => {
+		const fetchImpl = vi.fn<typeof fetch>(async () =>
+			new Response(null, {
+				status: 503,
+				headers: { "x-mux-maintenance": "true", "retry-after": "30" },
+			}),
+		);
+		render(<AuditLogPagination fetchImpl={fetchImpl} />);
+		await waitFor(() => screen.getByTestId("maintenance-notice"));
+		// The write action is replaced by the gated retry control, so nothing
+		// privileged can be triggered while maintenance is in effect.
+		expect(screen.queryByTestId("audit-log-load-more")).toBeNull();
+		expect(
+			(screen.getByTestId("maintenance-retry") as HTMLButtonElement).disabled,
+		).toBe(true);
+	});
+
 	it("offers Start over when the cursor is rejected", async () => {
 		const fetchImpl = fakeEndpoint((url) =>
 			url.searchParams.has("cursor")

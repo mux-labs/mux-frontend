@@ -106,6 +106,29 @@ describe("resolveRetryDelayMs", () => {
 	});
 });
 
+describe("formatRetryAfterSeconds", () => {
+	// Regression coverage for the documented contract: format a delay as a
+	// `Retry-After` delta-seconds header value. A change that emits
+	// milliseconds, a date, or a fractional/rounded-down value fails here.
+	it("formats a delay as delta-seconds", () => {
+		expect(formatRetryAfterSeconds(5_000)).toBe("5");
+		expect(formatRetryAfterSeconds(MIN_RETRY_AFTER_MS)).toBe("1");
+		expect(formatRetryAfterSeconds(MAX_RETRY_AFTER_MS)).toBe("300");
+	});
+
+	it("rounds partial seconds up so the client never retries early", () => {
+		expect(formatRetryAfterSeconds(1)).toBe("1");
+		expect(formatRetryAfterSeconds(1_001)).toBe("2");
+		expect(formatRetryAfterSeconds(2_500)).toBe("3");
+	});
+
+	it("emits a value parseRetryAfter reads back as delta-seconds", () => {
+		const header = formatRetryAfterSeconds(12_000);
+		expect(header).toMatch(/^\d+$/);
+		expect(parseRetryAfter(header, NOW)).toBe(12_000);
+	});
+});
+
 describe("classifyRateLimit", () => {
 	it("returns null for non-429 responses", () => {
 		expect(

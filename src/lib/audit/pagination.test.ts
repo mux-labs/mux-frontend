@@ -6,6 +6,7 @@ import {
 	DEFAULT_AUDIT_PAGE_SIZE,
 	decodeAuditCursor,
 	encodeAuditCursor,
+	filterFingerprint,
 	MAX_AUDIT_PAGE_SIZE,
 	MAX_AUDIT_RANGE_DAYS,
 	MAX_CURSOR_LENGTH,
@@ -444,6 +445,84 @@ describe("toAuditSearchParams", () => {
 			limit: DEFAULT_AUDIT_PAGE_SIZE,
 		});
 		expect(params.has("cursor")).toBe(false);
+	});
+});
+
+describe("filterFingerprint", () => {
+	/** Independent FNV-1a (32-bit) reference over the canonical filter tuple. */
+	function referenceFingerprint(filters: {
+		actor?: string;
+		action?: string;
+		from?: string;
+		to?: string;
+	}): string {
+		const canonical = [filters.actor, filters.action, filters.from, filters.to]
+			.map((value) => value ?? "")
+			.join("\u0000");
+		let hash = 0x811c9dc5;
+		for (let i = 0; i < canonical.length; i += 1) {
+			hash ^= canonical.charCodeAt(i);
+			hash = Math.imul(hash, 0x01000193) >>> 0;
+		}
+		return hash.toString(16).padStart(8, "0");
+	}
+
+	it("is FNV-1a over the canonical filter tuple", () => {
+		const filters = {
+			actor: "alice",
+			action: "wallet.create",
+			from: "2024-01-01T00:00:00.000Z",
+			to: "2024-02-01T00:00:00.000Z",
+		};
+		expect(filterFingerprint(filters)).toBe(referenceFingerprint(filters));
+		// Known FNV-1a 32-bit vector: empty input -> offset basis.
+		expect(filterFingerprint({})).toBe("811c9dc5");
+		expect(filterFingerprint({})).toBe(referenceFingerprint({}));
+	});
+
+	it("is stable and 8 lowercase hex chars", () => {
+		const filters = { actor: "alice" };
+		expect(filterFingerprint(filters)).toBe(filterFingerprint({ ...filters }));
+		expect(filterFingerprint(filters)).toMatch(/^[0-9a-f]{8}$/);
+	});
+
+	it("treats missing and empty values as the same canonical slot", () => {
+		expect(filterFingerprint({ actor: "" })).toBe(filterFingerprint({}));
+		expect(filterFingerprint({ actor: "", action: "" })).toBe(
+			filterFingerprint({}),
+		);
+	});
+
+	it("distinguishes values that would collide without the NUL separator", () => {
+		expect(filterFingerprint({ actor: "ab", action: "c" })).not.toBe(
+			filterFingerprint({ actor: "a", action: "bc" }),
+		);
+	});
+
+	it("changes when any filter field changes", () => {
+		const base = {
+			actor: "alice",
+			action: "wallet.create",
+			from: "2024-01-01T00:00:00.000Z",
+			to: "2024-02-01T00:00:00.000Z",
+		};
+		const baseline = filterFingerprint(base);
+		for (const key of ["actor", "action", "from", "to"] as const) {
+			expect(filterFingerprint({ ...base, [key]: "changed" })).not.toBe(
+				baseline,
+			);
+		}
+	});
+
+	it("binds a cursor to its filters (mismatch is invalid_cursor)", () => {
+		const filters = { actor: "alice" };
+		const cursor = encodeAuditCursor(
+			{ createdAt: "2026-01-01T00:00:00.000Z", id: "evt_0001" },
+			filters,
+		);
+		expect(decodeAuditCursor(cursor, filters)).not.toBeNull();
+		expect(decodeAuditCursor(cursor, { actor: "bob" })).toBeNull();
+		expect(decodeAuditCursor(cursor, {})).toBeNull();
 	});
 });
 

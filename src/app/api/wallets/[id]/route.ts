@@ -199,7 +199,7 @@ export async function readBoundedBody(req: NextRequest): Promise<string | null> 
 }
 
 /** Map a known upstream error code to a status when the envelope omits one. */
-function fallbackStatusFor(code: string): number {
+export function fallbackStatusFor(code: string): number {
   switch (code) {
     case 'WALLET_NOT_FOUND':
       return 404;

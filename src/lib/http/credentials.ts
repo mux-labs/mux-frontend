@@ -160,4 +160,52 @@ if (import.meta.vitest) {
 			).toBe(false);
 		});
 	});
+
+	describe("forwardCredentialHeaders", () => {
+		it("forwards only the credential headers and nothing else", () => {
+			const headers = forwardCredentialHeaders(
+				makeRequest({
+					authorization: "Bearer token",
+					"x-api-key": "key",
+					cookie: `${SESSION_COOKIE_NAME}=abc`,
+					origin: "https://evil.example.com",
+					"x-forwarded-for": "203.0.113.7",
+					"content-type": "application/json",
+				}),
+			);
+			expect(headers).toEqual({
+				authorization: "Bearer token",
+				"x-api-key": "key",
+				cookie: `${SESSION_COOKIE_NAME}=abc`,
+			});
+		});
+
+		it("forwards a session cookie without unrelated cookies", () => {
+			const headers = forwardCredentialHeaders(
+				makeRequest({
+					cookie: `theme=dark; ${SESSION_COOKIE_NAME}=abc; other=1`,
+				}),
+			);
+			expect(headers).toEqual({ cookie: `${SESSION_COOKIE_NAME}=abc` });
+		});
+
+		it("forwards nothing when no credential is present", () => {
+			expect(
+				forwardCredentialHeaders(
+					makeRequest({
+						origin: APP_ORIGIN,
+						"x-forwarded-for": "203.0.113.7",
+					}),
+				),
+			).toEqual({});
+		});
+
+		it("omits an empty session cookie value", () => {
+			expect(
+				forwardCredentialHeaders(
+					makeRequest({ cookie: `${SESSION_COOKIE_NAME}=` }),
+				),
+			).toEqual({});
+		});
+	});
 }

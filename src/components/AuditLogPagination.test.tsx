@@ -115,6 +115,37 @@ describe("AuditLogPagination", () => {
 		await waitFor(() => expect(rows()).toHaveLength(10));
 	});
 
+	it("keeps loaded rows and retries the same cursor after a failed page", async () => {
+		const fetchImpl = fakeEndpoint((_url, call) =>
+			call === 2 ? new Response(null, { status: 500 }) : null,
+		);
+		render(<AuditLogPagination limit={10} fetchImpl={fetchImpl} />);
+		await waitFor(() => expect(rows()).toHaveLength(10));
+		const firstPageIds = rows().map((row) => row.dataset.id);
+
+		fireEvent.click(screen.getByTestId("audit-log-load-more"));
+		await waitFor(() => screen.getByTestId("audit-log-error"));
+		// The already-loaded rows survive the failure.
+		expect(rows().map((row) => row.dataset.id)).toEqual(firstPageIds);
+
+		const failedCursor = new URL(
+			String(fetchImpl.mock.calls[1][0]),
+			"http://localhost",
+		).searchParams.get("cursor");
+		expect(failedCursor).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("audit-log-load-more"));
+		await waitFor(() => expect(rows()).toHaveLength(20));
+		const retriedCursor = new URL(
+			String(fetchImpl.mock.calls[2][0]),
+			"http://localhost",
+		).searchParams.get("cursor");
+		expect(retriedCursor).toBe(failedCursor);
+		expect(rows().map((row) => row.dataset.id)).toEqual(
+			expect.arrayContaining(firstPageIds),
+		);
+	});
+
 	it("does not render server error text", async () => {
 		const fetchImpl = fakeEndpoint(() =>
 			Response.json(

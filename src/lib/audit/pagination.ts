@@ -224,11 +224,34 @@ export function decodeAuditCursor(
 	return { createdAt: c, id: i };
 }
 
-/** Descending (createdAt, id) comparator; negative means `a` sorts first. */
-function compareDesc(a: CursorKey, b: CursorKey): number {
+/**
+ * Descending (createdAt, id) comparator; negative means `a` sorts first.
+ * Exported for the regression test in `pagination.test.ts`.
+ */
+export function compareDesc(
+	a: Pick<AuditEntry, "createdAt" | "id">,
+	b: Pick<AuditEntry, "createdAt" | "id">,
+): number {
 	const byTime = Date.parse(b.createdAt) - Date.parse(a.createdAt);
 	if (byTime !== 0) return byTime;
 	return a.id < b.id ? 1 : a.id > b.id ? -1 : 0;
+}
+
+/**
+ * Failure path named in the comment above: `compareDesc` must never report
+ * "equal" for two rows that differ, otherwise keyset pagination would skip or
+ * duplicate rows. Returns true when the comparator is safe for `a` vs `b`.
+ */
+export function compareDescIsConsistent(
+	a: Pick<AuditEntry, "createdAt" | "id">,
+	b: Pick<AuditEntry, "createdAt" | "id">,
+): boolean {
+	const forward = compareDesc(a, b);
+	const backward = compareDesc(b, a);
+	if (a.createdAt === b.createdAt && a.id === b.id) {
+		return forward === 0 && backward === 0;
+	}
+	return forward !== 0 && Math.sign(forward) === -Math.sign(backward);
 }
 
 export function matchesAuditFilters(

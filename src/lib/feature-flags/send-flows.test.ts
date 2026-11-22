@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
 	evaluateSendFlowGate,
@@ -154,6 +155,42 @@ describe("readClientSendFlowFlags", () => {
 		const result = evaluateSendFlowGate(flags);
 		expect(result.allowed).toBe(false);
 		expect(result.code).toBe(SEND_GATE_CODES.NETWORK_MISCONFIGURED);
+	});
+
+	it("reads each NEXT_PUBLIC_* flag literally so Next.js can inline it", () => {
+		// Next.js only inlines `process.env.NEXT_PUBLIC_*` when the member
+		// expression appears verbatim in the source. A dynamic lookup such as
+		// `process.env[key]` would silently yield undefined in the browser
+		// bundle, so assert the literal references exist in the source.
+		const source = readFileSync(
+			new URL("./send-flows.ts", import.meta.url),
+			"utf8",
+		);
+		const body = source.slice(
+			source.indexOf("export function readClientSendFlowFlags"),
+		);
+		for (const key of [
+			"NEXT_PUBLIC_SEND_FLOWS_ENABLED",
+			"NEXT_PUBLIC_SEND_KILL_SWITCH",
+			"NEXT_PUBLIC_SEND_MAINNET_ENABLED",
+			"NEXT_PUBLIC_STELLAR_NETWORK",
+		]) {
+			expect(body).toContain(`process.env.${key}`);
+		}
+		expect(body).not.toMatch(/process\.env\[/);
+	});
+
+	it("fails closed when the client flags are unset", () => {
+		const flags = readClientSendFlowFlags();
+		expect(flags).toEqual({
+			enabled: false,
+			killSwitch: false,
+			mainnetEnabled: false,
+			network: null,
+		});
+		const result = evaluateSendFlowGate(flags);
+		expect(result.allowed).toBe(false);
+		expect(result.code).toBe(SEND_GATE_CODES.DISABLED);
 	});
 });
 

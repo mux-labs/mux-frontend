@@ -114,6 +114,35 @@ describe("parseAuditPageParams", () => {
 		});
 	});
 
+	// #1191: pins the documented contract of parseAuditPageParams — unknown
+	// params are ignored, inverted UTC-normalized ranges report `from`, and
+	// oversized ranges report `to`.
+	it("ignores unknown params while keeping known ones", () => {
+		expect(parse("foo=bar&baz=1&actor=member_admin&limit=5")).toEqual({
+			ok: true,
+			query: { filters: { actor: "member_admin" }, cursor: null, limit: 5 },
+		});
+	});
+
+	it("reports from for an inverted UTC-normalized range", () => {
+		// Raw strings look ordered, but after UTC normalization from > to.
+		expect(
+			parse("from=2026-01-01T00%3A00%3A00%2B05%3A00&to=2026-01-01T00%3A00%3A00Z"),
+		).toEqual({ ok: false, code: "invalid_filter", field: "from" });
+	});
+
+	it("reports to for an oversized range", () => {
+		const from = "2025-01-01T00:00:00.000Z";
+		const to = new Date(
+			Date.parse(from) + (MAX_AUDIT_RANGE_DAYS + 1) * 24 * 60 * 60 * 1000,
+		).toISOString();
+		expect(parse(new URLSearchParams({ from, to }).toString())).toEqual({
+			ok: false,
+			code: "invalid_filter",
+			field: "to",
+		});
+	});
+
 	it("round-trips through toAuditSearchParams", () => {
 		const result = parse("actor=member_admin&limit=5&cursor=abc");
 		if (!result.ok) throw new Error("expected ok");

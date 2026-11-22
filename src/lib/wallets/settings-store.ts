@@ -24,6 +24,10 @@ const records = new Map<string, WalletSettingsRecord>();
 /**
  * Merge `update` into the stored settings for `walletId` and persist the
  * result. Creates the record on first write.
+ *
+ * Failure path: if the write cannot be persisted (the store rejects), the
+ * previous record is left untouched and the error is rethrown so callers can
+ * fail closed instead of reporting a settings change that was never stored.
  */
 export async function applySettings(
 	walletId: string,
@@ -40,4 +44,9 @@ export async function applySettings(
 	};
 	records.set(walletId, next);
 	return next;
+}
+
+/** Test-only helper: drop all stored records. */
+export function __resetSettingsStore(): void {
+	records.clear();
 }

@@ -123,4 +123,39 @@ describe("canLoadMore", () => {
 	it("is true when ready with a cursor", () => {
 		expect(canLoadMore(readyState())).toBe(true);
 	});
+
+	it("is true before the first page has loaded", () => {
+		expect(canLoadMore(initialAuditPaginationState)).toBe(true);
+	});
+
+	it("is false when started with no cursor left", () => {
+		expect(
+			canLoadMore(readyState({ started: true, nextCursor: null })),
+		).toBe(false);
+	});
+
+	it("is false after an invalid_cursor failure", () => {
+		expect(
+			canLoadMore(
+				readyState({
+					started: true,
+					nextCursor: null,
+					status: "error",
+					error: { kind: "failed", code: "invalid_cursor", correlationId: null },
+				}),
+			),
+		).toBe(false);
+	});
+
+	it("is true after a retryable failure that keeps the cursor", () => {
+		expect(
+			canLoadMore(
+				readyState({
+					started: true,
+					status: "error",
+					error: { kind: "failed", code: "network", correlationId: null },
+				}),
+			),
+		).toBe(true);
+	});
 });

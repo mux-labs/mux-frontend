@@ -275,6 +275,63 @@ describe('readBoundedBody', () => {
   });
 });
 
+describe('GET /api/wallets/[id] receive URI (buildReceiveUri)', () => {
+  beforeEach(() => {
+    parseEnvelope.mockReset();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('builds a SEP-0007 web+stellar:pay URI for the wallet address', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: VALID_STELLAR_ADDRESS, network: 'testnet' },
+      error: null,
+      correlationId: 'corr-receive-testnet',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.receive.uri).toBe(
+      `web+stellar:pay?destination=${VALID_STELLAR_ADDRESS}&network=testnet`,
+    );
+  });
+
+  it('maps mainnet to the SEP-0007 public network passphrase name', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: VALID_STELLAR_ADDRESS, network: 'mainnet' },
+      error: null,
+      correlationId: 'corr-receive-mainnet',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(json.receive.uri).toBe(
+      `web+stellar:pay?destination=${VALID_STELLAR_ADDRESS}&network=public`,
+    );
+  });
+
+  it('fails closed with INVALID_RECEIVE_ADDRESS instead of building a URI for a bad address', async () => {
+    parseEnvelope.mockResolvedValue({
+      data: { id: VALID_ID, address: 'not-a-stellar-address', network: 'testnet' },
+      error: null,
+      correlationId: 'corr-receive-invalid',
+    });
+
+    const res = await GET(makeRequest('GET'), ctx());
+    const json = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(json.error.code).toBe(ERROR_CODES.INVALID_RECEIVE_ADDRESS);
+    expect(json.receive).toBeUndefined();
+  });
+});
+
 describe('POST /api/wallets/[id] envelope parsing', () => {
   beforeEach(() => {
     parseEnvelope.mockReset();

@@ -5,6 +5,7 @@ import {
 	fetchWithRetryAfter,
 	formatRetryAfterSeconds,
 	formatRetryCountdown,
+	MAX_ATTEMPTS,
 	MAX_RETRY_AFTER_MS,
 	MIN_RETRY_AFTER_MS,
 	parseRetryAfter,
@@ -185,6 +186,33 @@ describe("fetchWithRetryAfter", () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		expect(result.kind).toBe("rate_limited");
+	});
+
+	it("enforces the hard cap on total attempts on the failure path", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
+		const onMetric = vi.fn();
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{
+				fetchImpl,
+				sleep: noSleep,
+				now: () => NOW,
+				maxAttempts: 99,
+				onMetric,
+			},
+		);
+
+		// Initial attempt + (MAX_ATTEMPTS - 1) retries, never more.
+		expect(fetchImpl).toHaveBeenCalledTimes(MAX_ATTEMPTS);
+		expect(result.kind).toBe("rate_limited");
+		expect(result.attempts).toBe(MAX_ATTEMPTS);
+		// The final attempt must not be auto-retried: the cap is exhausted.
+		expect(onMetric).toHaveBeenLastCalledWith(
+			expect.objectContaining({ autoRetried: false }),
+		);
+		expect(noSleep).toHaveBeenCalledTimes(MAX_ATTEMPTS - 1);
 	});
 
 	it("aborts the wait when the caller aborts", async () => {

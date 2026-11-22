@@ -490,6 +490,17 @@ describe("paginateAuditEntries", () => {
 		).toEqual({ ok: false, code: "invalid_cursor" });
 	});
 
+	it("fails closed with invalid_cursor for a malformed cursor", () => {
+		// Documented failure path: a cursor that does not decode (forged,
+		// truncated, or not base64url) must never yield an unfiltered page.
+		expect(
+			paginateAuditEntries(MOCK_AUDIT_ENTRIES, {
+				...firstPage,
+				cursor: "not-a-cursor!!",
+			}),
+		).toEqual({ ok: false, code: "invalid_cursor" });
+	});
+
 	it("returns an empty, exhausted page for no matches", () => {
 		expect(
 			paginateAuditEntries(MOCK_AUDIT_ENTRIES, {

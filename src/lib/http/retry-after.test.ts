@@ -5,6 +5,7 @@ import {
 	fetchWithRetryAfter,
 	formatRetryAfterSeconds,
 	formatRetryCountdown,
+	MAX_ATTEMPTS,
 	MAX_RETRY_AFTER_MS,
 	MIN_RETRY_AFTER_MS,
 	parseRetryAfter,
@@ -47,6 +48,20 @@ describe("parseRetryAfter", () => {
 		"x".repeat(65),
 	])("rejects malformed value %s", (value) => {
 		expect(parseRetryAfter(value, NOW)).toBeNull();
+	});
+
+	it("returns milliseconds from now for delta-seconds and HTTP-dates", () => {
+		expect(parseRetryAfter("30", NOW)).toBe(30_000);
+		expect(parseRetryAfter(new Date(NOW + 90_000).toUTCString(), NOW)).toBe(
+			90_000,
+		);
+	});
+
+	it("returns null when the header is absent or malformed", () => {
+		expect(parseRetryAfter(null, NOW)).toBeNull();
+		expect(parseRetryAfter(undefined, NOW)).toBeNull();
+		expect(parseRetryAfter("", NOW)).toBeNull();
+		expect(parseRetryAfter("not-a-date", NOW)).toBeNull();
 	});
 
 	it("does not overflow on an enormous delta", () => {
@@ -246,6 +261,33 @@ describe("fetchWithRetryAfter", () => {
 
 		expect(fetchImpl).toHaveBeenCalledTimes(3);
 		expect(result.kind).toBe("rate_limited");
+	});
+
+	it("enforces the hard cap on total attempts on the failure path", async () => {
+		const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(rateLimited("1"));
+		const onMetric = vi.fn();
+
+		const result = await fetchWithRetryAfter(
+			"/api/activity",
+			{},
+			{
+				fetchImpl,
+				sleep: noSleep,
+				now: () => NOW,
+				maxAttempts: 99,
+				onMetric,
+			},
+		);
+
+		// Initial attempt + (MAX_ATTEMPTS - 1) retries, never more.
+		expect(fetchImpl).toHaveBeenCalledTimes(MAX_ATTEMPTS);
+		expect(result.kind).toBe("rate_limited");
+		expect(result.attempts).toBe(MAX_ATTEMPTS);
+		// The final attempt must not be auto-retried: the cap is exhausted.
+		expect(onMetric).toHaveBeenLastCalledWith(
+			expect.objectContaining({ autoRetried: false }),
+		);
+		expect(noSleep).toHaveBeenCalledTimes(MAX_ATTEMPTS - 1);
 	});
 
 	it("aborts the wait when the caller aborts", async () => {

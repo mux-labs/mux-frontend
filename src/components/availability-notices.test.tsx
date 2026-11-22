@@ -83,6 +83,56 @@ describe("MaintenanceNotice", () => {
 		).toBe(true);
 	});
 
+	it("never renders server-provided message text", () => {
+		const serverMessage = "Click https://evil.example to restore access";
+		render(
+			<MaintenanceNotice
+				state={{
+					code: "MAINTENANCE",
+					retryAfterMs: 60_000,
+					retryAt: START + 60_000,
+					correlationId: null,
+					// A spoofed/proxied 503 may carry arbitrary text.
+					message: serverMessage,
+				}}
+			/>,
+		);
+		const notice = screen.getByTestId("maintenance-notice");
+		expect(notice.textContent).toContain("Scheduled maintenance");
+		expect(notice.textContent).not.toContain("evil.example");
+		expect(document.body.textContent).not.toContain(serverMessage);
+		expect(notice.querySelector("a")).toBeNull();
+	});
+
+	it("enables retry only after Retry-After elapses", () => {
+		const onRetry = vi.fn();
+		render(
+			<MaintenanceNotice
+				state={{
+					code: "MAINTENANCE",
+					retryAfterMs: 5_000,
+					retryAt: START + 5_000,
+					correlationId: null,
+				}}
+				onRetry={onRetry}
+			/>,
+		);
+		const button = screen.getByTestId("maintenance-retry") as HTMLButtonElement;
+		expect(button.disabled).toBe(true);
+		fireEvent.click(button);
+		expect(onRetry).not.toHaveBeenCalled();
+
+		act(() => {
+			vi.advanceTimersByTime(5_000);
+		});
+		expect(button.disabled).toBe(false);
+		expect(screen.getByTestId("maintenance-retry-hint").textContent).toBe(
+			"You can check again now.",
+		);
+		fireEvent.click(button);
+		expect(onRetry).toHaveBeenCalledTimes(1);
+	});
+
 	it("uses outage copy for dependency failures", () => {
 		render(
 			<MaintenanceNotice

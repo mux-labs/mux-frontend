@@ -94,6 +94,23 @@ describe("AuditLogPagination", () => {
 		expect(rows()).toHaveLength(0);
 	});
 
+	it("keeps write actions disabled while the notice is shown", async () => {
+		const fetchImpl = vi.fn<typeof fetch>(async () =>
+			new Response(null, {
+				status: 503,
+				headers: { "x-mux-maintenance": "true", "retry-after": "30" },
+			}),
+		);
+		render(<AuditLogPagination fetchImpl={fetchImpl} />);
+		await waitFor(() => screen.getByTestId("maintenance-notice"));
+		// The write action is replaced by the gated retry control, so nothing
+		// privileged can be triggered while maintenance is in effect.
+		expect(screen.queryByTestId("audit-log-load-more")).toBeNull();
+		expect(
+			(screen.getByTestId("maintenance-retry") as HTMLButtonElement).disabled,
+		).toBe(true);
+	});
+
 	it("offers Start over when the cursor is rejected", async () => {
 		const fetchImpl = fakeEndpoint((url) =>
 			url.searchParams.has("cursor")
@@ -113,6 +130,37 @@ describe("AuditLogPagination", () => {
 			expect(screen.queryByTestId("audit-log-restart")).toBeNull(),
 		);
 		await waitFor(() => expect(rows()).toHaveLength(10));
+	});
+
+	it("keeps loaded rows and retries the same cursor after a failed page", async () => {
+		const fetchImpl = fakeEndpoint((_url, call) =>
+			call === 2 ? new Response(null, { status: 500 }) : null,
+		);
+		render(<AuditLogPagination limit={10} fetchImpl={fetchImpl} />);
+		await waitFor(() => expect(rows()).toHaveLength(10));
+		const firstPageIds = rows().map((row) => row.dataset.id);
+
+		fireEvent.click(screen.getByTestId("audit-log-load-more"));
+		await waitFor(() => screen.getByTestId("audit-log-error"));
+		// The already-loaded rows survive the failure.
+		expect(rows().map((row) => row.dataset.id)).toEqual(firstPageIds);
+
+		const failedCursor = new URL(
+			String(fetchImpl.mock.calls[1][0]),
+			"http://localhost",
+		).searchParams.get("cursor");
+		expect(failedCursor).toBeTruthy();
+
+		fireEvent.click(screen.getByTestId("audit-log-load-more"));
+		await waitFor(() => expect(rows()).toHaveLength(20));
+		const retriedCursor = new URL(
+			String(fetchImpl.mock.calls[2][0]),
+			"http://localhost",
+		).searchParams.get("cursor");
+		expect(retriedCursor).toBe(failedCursor);
+		expect(rows().map((row) => row.dataset.id)).toEqual(
+			expect.arrayContaining(firstPageIds),
+		);
 	});
 
 	it("does not render server error text", async () => {

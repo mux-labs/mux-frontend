@@ -6,6 +6,7 @@ import {
 	DEFAULT_AUDIT_PAGE_SIZE,
 	decodeAuditCursor,
 	encodeAuditCursor,
+	filterFingerprint,
 	MAX_AUDIT_PAGE_SIZE,
 	MAX_AUDIT_RANGE_DAYS,
 	MAX_CURSOR_LENGTH,
@@ -162,6 +163,59 @@ describe("parseAuditPageParams", () => {
 
 		const reparsed = parseAuditPageParams(toAuditSearchParams(parsed.query));
 		expect(reparsed).toEqual(parsed);
+	});
+});
+
+describe("toAuditSearchParams", () => {
+	it("serializes a validated query back into URL params", () => {
+		const params = toAuditSearchParams({
+			filters: {
+				actor: "member_admin",
+				action: "wallet.send",
+				from: "2026-01-01T00:00:00.000Z",
+				to: "2026-01-02T00:00:00.000Z",
+			},
+			cursor: "abc",
+			limit: 25,
+		});
+
+		expect(params.get("actor")).toBe("member_admin");
+		expect(params.get("action")).toBe("wallet.send");
+		expect(params.get("from")).toBe("2026-01-01T00:00:00.000Z");
+		expect(params.get("to")).toBe("2026-01-02T00:00:00.000Z");
+		expect(params.get("cursor")).toBe("abc");
+		expect(params.get("limit")).toBe("25");
+	});
+
+	it("omits absent filters and a null cursor, but always sets limit", () => {
+		const params = toAuditSearchParams({
+			filters: {},
+			cursor: null,
+			limit: DEFAULT_AUDIT_PAGE_SIZE,
+		});
+
+		expect(params.has("actor")).toBe(false);
+		expect(params.has("action")).toBe(false);
+		expect(params.has("from")).toBe(false);
+		expect(params.has("to")).toBe(false);
+		expect(params.has("cursor")).toBe(false);
+		expect(params.get("limit")).toBe(String(DEFAULT_AUDIT_PAGE_SIZE));
+	});
+
+	it("fails closed: a query it cannot serialize is rejected by the parser", () => {
+		// The doc comment promises the output is a validated query, so a
+		// malformed value must not silently round-trip as an unfiltered page.
+		const params = toAuditSearchParams({
+			filters: { actor: "not a token!" },
+			cursor: null,
+			limit: DEFAULT_AUDIT_PAGE_SIZE,
+		});
+
+		expect(parseAuditPageParams(params)).toEqual({
+			ok: false,
+			code: "invalid_filter",
+			field: "actor",
+		});
 	});
 });
 
@@ -423,6 +477,84 @@ describe("toAuditSearchParams", () => {
 	});
 });
 
+describe("filterFingerprint", () => {
+	/** Independent FNV-1a (32-bit) reference over the canonical filter tuple. */
+	function referenceFingerprint(filters: {
+		actor?: string;
+		action?: string;
+		from?: string;
+		to?: string;
+	}): string {
+		const canonical = [filters.actor, filters.action, filters.from, filters.to]
+			.map((value) => value ?? "")
+			.join("\u0000");
+		let hash = 0x811c9dc5;
+		for (let i = 0; i < canonical.length; i += 1) {
+			hash ^= canonical.charCodeAt(i);
+			hash = Math.imul(hash, 0x01000193) >>> 0;
+		}
+		return hash.toString(16).padStart(8, "0");
+	}
+
+	it("is FNV-1a over the canonical filter tuple", () => {
+		const filters = {
+			actor: "alice",
+			action: "wallet.create",
+			from: "2024-01-01T00:00:00.000Z",
+			to: "2024-02-01T00:00:00.000Z",
+		};
+		expect(filterFingerprint(filters)).toBe(referenceFingerprint(filters));
+		// Known FNV-1a 32-bit vector: empty input -> offset basis.
+		expect(filterFingerprint({})).toBe("811c9dc5");
+		expect(filterFingerprint({})).toBe(referenceFingerprint({}));
+	});
+
+	it("is stable and 8 lowercase hex chars", () => {
+		const filters = { actor: "alice" };
+		expect(filterFingerprint(filters)).toBe(filterFingerprint({ ...filters }));
+		expect(filterFingerprint(filters)).toMatch(/^[0-9a-f]{8}$/);
+	});
+
+	it("treats missing and empty values as the same canonical slot", () => {
+		expect(filterFingerprint({ actor: "" })).toBe(filterFingerprint({}));
+		expect(filterFingerprint({ actor: "", action: "" })).toBe(
+			filterFingerprint({}),
+		);
+	});
+
+	it("distinguishes values that would collide without the NUL separator", () => {
+		expect(filterFingerprint({ actor: "ab", action: "c" })).not.toBe(
+			filterFingerprint({ actor: "a", action: "bc" }),
+		);
+	});
+
+	it("changes when any filter field changes", () => {
+		const base = {
+			actor: "alice",
+			action: "wallet.create",
+			from: "2024-01-01T00:00:00.000Z",
+			to: "2024-02-01T00:00:00.000Z",
+		};
+		const baseline = filterFingerprint(base);
+		for (const key of ["actor", "action", "from", "to"] as const) {
+			expect(filterFingerprint({ ...base, [key]: "changed" })).not.toBe(
+				baseline,
+			);
+		}
+	});
+
+	it("binds a cursor to its filters (mismatch is invalid_cursor)", () => {
+		const filters = { actor: "alice" };
+		const cursor = encodeAuditCursor(
+			{ createdAt: "2026-01-01T00:00:00.000Z", id: "evt_0001" },
+			filters,
+		);
+		expect(decodeAuditCursor(cursor, filters)).not.toBeNull();
+		expect(decodeAuditCursor(cursor, { actor: "bob" })).toBeNull();
+		expect(decodeAuditCursor(cursor, {})).toBeNull();
+	});
+});
+
 describe("audit cursors", () => {
 	const key = { createdAt: "2026-01-01T00:00:00.000Z", id: "evt_0001" };
 
@@ -441,6 +573,67 @@ describe("audit cursors", () => {
 	it("rejects forged cursors", () => {
 		expect(decodeAuditCursor("AAAA", {})).toBeNull();
 		expect(decodeAuditCursor(btoa('{"v":2}'), {})).toBeNull();
+	});
+
+	// #1194: regression coverage for the documented contract of
+	// decodeAuditCursor — null for forged, stale, or mismatched cursors, and the
+	// decoded key for valid ones.
+	describe("decodeAuditCursor contract (#1194)", () => {
+		const filters = { actor: "a" };
+		const fingerprint = filterFingerprint(filters);
+
+		function forge(payload: unknown): string {
+			return btoa(JSON.stringify(payload))
+				.replace(/\+/g, "-")
+				.replace(/\//g, "_")
+				.replace(/=+$/, "");
+		}
+
+		it("returns the decoded key for a valid cursor", () => {
+			expect(decodeAuditCursor(encodeAuditCursor(key, filters), filters)).toEqual(
+				key,
+			);
+			expect(decodeAuditCursor(encodeAuditCursor(key, {}), {})).toEqual(key);
+		});
+
+		it("returns null for non-base64url or non-JSON input", () => {
+			expect(decodeAuditCursor("", filters)).toBeNull();
+			expect(decodeAuditCursor("not base64!", filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("not json"), filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("null"), filters)).toBeNull();
+			expect(decodeAuditCursor(btoa("42"), filters)).toBeNull();
+		});
+
+		it("returns null for forged payloads that fail shape checks", () => {
+			expect(decodeAuditCursor(forge({ v: 2, c: key.createdAt, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ c: key.createdAt, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: 1, i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: 7, f: fingerprint }), filters)).toBeNull();
+		});
+
+		it("returns null for stale or malformed keys", () => {
+			expect(decodeAuditCursor(forge({ v: 1, c: "not-a-date", i: key.id, f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "bad id", f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "", f: fingerprint }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: "x".repeat(129), f: fingerprint }), filters)).toBeNull();
+		});
+
+		it("returns null when the cursor is replayed against different filters", () => {
+			const cursor = encodeAuditCursor(key, filters);
+			expect(decodeAuditCursor(cursor, {})).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "b" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", action: "login" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", from: "2026-01-01" })).toBeNull();
+			expect(decodeAuditCursor(cursor, { actor: "a", to: "2026-01-01" })).toBeNull();
+		});
+
+		it("returns null when the fingerprint is forged or missing", () => {
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id, f: "00000000" }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id }), filters)).toBeNull();
+			expect(decodeAuditCursor(forge({ v: 1, c: key.createdAt, i: key.id, f: 1 }), filters)).toBeNull();
+		});
 	});
 });
 
@@ -519,6 +712,17 @@ describe("paginateAuditEntries", () => {
 		).toEqual({ ok: false, code: "invalid_cursor" });
 	});
 
+	it("fails closed with invalid_cursor for a malformed cursor", () => {
+		// Documented failure path: a cursor that does not decode (forged,
+		// truncated, or not base64url) must never yield an unfiltered page.
+		expect(
+			paginateAuditEntries(MOCK_AUDIT_ENTRIES, {
+				...firstPage,
+				cursor: "not-a-cursor!!",
+			}),
+		).toEqual({ ok: false, code: "invalid_cursor" });
+	});
+
 	it("returns an empty, exhausted page for no matches", () => {
 		expect(
 			paginateAuditEntries(MOCK_AUDIT_ENTRIES, {
@@ -560,6 +764,78 @@ describe("parseAuditPage", () => {
 		["a missing cursor", { items: [entry] }, 10],
 	] as const)("fails closed on %s", (_label, body, limit) => {
 		expect(parseAuditPage(body, limit)).toBeNull();
+	});
+
+	// #1197: regression coverage for the documented fail-closed paths.
+	it("accepts an empty page with a null cursor", () => {
+		expect(parseAuditPage({ items: [], nextCursor: null }, 10)).toEqual({
+			items: [],
+			nextCursor: null,
+			hasMore: false,
+		});
+	});
+
+	it("accepts a page exactly at the requested limit", () => {
+		const items = [entry, { ...entry, id: "second" }];
+		expect(parseAuditPage({ items, nextCursor: null }, 2)).toEqual({
+			items,
+			nextCursor: null,
+			hasMore: false,
+		});
+	});
+
+	it.each([
+		["null", null],
+		["an array", []],
+		["a string", "nope"],
+		["a number", 42],
+	] as const)("fails closed when the body is %s", (_label, body) => {
+		expect(parseAuditPage(body, 10)).toBeNull();
+	});
+
+	it.each([
+		["items is not an array", { items: "nope", nextCursor: null }],
+		["items is missing", { nextCursor: null }],
+		["an entry is not an object", { items: [null], nextCursor: null }],
+		["an entry has an empty id", { items: [{ ...entry, id: "" }], nextCursor: null }],
+		[
+			"an entry has an unparseable createdAt",
+			{ items: [{ ...entry, createdAt: "not-a-date" }], nextCursor: null },
+		],
+		[
+			"an entry has a non-string actor",
+			{ items: [{ ...entry, actor: 7 }], nextCursor: null },
+		],
+		["the cursor is empty", { items: [entry], nextCursor: "" }],
+		[
+			"the cursor exceeds MAX_CURSOR_LENGTH",
+			{ items: [entry], nextCursor: "a".repeat(MAX_CURSOR_LENGTH + 1) },
+		],
+		["the cursor is not a string", { items: [entry], nextCursor: 7 }],
+	] as const)("fails closed when %s", (_label, body) => {
+		expect(parseAuditPage(body, 10)).toBeNull();
+	});
+
+	it("fails closed on an oversized page even when every entry is valid", () => {
+		const items = Array.from({ length: 3 }, (_, index) => ({
+			...entry,
+			id: `entry-${index}`,
+		}));
+		expect(parseAuditPage({ items, nextCursor: null }, 2)).toBeNull();
+	});
+
+	it("fails closed on duplicate ids even when the page fits the limit", () => {
+		const items = [entry, { ...entry }];
+		expect(parseAuditPage({ items, nextCursor: null }, 10)).toBeNull();
+	});
+
+	it("derives hasMore from the cursor rather than trusting the body", () => {
+		expect(
+			parseAuditPage({ items: [entry], nextCursor: "abc", hasMore: false }, 10),
+		).toEqual({ items: [entry], nextCursor: "abc", hasMore: true });
+		expect(
+			parseAuditPage({ items: [entry], nextCursor: null, hasMore: true }, 10),
+		).toEqual({ items: [entry], nextCursor: null, hasMore: false });
 	});
 });
 

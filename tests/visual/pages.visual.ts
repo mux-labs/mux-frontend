@@ -26,6 +26,35 @@ async function signIn(page: Page) {
 	await page.waitForURL("**/dashboard**");
 }
 
+// Regression guard for the `signIn` contract documented above: with
+// `NEXT_PUBLIC_API_URL` unset the mock login must accept well-formed
+// credentials and land on the dashboard. If the mock stops doing that, the
+// visual baselines would silently capture the login page instead of the
+// dashboard shell, so this fails loudly instead.
+test("signIn reaches the dashboard when NEXT_PUBLIC_API_URL is unset", async ({
+	page,
+}) => {
+	await signIn(page);
+	await expect(page).toHaveURL(/\/dashboard/);
+});
+
+// Failure path: the same helper must not report success when the login route
+// rejects the credentials, so a broken mock cannot mask a regression.
+test("signIn does not reach the dashboard when login is rejected", async ({
+	page,
+}) => {
+	await page.route("**/api/auth/login", (route) =>
+		route.fulfill({
+			status: 401,
+			contentType: "application/json",
+			body: JSON.stringify({ error: "Invalid email or password." }),
+		}),
+	);
+
+	await expect(signIn(page)).rejects.toThrow();
+	await expect(page).not.toHaveURL(/\/dashboard/);
+});
+
 for (const { name, path, requiresAuth } of PAGES) {
 	test(`${name} page matches baseline`, async ({ page }) => {
 		if (requiresAuth) {

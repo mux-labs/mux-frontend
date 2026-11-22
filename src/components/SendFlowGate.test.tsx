@@ -74,4 +74,66 @@ describe("SendFlowGate", () => {
 
     expect(screen.getByRole("button", { name: "Send" })).toBeInTheDocument();
   });
+
+  it("renders the disabled notice with the gate code when flags deny sending", () => {
+    vi.stubEnv("NEXT_PUBLIC_SEND_FLOWS_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_SEND_KILL_SWITCH", "true");
+    vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "testnet");
+
+    renderGate();
+
+    const notice = screen.getByTestId("send-flow-disabled");
+    expect(notice.getAttribute("role")).toBe("status");
+    expect(notice.dataset.code).toBe("SEND_KILL_SWITCH_ENGAGED");
+    expect(notice.textContent).toBe(
+      "Sending is temporarily paused. Your funds are safe; please try again later.",
+    );
+  });
+
+  it("fails closed when the wallet network does not match the enabled network", () => {
+    vi.stubEnv("NEXT_PUBLIC_SEND_FLOWS_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_SEND_KILL_SWITCH", "false");
+    vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "testnet");
+
+    render(
+      <SendFlowGate network="mainnet">
+        <button>Send</button>
+      </SendFlowGate>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByTestId("send-flow-disabled").dataset.code).toBe(
+      "SEND_NETWORK_MISMATCH",
+    );
+  });
+
+  it("fails closed when the wallet network is unknown", () => {
+    vi.stubEnv("NEXT_PUBLIC_SEND_FLOWS_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_SEND_KILL_SWITCH", "false");
+    vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "testnet");
+
+    render(
+      <SendFlowGate network={null}>
+        <button>Send</button>
+      </SendFlowGate>,
+    );
+
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByTestId("send-flow-disabled").dataset.code).toBe(
+      "SEND_NETWORK_MISMATCH",
+    );
+  });
+
+  it("fails closed when the configured network is unknown", () => {
+    vi.stubEnv("NEXT_PUBLIC_SEND_FLOWS_ENABLED", "true");
+    vi.stubEnv("NEXT_PUBLIC_SEND_KILL_SWITCH", "false");
+    vi.stubEnv("NEXT_PUBLIC_STELLAR_NETWORK", "not-a-network");
+
+    renderGate();
+
+    expect(screen.queryByRole("button", { name: "Send" })).toBeNull();
+    expect(screen.getByTestId("send-flow-disabled").dataset.code).toBe(
+      "SEND_NETWORK_MISCONFIGURED",
+    );
+  });
 });

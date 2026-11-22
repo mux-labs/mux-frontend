@@ -37,9 +37,9 @@ const isDevOrTest =
  *   an unset or typo'd origin can never widen the policy.
  * - `'self'` is always included; the directive is never empty.
  *
- * The construction below is exported so tests/csp-connect-src.test.ts can
- * assert the resolved directive against the README's fail-closed contract
- * (issue #979).
+ * The construction below is exported so tests/csp-connect-src.test.ts and
+ * tests/next-config-connect-src.test.ts can assert the resolved directive
+ * against the README's fail-closed contract (issues #979, #1155).
  */
 export const DEFAULT_CONNECT_SRC_ORIGINS = [
 	"'self'",
@@ -97,9 +97,17 @@ export function resolveConnectSrcOrigins(): string[] {
 /**
  * Build the `connect-src` directive value from the resolved allowlist.
  * Exported so tests can assert on the actual header value.
+ *
+ * Failure path: the directive is never empty. If the resolved allowlist is
+ * empty (e.g. a caller passes an empty list), the directive falls back to
+ * `'self'` so the policy stays fail-closed instead of emitting a bare
+ * `connect-src` that would block every request.
  */
-export function buildConnectSrcDirective(): string {
-	return `connect-src ${resolveConnectSrcOrigins().join(" ")}`;
+export function buildConnectSrcDirective(
+	origins: readonly string[] = resolveConnectSrcOrigins(),
+): string {
+	const sources = origins.length > 0 ? origins : ["'self'"];
+	return `connect-src ${sources.join(" ")}`;
 }
 
 /**
@@ -112,6 +120,106 @@ const contentSecurityPolicy = [
 	"default-src 'self'",
 	buildConnectSrcDirective(),
 ].join("; ");
+
+/**
+ * Playwright contract (issue #1157): the dev-mode build indicator overlay
+ * renders a full-viewport portal that intercepts pointer events, which blocks
+ * Playwright (and manual QA) from clicking through the app in `next dev`.
+ * Disabling it only affects local development UI, not production behavior.
+ * Exported so tests can assert the overlay stays disabled.
+ */
+export const PLAYWRIGHT_DEV_INDICATORS_DISABLED = true;
+
+/**
+ * Granular code-splitting for large client bundles (Next 13+): the router
+ * prepares client chunks incrementally instead of all at once, which keeps
+ * the analytics page fast. Exported so tests can assert the contract.
+ */
+export const OPTIMIZE_PACKAGE_IMPORTS = [
+	"@/components/analytics",
+	"@/components/dashboard",
+];
+
+/**
+ * Resolve the `experimental` block. Fail-closed: if the granular
+ * code-splitting list is ever emptied or replaced with a non-array, the
+ * router would fall back to preparing every client chunk at once, so we
+ * throw instead of silently shipping the slower behavior.
+ */
+export function resolveExperimentalConfig(
+	optimizePackageImports: unknown = OPTIMIZE_PACKAGE_IMPORTS,
+): { optimizePackageImports: string[] } {
+	if (
+		!Array.isArray(optimizePackageImports) ||
+		optimizePackageImports.length === 0 ||
+		!optimizePackageImports.every(
+			(entry): entry is string => typeof entry === "string" && entry.length > 0,
+		)
+	) {
+		throw new Error(
+			"experimental.optimizePackageImports must be a non-empty list of module specifiers",
+		);
+	}
+	return { optimizePackageImports: [...optimizePackageImports] };
+}
+
+/**
+ * Resolve the `devIndicators` value. Fail-closed: the overlay must stay
+ * disabled so Playwright can click through the app in `next dev`; any other
+ * value (including `undefined`, which re-enables the overlay) throws.
+ */
+export function resolveDevIndicators(
+	disabled: unknown = PLAYWRIGHT_DEV_INDICATORS_DISABLED,
+): false {
+	if (disabled !== true) {
+		throw new Error(
+			"devIndicators must be disabled so Playwright can interact with the dev app",
+		);
+	}
+	return false;
+}
+
+/**
+ * Playwright contract (issue #1157): the dev-mode build indicator overlay
+ * renders a full-viewport portal that intercepts pointer events, which blocks
+ * Playwright (and manual QA) from clicking through the app in `next dev`.
+ * Disabling it only affects local development UI, not production behavior.
+ * Exported so tests can assert the overlay stays disabled.
+ */
+export const PLAYWRIGHT_DEV_INDICATORS_DISABLED = true;
+
+/**
+ * Granular code-splitting for large client bundles (Next 13+): the router
+ * prepares client chunks incrementally instead of all at once, which keeps
+ * the analytics page fast. Exported so tests can assert the contract.
+ */
+export const OPTIMIZE_PACKAGE_IMPORTS = [
+	"@/components/analytics",
+	"@/components/dashboard",
+];
+
+/**
+ * Resolve the `experimental` block. Fail-closed: if the granular
+ * code-splitting list is ever emptied or replaced with a non-array, the
+ * router would fall back to preparing every client chunk at once, so we
+ * throw instead of silently shipping the slower behavior.
+ */
+export function resolveExperimentalConfig(
+	optimizePackageImports: unknown = OPTIMIZE_PACKAGE_IMPORTS,
+): { optimizePackageImports: string[] } {
+	if (
+		!Array.isArray(optimizePackageImports) ||
+		optimizePackageImports.length === 0 ||
+		!optimizePackageImports.every(
+			(entry): entry is string => typeof entry === "string" && entry.length > 0,
+		)
+	) {
+		throw new Error(
+			"experimental.optimizePackageImports must be a non-empty list of module specifiers",
+		);
+	}
+	return { optimizePackageImports: [...optimizePackageImports] };
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
@@ -133,12 +241,7 @@ const nextConfig = {
 	 * This tells the router to prepare client chunks incrementally rather
 	 * than all at once, which helps the analytics page load faster.
 	 */
-	experimental: {
-		optimizePackageImports: [
-			"@/components/analytics",
-			"@/components/dashboard",
-		],
-	},
+	experimental: resolveExperimentalConfig(),
 
 	/**
 	 * The dev-mode build indicator overlay renders a full-viewport portal
@@ -146,7 +249,7 @@ const nextConfig = {
 	 * QA) from clicking through the app in `next dev`. Disabling it only
 	 * affects local development UI, not production behavior.
 	 */
-	devIndicators: false,
+	devIndicators: resolveDevIndicators(),
 
 	/**
 	 * Security headers. `connect-src` is derived from the validated API

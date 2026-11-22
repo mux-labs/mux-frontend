@@ -82,6 +82,45 @@ describe("parseKillSwitch", () => {
 		expect(parseKillSwitch("true")).toBe(true);
 		expect(parseKillSwitch("typo")).toBe(true);
 	});
+
+	it("engages for every value other than unset/false/0", () => {
+		const disengaged = new Set([undefined, "", "false", "0"]);
+		const values = [
+			undefined,
+			"",
+			" ",
+			"false",
+			"FALSE",
+			" false ",
+			"0",
+			" 0 ",
+			"00",
+			"1",
+			"true",
+			"TRUE",
+			"yes",
+			"no",
+			"off",
+			"disabled",
+			"null",
+			"undefined",
+			"typo",
+			"falsey",
+			"0.0",
+			"-0",
+			"kill",
+		];
+		for (const value of values) {
+			expect(parseKillSwitch(value), `value: ${JSON.stringify(value)}`).toBe(
+				!disengaged.has(value),
+			);
+		}
+	});
+
+	it("treats whitespace-only values as unset (disengaged)", () => {
+		expect(parseKillSwitch("   ")).toBe(false);
+		expect(parseKillSwitch("\t\n")).toBe(false);
+	});
 });
 
 describe("parseNetwork", () => {

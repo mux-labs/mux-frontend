@@ -85,4 +85,59 @@ describe("useAuditLogPagination", () => {
 		await waitFor(() => expect(signals.length).toBeGreaterThanOrEqual(2));
 		expect(result.current.items).toEqual([]);
 	});
+
+	it("reads /api/activity by cursor and reloads from page 1 when filters change", async () => {
+		const entry = (id: string, actor: string) => ({
+			id,
+			actor,
+			action: "wallet.created",
+			createdAt: "2026-01-01T00:00:00.000Z",
+			network: "testnet" as const,
+		});
+		const urls: string[] = [];
+		const fetchImpl = vi.fn<typeof fetch>(async (input) => {
+			const url = new URL(String(input), "http://localhost");
+			urls.push(`${url.pathname}${url.search}`);
+			const cursor = url.searchParams.get("cursor");
+			const actor = url.searchParams.get("actor") ?? "any";
+			if (cursor === null) {
+				return Response.json({
+					items: [entry(`${actor}-1`, actor)],
+					nextCursor: "cursor-1",
+				});
+			}
+			return Response.json({
+				items: [entry(`${actor}-2`, actor)],
+				nextCursor: null,
+			});
+		});
+
+		const { result, rerender } = renderHook(
+			({ filters }) => useAuditLogPagination({ fetchImpl, limit: 10, filters }),
+			{ initialProps: { filters: { actor: "alice" } } },
+		);
+
+		await waitFor(() => expect(result.current.items).toHaveLength(1));
+		expect(urls[0]).toBe("/api/activity?actor=alice&limit=10");
+		expect(result.current.canLoadMore).toBe(true);
+
+		result.current.loadMore();
+
+		await waitFor(() => expect(result.current.items).toHaveLength(2));
+		expect(urls[1]).toBe("/api/activity?actor=alice&limit=10&cursor=cursor-1");
+		expect(result.current.items.map((item) => item.id)).toEqual([
+			"alice-1",
+			"alice-2",
+		]);
+		expect(result.current.canLoadMore).toBe(false);
+
+		rerender({ filters: { actor: "bob" } });
+
+		await waitFor(() =>
+			expect(result.current.items.map((item) => item.id)).toEqual(["bob-1"]),
+		);
+		// Filters changed: the next read starts from page 1, with no cursor.
+		expect(urls[2]).toBe("/api/activity?actor=bob&limit=10");
+		expect(urls[2]).not.toContain("cursor=");
+	});
 });

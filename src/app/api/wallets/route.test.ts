@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
-import { OnboardingErrorCode, POST, provisionFirstWallet, resolveAuthContext } from './route';
+import {
+  OnboardingErrorCode,
+  POST,
+  __test__,
+  provisionFirstWallet,
+  resolveAuthContext,
+} from './route';
 
 const AUTH_HEADERS = {
   authorization: 'Bearer test-token',
@@ -215,6 +221,37 @@ describe('POST /api/wallets network param', () => {
   it('checks auth before validating the network', async () => {
     const res = await POST(walletRequest({ network: 'bogus' }, {}));
     expect(res.status).toBe(401);
+  });
+});
+
+describe('isMainnetEnabled', () => {
+  const { isMainnetEnabled } = __test__;
+
+  it('is disabled when MUX_MAINNET_ENABLED is unset', () => {
+    vi.stubEnv('MUX_MAINNET_ENABLED', undefined as unknown as string);
+    delete process.env.MUX_MAINNET_ENABLED;
+    expect(isMainnetEnabled()).toBe(false);
+  });
+
+  it('is disabled for any value other than the exact string "true"', () => {
+    for (const value of ['', 'false', 'TRUE', 'True', '1', 'yes', ' true', 'true ']) {
+      vi.stubEnv('MUX_MAINNET_ENABLED', value);
+      expect(isMainnetEnabled()).toBe(false);
+    }
+  });
+
+  it('is enabled only when MUX_MAINNET_ENABLED is exactly "true"', () => {
+    vi.stubEnv('MUX_MAINNET_ENABLED', 'true');
+    expect(isMainnetEnabled()).toBe(true);
+  });
+
+  it('fails closed: mainnet onboarding is rejected when the flag is not exactly "true"', async () => {
+    for (const value of ['', 'false', 'TRUE', '1']) {
+      vi.stubEnv('MUX_MAINNET_ENABLED', value);
+      const res = await POST(walletRequest({ network: 'mainnet' }));
+      expect(res.status).toBe(403);
+      expect(await errorCode(res)).toBe(OnboardingErrorCode.NETWORK_DISABLED);
+    }
   });
 });
 

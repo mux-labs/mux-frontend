@@ -50,6 +50,20 @@ describe("parseRetryAfter", () => {
 		expect(parseRetryAfter(value, NOW)).toBeNull();
 	});
 
+	it("returns milliseconds from now for delta-seconds and HTTP-dates", () => {
+		expect(parseRetryAfter("30", NOW)).toBe(30_000);
+		expect(parseRetryAfter(new Date(NOW + 90_000).toUTCString(), NOW)).toBe(
+			90_000,
+		);
+	});
+
+	it("returns null when the header is absent or malformed", () => {
+		expect(parseRetryAfter(null, NOW)).toBeNull();
+		expect(parseRetryAfter(undefined, NOW)).toBeNull();
+		expect(parseRetryAfter("", NOW)).toBeNull();
+		expect(parseRetryAfter("not-a-date", NOW)).toBeNull();
+	});
+
 	it("does not overflow on an enormous delta", () => {
 		const parsed = parseRetryAfter("9".repeat(40), NOW);
 		expect(parsed).not.toBeNull();

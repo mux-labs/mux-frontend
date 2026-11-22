@@ -66,6 +66,67 @@ describe("resolveRetryDelayMs", () => {
 		expect(resolveRetryDelayMs("0", NOW)).toBe(MIN_RETRY_AFTER_MS);
 		expect(resolveRetryDelayMs("999999", NOW)).toBe(MAX_RETRY_AFTER_MS);
 	});
+
+	// Regression coverage for the documented contract: the resolved delay is
+	// always clamped to [MIN_RETRY_AFTER_MS, MAX_RETRY_AFTER_MS] and always
+	// positive, including the failure path (missing/malformed header).
+	it("always returns a clamped, positive delay", () => {
+		const pastDate = new Date(NOW - 60_000).toUTCString();
+		const futureDate = new Date(NOW + 60 * 60_000).toUTCString();
+		const values = [
+			null,
+			undefined,
+			"",
+			"garbage",
+			"-5",
+			"1.5",
+			"0",
+			"1",
+			"999999",
+			"9".repeat(40),
+			pastDate,
+			futureDate,
+		];
+
+		for (const value of values) {
+			const delay = resolveRetryDelayMs(value, NOW);
+			expect(Number.isFinite(delay)).toBe(true);
+			expect(delay).toBeGreaterThan(0);
+			expect(delay).toBeGreaterThanOrEqual(MIN_RETRY_AFTER_MS);
+			expect(delay).toBeLessThanOrEqual(MAX_RETRY_AFTER_MS);
+		}
+	});
+
+	it("falls back to the default on the failure path, not to retry-immediately", () => {
+		expect(resolveRetryDelayMs(undefined, NOW)).toBe(DEFAULT_RETRY_AFTER_MS);
+		expect(resolveRetryDelayMs("", NOW)).toBe(DEFAULT_RETRY_AFTER_MS);
+		expect(resolveRetryDelayMs("not-a-date", NOW)).toBe(
+			DEFAULT_RETRY_AFTER_MS,
+		);
+	});
+});
+
+describe("formatRetryAfterSeconds", () => {
+	// Regression coverage for the documented contract: format a delay as a
+	// `Retry-After` delta-seconds header value. A change that emits
+	// milliseconds, a date, or a fractional/rounded-down value fails here.
+	it("formats a delay as delta-seconds", () => {
+		expect(formatRetryAfterSeconds(5_000)).toBe("5");
+		expect(formatRetryAfterSeconds(MIN_RETRY_AFTER_MS)).toBe("1");
+		expect(formatRetryAfterSeconds(MAX_RETRY_AFTER_MS)).toBe("300");
+	});
+
+	it("rounds partial seconds up so the client never retries early", () => {
+		expect(formatRetryAfterSeconds(1)).toBe("1");
+		expect(formatRetryAfterSeconds(1_001)).toBe("2");
+		expect(formatRetryAfterSeconds(2_500)).toBe("3");
+	});
+
+	it("emits a value parseRetryAfter reads back as delta-seconds", () => {
+		const header = formatRetryAfterSeconds(12_000);
+		expect(header).toMatch(/^\d+$/);
+		expect(parseRetryAfter(header, NOW)).toBe(12_000);
+	});
 });
 
 describe("classifyRateLimit", () => {
@@ -249,6 +310,25 @@ describe("formatRetryCountdown", () => {
 		[125_000, "2m 05s"],
 	])("formats %i ms as %s", (ms, expected) => {
 		expect(formatRetryCountdown(ms)).toBe(expected);
+	});
+
+	it("rounds partial seconds up so the wait is never understated", () => {
+		expect(formatRetryCountdown(1)).toBe("1s");
+		expect(formatRetryCountdown(1_001)).toBe("2s");
+		expect(formatRetryCountdown(60_001)).toBe("1m 01s");
+	});
+
+	it("pads seconds to two digits once minutes are shown", () => {
+		expect(formatRetryCountdown(60_000)).toBe("1m 00s");
+		expect(formatRetryCountdown(MAX_RETRY_AFTER_MS)).toBe("5m 00s");
+	});
+
+	it("never returns a negative or signed value", () => {
+		for (const ms of [-1, -500, -60_000, Number.NEGATIVE_INFINITY]) {
+			const formatted = formatRetryCountdown(ms);
+			expect(formatted).toBe("0s");
+			expect(formatted).not.toContain("-");
+		}
 	});
 });
 

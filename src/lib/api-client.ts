@@ -32,9 +32,24 @@ export type Envelope<T = unknown> = {
 	configuredNetwork?: "testnet" | "mainnet";
 };
 
-function resolveConfiguredNetwork(): "testnet" | "mainnet" | undefined {
+/**
+ * Resolves the configured Stellar network from the environment.
+ *
+ * Returns the HTTP status to use for an error envelope, if the caller should
+ * preserve it: a recognised network value returns `{ network, status: 200 }`;
+ * an absent or unrecognised value returns `{ network: undefined, status: 200 }`
+ * so the caller can decide whether to fail closed.
+ *
+ * Exported for regression testing (issue #1163).
+ */
+export function resolveConfiguredNetwork(): {
+	network: "testnet" | "mainnet" | undefined;
+	status: number;
+} {
 	const raw = process.env.NEXT_PUBLIC_STELLAR_NETWORK;
-	return raw === "testnet" || raw === "mainnet" ? raw : undefined;
+	const network =
+		raw === "testnet" || raw === "mainnet" ? raw : undefined;
+	return { network, status: 200 };
 }
 
 /**
@@ -61,7 +76,7 @@ export async function parseEnvelope<T = unknown>(
 			data: body as T,
 			error: null,
 			correlationId,
-			configuredNetwork: resolveConfiguredNetwork(),
+			configuredNetwork: resolveConfiguredNetwork().network,
 		};
 	}
 
@@ -78,6 +93,6 @@ export async function parseEnvelope<T = unknown>(
 		},
 		correlationId,
 		status: response.status,
-		configuredNetwork: resolveConfiguredNetwork(),
+		configuredNetwork: resolveConfiguredNetwork().network,
 	};
 }

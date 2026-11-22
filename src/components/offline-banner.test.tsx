@@ -70,6 +70,28 @@ describe('OfflineBanner', () => {
     }
   });
 
+  it('forces the error message to display via forceError', () => {
+    render(<OfflineBanner forceError="Forced failure" />);
+
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Forced failure');
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('prefers forceError over the error prop', () => {
+    render(<OfflineBanner forceError="Forced failure" error="Prop failure" />);
+
+    expect(screen.getByRole('alert')).toHaveTextContent('Forced failure');
+    expect(screen.queryByText('Prop failure')).not.toBeInTheDocument();
+  });
+
+  it('does not force an error when forceError is null', () => {
+    const { container } = render(<OfflineBanner forceError={null} />);
+
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows the offline bar after mount when navigator.onLine is false', async () => {
     vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
 

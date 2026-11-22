@@ -30,7 +30,7 @@ export type CsrfResult = {
   ok: boolean;
 };
 
-function readCookie(name: string, source?: CookieSource): string | undefined {
+function readCookieFromSource(name: string, source?: CookieSource): string | undefined {
   const cookie = source ? source.cookie : document.cookie;
   if (!cookie) return undefined;
 
@@ -71,7 +71,7 @@ function isSafeMethod(method: string | undefined): boolean {
  * Returns true when a CSRF token is available to attach to a request.
  */
 export function hasCsrfToken(cookieSource?: CookieSource): boolean {
-  return Boolean(readCookie(CSRF_COOKIE_NAME, cookieSource));
+  return Boolean(readCookieFromSource(CSRF_COOKIE_NAME, cookieSource));
 }
 
 /**
@@ -86,7 +86,7 @@ export function tryWithCsrf(
     return { init, ok: true };
   }
 
-  const token = readCookie(CSRF_COOKIE_NAME, cookieSource);
+  const token = readCookieFromSource(CSRF_COOKIE_NAME, cookieSource);
   if (!token) {
     return { init, ok: false };
   }

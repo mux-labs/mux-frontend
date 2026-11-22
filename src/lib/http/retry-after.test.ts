@@ -311,6 +311,25 @@ describe("formatRetryCountdown", () => {
 	])("formats %i ms as %s", (ms, expected) => {
 		expect(formatRetryCountdown(ms)).toBe(expected);
 	});
+
+	it("rounds partial seconds up so the wait is never understated", () => {
+		expect(formatRetryCountdown(1)).toBe("1s");
+		expect(formatRetryCountdown(1_001)).toBe("2s");
+		expect(formatRetryCountdown(60_001)).toBe("1m 01s");
+	});
+
+	it("pads seconds to two digits once minutes are shown", () => {
+		expect(formatRetryCountdown(60_000)).toBe("1m 00s");
+		expect(formatRetryCountdown(MAX_RETRY_AFTER_MS)).toBe("5m 00s");
+	});
+
+	it("never returns a negative or signed value", () => {
+		for (const ms of [-1, -500, -60_000, Number.NEGATIVE_INFINITY]) {
+			const formatted = formatRetryCountdown(ms);
+			expect(formatted).toBe("0s");
+			expect(formatted).not.toContain("-");
+		}
+	});
 });
 
 // Boundary inputs shared by the formatting and delay-resolution contract tests.
